@@ -56,6 +56,13 @@ public final class BaritoneBridge {
         }
     }
 
+    /** Bounded resource collection; only known block identifiers can be passed. */
+    public static Result mineBlock(String blockId) {
+        if (blockId == null || !blockId.matches("minecraft:[a-z0-9_]{1,64}"))
+            return new Result(false, "无效的方块名称");
+        return executeLocal("mine " + blockId, "已向 Baritone 发送采集 " + blockId);
+    }
+
     public static Result stop() {
         return executeLocal("stop", "已向 Baritone 发送 #stop");
     }
