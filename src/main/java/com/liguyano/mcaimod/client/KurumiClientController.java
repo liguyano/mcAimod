@@ -11,6 +11,7 @@ import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import net.minecraft.commands.CommandSourceStack;
 import net.neoforged.fml.loading.FMLPaths;
 
 import java.time.Clock;
@@ -42,13 +43,13 @@ public final class KurumiClientController {
     }
 
     private static void registerCommands(RegisterClientCommandsEvent event) {
-        event.getDispatcher().register(LiteralArgumentBuilder.literal("kurumi")
-                .then(LiteralArgumentBuilder.literal("on").executes(context -> {
+        event.getDispatcher().register(LiteralArgumentBuilder.<CommandSourceStack>literal("kurumi")
+                .then(LiteralArgumentBuilder.<CommandSourceStack>literal("on").executes(context -> {
                     enabled = true;
                     notice("已启用聊天监听（仅本机）。");
                     return 1;
                 }))
-                .then(LiteralArgumentBuilder.literal("off").executes(context -> {
+                .then(LiteralArgumentBuilder.<CommandSourceStack>literal("off").executes(context -> {
                     enabled = false;
                     autoFarmEnabled = false;
                     generation++;
@@ -57,30 +58,30 @@ public final class KurumiClientController {
                     notice("已关闭聊天监听。");
                     return 1;
                 }))
-                .then(LiteralArgumentBuilder.literal("auto")
-                        .then(LiteralArgumentBuilder.literal("on").executes(context -> {
+                .then(LiteralArgumentBuilder.<CommandSourceStack>literal("auto")
+                        .then(LiteralArgumentBuilder.<CommandSourceStack>literal("on").executes(context -> {
                             autoFarmEnabled = true;
                             notice("已允许公共聊天触发 Baritone 农作（任何玩家均可触发）。");
                             return 1;
                         }))
-                        .then(LiteralArgumentBuilder.literal("off").executes(context -> {
+                        .then(LiteralArgumentBuilder.<CommandSourceStack>literal("off").executes(context -> {
                             autoFarmEnabled = false;
                             notice("已禁止公共聊天触发农作。");
                             return 1;
                         })))
-                .then(LiteralArgumentBuilder.literal("farm").executes(context -> {
+                .then(LiteralArgumentBuilder.<CommandSourceStack>literal("farm").executes(context -> {
                     BaritoneBridge.Result result = BaritoneBridge.farm(16);
                     notice(result.message());
                     return result.success() ? 1 : 0;
                 }))
-                .then(LiteralArgumentBuilder.literal("stop").executes(context -> {
+                .then(LiteralArgumentBuilder.<CommandSourceStack>literal("stop").executes(context -> {
                     generation++;
                     GATE.reset();
                     BaritoneBridge.Result result = BaritoneBridge.stop();
                     notice("已取消等待中的 Kurumi 请求。" + result.message());
                     return 1;
                 }))
-                .then(LiteralArgumentBuilder.literal("status").executes(context -> {
+                .then(LiteralArgumentBuilder.<CommandSourceStack>literal("status").executes(context -> {
                     notice("聊天监听：" + (enabled ? "开启" : "关闭") + "；自动农作：" + (autoFarmEnabled ? "开启" : "关闭") + "；Baritone：" + (BaritoneBridge.available() ? "已检测到" : "未检测到") + "；动作识别：大模型");
                     return 1;
                 })));
@@ -153,7 +154,7 @@ public final class KurumiClientController {
 
     private static void notice(String text) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player != null) minecraft.player.displayClientMessage(Component.literal("[Kurumi] " + text), false);
+        if (minecraft.player != null) minecraft.gui.getChat().addMessage(Component.literal("[Kurumi] " + text));
     }
 
     private KurumiClientController() {}
