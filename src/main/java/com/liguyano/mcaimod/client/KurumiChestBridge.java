@@ -18,6 +18,7 @@ public final class KurumiChestBridge {
     private record Pending(String itemId, int quantity, long startedAt) {}
     private static Pending pending;
     private static final String ALL_ITEMS = "*";
+    private static final String ALL_OF_ITEM_PREFIX = "all:";
 
     public static void install() {
         NeoForge.EVENT_BUS.addListener(KurumiChestBridge::onTick);
@@ -36,6 +37,12 @@ public final class KurumiChestBridge {
 
     public static BaritoneBridge.Result putAll() { return interact(ALL_ITEMS, 0); }
 
+    public static BaritoneBridge.Result putItemAll(String itemId) {
+        if (itemId == null || !itemId.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+            return new BaritoneBridge.Result(false, "物品ID不合法");
+        return interact(ALL_OF_ITEM_PREFIX + itemId, 0);
+    }
+
     private static BaritoneBridge.Result interact(String itemId, int quantity) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null || mc.gameMode == null)
@@ -43,13 +50,14 @@ public final class KurumiChestBridge {
         if (pending != null)
             return new BaritoneBridge.Result(false, "上一项箱子操作尚未完成");
         if (itemId != null && !ALL_ITEMS.equals(itemId)) {
+            String matchId = itemId.startsWith(ALL_OF_ITEM_PREFIX) ? itemId.substring(ALL_OF_ITEM_PREFIX.length()) : itemId;
             int count = 0;
             for (int i = 0; i < 36; i++) {
                 var stack = mc.player.getInventory().getItem(i);
-                if (!stack.isEmpty() && itemId.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()))
+                if (!stack.isEmpty() && matchId.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()))
                     count += stack.getCount();
             }
-            if (count < quantity)
+            if (count < quantity || itemId.startsWith(ALL_OF_ITEM_PREFIX) && count == 0)
                 return new BaritoneBridge.Result(false, "背包中 " + itemId + " 数量不足，需要" + quantity + "个，现有" + count + "个");
         }
         if (mc.player.containerMenu instanceof ChestMenu) {
@@ -101,11 +109,12 @@ public final class KurumiChestBridge {
         if (mc.player == null || mc.gameMode == null || !(mc.player.containerMenu instanceof ChestMenu menu))
             return new BaritoneBridge.Result(false, "箱子界面尚未打开");
         int chestSlots = menu.getRowCount() * 9;
-        if (ALL_ITEMS.equals(itemId)) {
+        if (ALL_ITEMS.equals(itemId) || itemId.startsWith(ALL_OF_ITEM_PREFIX)) {
+            String matchId = itemId.startsWith(ALL_OF_ITEM_PREFIX) ? itemId.substring(ALL_OF_ITEM_PREFIX.length()) : null;
             int stacks = 0;
             for (int slot = chestSlots; slot < chestSlots + 36; slot++) {
                 var stack = menu.getSlot(slot).getItem();
-                if (stack.isEmpty()) continue;
+                if (stack.isEmpty() || matchId != null && !matchId.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString())) continue;
                 mc.gameMode.handleContainerInput(menu.containerId, slot, 0,
                         ContainerInput.QUICK_MOVE, mc.player);
                 stacks++;
