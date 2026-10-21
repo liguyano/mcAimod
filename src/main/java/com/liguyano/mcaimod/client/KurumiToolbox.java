@@ -25,11 +25,11 @@ public final class KurumiToolbox {
                 out.addProperty("food", mc.player.getFoodData().getFoodLevel());
             }
             case "get_environment" -> {
-                out.addProperty("dimension", mc.level.dimension().location().toString());
-                out.addProperty("day_time", mc.level.getDayTime());
+                out.addProperty("dimension", mc.level.dimension().toString());
+                out.addProperty("day_time", mc.level.getGameTime());
                 out.addProperty("raining", mc.level.isRaining());
                 out.addProperty("biome", mc.level.getBiome(mc.player.blockPosition()).unwrapKey()
-                        .map(k -> k.location().toString()).orElse("unknown"));
+                        .map(Object::toString).orElse("unknown"));
             }
             case "scan_nearby_entities" -> {
                 JsonArray found = new JsonArray();
