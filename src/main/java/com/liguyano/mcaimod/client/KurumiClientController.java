@@ -26,6 +26,7 @@ public final class KurumiClientController {
     private static boolean enabled = false;
     private static boolean autoFarmEnabled = false;
     private static long generation = 0;
+    private static boolean requestInFlight = false;
 
     public static void install() {
         NeoForge.EVENT_BUS.addListener(KurumiClientController::onPlayerChat);
@@ -35,6 +36,7 @@ public final class KurumiClientController {
 
     private static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
         generation++;
+        requestInFlight = false;
         autoFarmEnabled = false;
         GATE.reset();
     }
@@ -50,6 +52,7 @@ public final class KurumiClientController {
                     enabled = false;
                     autoFarmEnabled = false;
                     generation++;
+                    requestInFlight = false;
                     GATE.reset();
                     notice("已关闭聊天监听。");
                     return 1;
@@ -88,7 +91,8 @@ public final class KurumiClientController {
         if (!enabled || minecraft.player == null || minecraft.getConnection() == null) return;
         if (minecraft.player.getUUID().equals(event.getSender())) return;
         String message = event.getPlayerChatMessage().signedContent();
-        if (!GATE.tryAccept(message)) return;
+        if (requestInFlight || !GATE.tryAccept(message)) return;
+        requestInFlight = true;
         long requestGeneration = generation;
         // Acknowledgement is public and uses the player's normal chat account.
 
@@ -96,11 +100,13 @@ public final class KurumiClientController {
         try {
             profile = ModelProfiles.load(FMLPaths.CONFIGDIR.get().resolve("mcaimod-models.json")).first();
         } catch (Exception error) {
+            requestInFlight = false;
             GATE.finish();
             notice("模型配置读取失败，请检查 config/mcaimod-models.json");
             return;
         }
         if (profile.isEmpty()) {
+            requestInFlight = false;
             GATE.finish();
             notice("没有启用的模型配置。");
             return;
@@ -110,6 +116,8 @@ public final class KurumiClientController {
                 new ChatMessage("system", "你是 Minecraft 中的 Kurumi。只输出 JSON 对象，不要 Markdown。字段 type 为 chat 或 action，reply 为简短中文回复。仅在玩家明确要求种田或收割时，使用 type=action、action=FARM、radius=16；明确要求停止时使用 action=STOP、radius=0。其他请求用 type=chat。不要生成其他动作。"),
                 new ChatMessage("user", message)))
                 .whenComplete((reply, error) -> minecraft.execute(() -> {
+                    if (generation != requestGeneration) return;
+                    requestInFlight = false;
                     GATE.finish();
                     if (!enabled || generation != requestGeneration || minecraft.player == null ||
                             minecraft.getConnection() == null) return;
@@ -126,7 +134,7 @@ public final class KurumiClientController {
                     if (decision.action().isPresent()) {
                         KurumiActionValidator.Action action = decision.action().get();
                         if (!autoFarmEnabled) {
-                            minecraft.getConnection().sendChat("[Kurumi] 自动操作未开启，请先输入 /kurumi auto on。");
+                            notice("自动操作未开启，请先输入 /kurumi auto on。");
                             return;
                         }
                         BaritoneBridge.Result result = switch (action.type()) {
