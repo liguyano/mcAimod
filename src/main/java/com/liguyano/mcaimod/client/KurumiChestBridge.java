@@ -18,6 +18,7 @@ public final class KurumiChestBridge {
     private record Pending(String itemId, int quantity, long startedAt) {}
     private static Pending pending;
     private static final String ALL_ITEMS = "*";
+    private static final String TAKE_ALL = "take:*";
     private static final String ALL_OF_ITEM_PREFIX = "all:";
 
     public static void install() {
@@ -37,6 +38,8 @@ public final class KurumiChestBridge {
 
     public static BaritoneBridge.Result putAll() { return interact(ALL_ITEMS, 0); }
 
+    public static BaritoneBridge.Result takeAll() { return interact(TAKE_ALL, 0); }
+
     public static BaritoneBridge.Result putItemAll(String itemId) {
         if (itemId == null || !itemId.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
             return new BaritoneBridge.Result(false, "物品ID不合法");
@@ -49,7 +52,7 @@ public final class KurumiChestBridge {
             return new BaritoneBridge.Result(false, "当前不在游戏世界");
         if (pending != null)
             return new BaritoneBridge.Result(false, "上一项箱子操作尚未完成");
-        if (itemId != null && !ALL_ITEMS.equals(itemId)) {
+        if (itemId != null && !ALL_ITEMS.equals(itemId) && !TAKE_ALL.equals(itemId)) {
             String matchId = itemId.startsWith(ALL_OF_ITEM_PREFIX) ? itemId.substring(ALL_OF_ITEM_PREFIX.length()) : itemId;
             int count = 0;
             for (int i = 0; i < 36; i++) {
@@ -86,7 +89,7 @@ public final class KurumiChestBridge {
             return new BaritoneBridge.Result(false, "无法打开箱子，可能被阻挡或服务器拒绝");
         if (itemId != null)
             pending = new Pending(itemId, quantity, System.currentTimeMillis());
-        return new BaritoneBridge.Result(true, itemId == null ? "已发送打开箱子的请求" : "正在打开箱子，等待服务器同步后放入物品");
+        return new BaritoneBridge.Result(true, itemId == null ? "已发送打开箱子的请求" : TAKE_ALL.equals(itemId) ? "正在打开箱子，等待服务器同步后取出物品" : "正在打开箱子，等待服务器同步后放入物品");
     }
 
     private static void onTick(ClientTickEvent.Post event) {
@@ -109,6 +112,24 @@ public final class KurumiChestBridge {
         if (mc.player == null || mc.gameMode == null || !(mc.player.containerMenu instanceof ChestMenu menu))
             return new BaritoneBridge.Result(false, "箱子界面尚未打开");
         int chestSlots = menu.getRowCount() * 9;
+        if (TAKE_ALL.equals(itemId)) {
+            int stacks = 0;
+            int remainingStacks = 0;
+            for (int slot = 0; slot < chestSlots; slot++) {
+                var stack = menu.getSlot(slot).getItem();
+                if (stack.isEmpty()) continue;
+                mc.gameMode.handleContainerInput(menu.containerId, slot, 0,
+                        ContainerInput.QUICK_MOVE, mc.player);
+                if (menu.getSlot(slot).getItem().isEmpty()) stacks++;
+                else remainingStacks++;
+            }
+            if (stacks == 0)
+                return new BaritoneBridge.Result(false, remainingStacks > 0
+                        ? "背包空间不足，物品仍留在箱子里" : "箱子中没有可取出的物品");
+            return new BaritoneBridge.Result(true, "已尝试取出 " + stacks + " 组物品"
+                    + (remainingStacks > 0 ? "；仍有 " + remainingStacks + " 组留在箱子里" : "")
+                    + "（以服务器同步结果为准）");
+        }
         if (ALL_ITEMS.equals(itemId) || itemId.startsWith(ALL_OF_ITEM_PREFIX)) {
             String matchId = itemId.startsWith(ALL_OF_ITEM_PREFIX) ? itemId.substring(ALL_OF_ITEM_PREFIX.length()) : null;
             int stacks = 0;
