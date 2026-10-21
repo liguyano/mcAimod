@@ -31,11 +31,11 @@ public final class KurumiDropBridge {
             int count = Math.min(remaining, stack.getCount());
             int menuSlot = i < 9 ? i + 36 : i;
             if (count == stack.getCount()) {
-                mc.gameMode.handleInventoryMouseClick(mc.player.inventoryMenu.containerId,
+                mc.gameMode.handleContainerInput(mc.player.inventoryMenu.containerId,
                         menuSlot, 1, ContainerInput.THROW, mc.player);
             } else {
                 for (int j = 0; j < count; j++) {
-                    mc.gameMode.handleInventoryMouseClick(mc.player.inventoryMenu.containerId,
+                    mc.gameMode.handleContainerInput(mc.player.inventoryMenu.containerId,
                             menuSlot, 0, ContainerInput.THROW, mc.player);
                 }
             }
