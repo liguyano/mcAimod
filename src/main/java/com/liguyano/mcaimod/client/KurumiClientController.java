@@ -134,7 +134,7 @@ public final class KurumiClientController {
             publicFailure("没有启用的模型配置，暂时无法响应。");
             return;
         }
-        minecraft.getConnection().sendChat("[Kurumi] 好的，我听到了。");
+        minecraft.getConnection().sendChat("好的，我听到了。");
         UUID sender = event.getSender();
         List<ChatMessage> conversation = new ArrayList<>();
         conversation.add(new ChatMessage("system", "你是 Minecraft 中的 Kurumi。只输出 JSON 对象，不要 Markdown。type 为 chat 或 action，reply 为简短中文。动作：FARM radius=16、STOP radius=0、SLEEP radius=0（睡觉，尝试使用附近床）、TPA_REQUEST_TO target=精确玩家名（向指定在线玩家申请传送，包含向主人申请；如果客户端无法读取TPA玩家编号则报错，不能声称已发送）、TPA_REQUEST radius=0（打开TPA传送申请玩家选择菜单，用户需点击目标玩家；不要声称已发给指定玩家）、TPA_ACCEPT radius=0（接受当前待处理的TPA请求，仅在主人明确要求接受时使用）、CHAIN_ON radius=0（按住 OneKeyMiner 连锁破坏键）、CHAIN_OFF radius=0（松开连锁破坏键）、CHEST_OPEN radius=0（打开身边普通箱子）、CHEST_PUT item_id=物品注册ID quantity=1至64 radius=0（将背包物品放入身边普通箱子；先调用 get_inventory 验证）、PICKUP_ALL radius=0（连续拾取附近48格内所有掉落物，不是只去最近一个）、PICKUP_ITEM_ALL item_id=物品注册ID radius=0（连续拾取附近48格内所有这种掉落物；先调用 scan_dropped_items 确认ID）、PICKUP item_id=物品注册ID quantity=1至64 radius=0（先调用 scan_dropped_items 查找48格内真实掉落物，自动前往最近目标，不能声称已经捡到）、DROP_ITEM_ALL item_id=物品注册ID radius=0（把背包中该种物品的所有堆叠全部丢出，必须明确说所有某种物品；先调用 get_inventory 确认ID）、CHEST_PUT_ITEM_ALL item_id=物品注册ID radius=0（把背包中该种物品的所有堆叠放进附近箱子；先调用 get_inventory 确认ID）、DROP_ALL radius=0（丢出背包主物品栏和快捷栏全部物品，仅主人可用；须明确要求全部丢出）、CHEST_TAKE_ALL radius=0（从附近箱子取出全部物品，只有主人可用，必须明确要求全部拿出）、CHEST_PUT_ALL radius=0（把背包主物品栏和快捷栏全部放进附近箱子，仅主人可用；须明确要求全部存入）、DROP item_id=物品注册ID（如 minecraft:cobblestone） quantity=1至64 radius=0（丢弃指定数量物品；先调用 get_inventory 确认物品和数量，不要自行猜测 ID）、FOLLOW target=精确玩家名（持续跟随）、COME target=精确玩家名（过来：走到发言者当前坐标后停止，不持续跟随）、GOTO x/y/z=完整整数坐标、MINE block_id=具体原木 minecraft:xxx_log 或菌柄 minecraft:xxx_stem。跟随我或过来时用本条消息提供的发言者玩家名；“过来/来我这里”必须选 COME，不要选 FOLLOW。缺少坐标或树种时询问，不能假装已执行。可以调用只读工具，输出 JSON 对象 type=tool、tool=工具名。工具名可选 get_player_status、get_environment、scan_nearby_entities、scan_nearby_blocks、scan_dropped_items、get_inventory。收到工具结果后再决定下一步，最多3次调用。不要编造观察结果。不要输出其他动作。"));
@@ -228,7 +228,7 @@ public final class KurumiClientController {
                         }
                     }
                     if (decision.action().isPresent() && (decision.action().get().type() == KurumiActionValidator.Type.PICKUP || decision.action().get().type() == KurumiActionValidator.Type.PICKUP_ALL || decision.action().get().type() == KurumiActionValidator.Type.PICKUP_ITEM_ALL)) {
-                        minecraft.getConnection().sendChat("[Kurumi] " + "已开始前往掉落物位置，尚未确认拾取完成。");
+                        minecraft.getConnection().sendChat("" + "已开始前往掉落物位置，尚未确认拾取完成。");
                         return;
                     }
                     List<ChatMessage> updated = new ArrayList<>(HISTORY.getOrDefault(sender, List.of()));
@@ -236,7 +236,7 @@ public final class KurumiClientController {
                     updated.add(new ChatMessage("assistant", decision.reply()));
                     if (updated.size() > 20) updated = new ArrayList<>(updated.subList(updated.size() - 20, updated.size()));
                     HISTORY.put(sender, updated);
-                    minecraft.getConnection().sendChat("[Kurumi] " + decision.reply());
+                    minecraft.getConnection().sendChat("" + decision.reply());
                 }));
     }
 
@@ -245,7 +245,7 @@ public final class KurumiClientController {
         notice(reason);
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player != null && minecraft.getConnection() != null) {
-            minecraft.getConnection().sendChat("[Kurumi] 抱歉，操作失败：" + reason);
+            minecraft.getConnection().sendChat("抱歉，操作失败：" + reason);
         }
     }
 
@@ -256,7 +256,7 @@ public final class KurumiClientController {
 
     private static void notice(String text) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player != null) minecraft.player.sendSystemMessage(Component.literal("[Kurumi] " + text));
+        if (minecraft.player != null) minecraft.player.sendSystemMessage(Component.literal("" + text));
     }
 
     private KurumiClientController() {}
