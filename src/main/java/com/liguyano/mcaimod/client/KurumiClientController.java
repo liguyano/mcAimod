@@ -29,6 +29,7 @@ public final class KurumiClientController {
             new KurumiWakeRouter(Clock.systemUTC(), Duration.ofSeconds(5));
     private static final OpenAiCompatibleProvider PROVIDER = new OpenAiCompatibleProvider();
     private static final Map<UUID, List<ChatMessage>> HISTORY = new HashMap<>();
+    private static final int MAX_TOOL_CALLS = 3;
     private static boolean enabled = false;
     private static boolean autoFarmEnabled = false;
     private static long generation = 0;
@@ -122,21 +123,41 @@ public final class KurumiClientController {
         minecraft.getConnection().sendChat("[Kurumi] 好的，我听到了。");
         UUID sender = event.getSender();
         List<ChatMessage> conversation = new ArrayList<>();
-        conversation.add(new ChatMessage("system", "你是 Minecraft 中的 Kurumi。只输出 JSON 对象，不要 Markdown。type 为 chat 或 action，reply 为简短中文。动作：FARM radius=16、STOP radius=0、FOLLOW target=精确玩家名、GOTO x/y/z=完整整数坐标、MINE block_id=具体原木 minecraft:xxx_log 或菌柄 minecraft:xxx_stem。跟随我时用本条消息提供的发言者玩家名。缺少坐标或树种时询问，不能假装已执行。不要输出其他动作。"));
+        conversation.add(new ChatMessage("system", "你是 Minecraft 中的 Kurumi。只输出 JSON 对象，不要 Markdown。type 为 chat 或 action，reply 为简短中文。动作：FARM radius=16、STOP radius=0、FOLLOW target=精确玩家名、GOTO x/y/z=完整整数坐标、MINE block_id=具体原木 minecraft:xxx_log 或菌柄 minecraft:xxx_stem。跟随我时用本条消息提供的发言者玩家名。缺少坐标或树种时询问，不能假装已执行。可以调用只读工具，输出 JSON 对象 type=tool、tool=工具名。工具名可选 get_player_status、get_environment、scan_nearby_entities、scan_nearby_blocks、get_inventory。收到工具结果后再决定下一步，最多3次调用。不要编造观察结果。不要输出其他动作。"));
         conversation.addAll(HISTORY.getOrDefault(sender, List.of()));
         String senderName = minecraft.getConnection().getPlayerInfo(sender) == null ? "未知" : minecraft.getConnection().getPlayerInfo(sender).getProfile().name();
         conversation.add(new ChatMessage("user", "发言者玩家名：" + senderName + "；消息：" + message));
-        PROVIDER.chat(profile.get(), conversation)
+        runAgent(profile.get(), conversation, sender, message, requestGeneration, 0);
+    }
+
+    private static void runAgent(ModelProfile profile, List<ChatMessage> conversation, UUID sender,
+                                 String message, long requestGeneration, int toolCalls) {
+        Minecraft minecraft = Minecraft.getInstance();
+        PROVIDER.chat(profile, conversation)
                 .whenComplete((reply, error) -> minecraft.execute(() -> {
                     if (generation != requestGeneration) return;
-                    requestInFlight = false;
-                    GATE.finish();
                     if (!enabled || generation != requestGeneration || minecraft.player == null ||
                             minecraft.getConnection() == null) return;
                     if (error != null) {
+                        finishRequest();
                         notice("模型请求失败，请检查网络与模型配置。");
                         return;
                     }
+                    String tool = KurumiToolRequest.parse(reply);
+                    if (tool != null) {
+                        if (toolCalls >= MAX_TOOL_CALLS) {
+                            finishRequest();
+                            notice("工具调用达到3次上限，任务停止。");
+                            return;
+                        }
+                        List<ChatMessage> next = new ArrayList<>(conversation);
+                        next.add(new ChatMessage("assistant", reply));
+                        next.add(new ChatMessage("user", "工具 " + tool + " 的真实返回：" + KurumiToolbox.observe(tool)
+                                + "。请据此继续判断，最后返回 chat 或 action JSON。"));
+                        runAgent(profile, next, sender, message, requestGeneration, toolCalls + 1);
+                        return;
+                    }
+                    finishRequest();
                     Optional<KurumiDecisionParser.Decision> parsed = KurumiDecisionParser.parse(reply);
                     if (parsed.isEmpty()) {
                         notice("模型没有返回有效的结构化回复，本次不执行操作。");
@@ -170,6 +191,11 @@ public final class KurumiClientController {
                     HISTORY.put(sender, updated);
                     minecraft.getConnection().sendChat("[Kurumi] " + decision.reply());
                 }));
+    }
+
+    private static void finishRequest() {
+        requestInFlight = false;
+        GATE.finish();
     }
 
     private static void notice(String text) {
