@@ -8,7 +8,7 @@ import java.util.Optional;
  * This parser NEVER executes commands or touches game state.
  */
 public final class KurumiActionValidator {
-    public enum Type { FARM, STOP, SLEEP, CHAIN_ON, CHAIN_OFF, CHEST_OPEN, CHEST_TAKE_ALL, DROP_ALL, CHEST_PUT_ALL, DROP_ITEM_ALL, CHEST_PUT_ITEM_ALL, OPEN_DOOR, PRESS_BUTTON, PICKUP, DROP, CHEST_TAKE, CHEST_PUT }
+    public enum Type { FARM, STOP, SLEEP, CHAIN_ON, CHAIN_OFF, CHEST_OPEN, CHEST_TAKE_ALL, DROP_ALL, CHEST_PUT_ALL, DROP_ITEM_ALL, CHEST_PUT_ITEM_ALL, OPEN_DOOR, PRESS_BUTTON, PICKUP, PICKUP_ALL, PICKUP_ITEM_ALL, DROP, CHEST_TAKE, CHEST_PUT }
 
     public record Action(Type type, String itemId, int quantity, int radius) {}
 
@@ -25,7 +25,7 @@ public final class KurumiActionValidator {
             case PICKUP, DROP, CHEST_TAKE, CHEST_PUT -> true;
             default -> false;
         };
-        boolean allOfItem = type == Type.DROP_ITEM_ALL || type == Type.CHEST_PUT_ITEM_ALL;
+        boolean allOfItem = type == Type.DROP_ITEM_ALL || type == Type.CHEST_PUT_ITEM_ALL || type == Type.PICKUP_ITEM_ALL;
         if (allOfItem) {
             if (quantity != 0 || itemId == null || !itemId.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")) return Optional.empty();
         } else if (itemAction) {
