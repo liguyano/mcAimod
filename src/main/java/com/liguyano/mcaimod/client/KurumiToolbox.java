@@ -5,7 +5,6 @@ import com.google.gson.JsonObject;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.Comparator;
@@ -70,7 +69,8 @@ public final class KurumiToolbox {
             }
             case "get_inventory" -> {
                 JsonArray items = new JsonArray();
-                for (var stack : mc.player.getInventory().getNonEquipmentItems()) {
+                for (int i = 0; i < mc.player.getInventory().getContainerSize(); i++) {
+                    var stack = mc.player.getInventory().getItem(i);
                     if (stack.isEmpty()) continue;
                     JsonObject item = new JsonObject();
                     item.addProperty("item", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
