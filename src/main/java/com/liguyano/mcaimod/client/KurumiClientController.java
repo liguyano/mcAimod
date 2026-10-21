@@ -154,7 +154,7 @@ public final class KurumiClientController {
 
     private static void notice(String text) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player != null) minecraft.gui.getChat().addMessage(Component.literal("[Kurumi] " + text));
+        if (minecraft.player != null) minecraft.player.sendSystemMessage(Component.literal("[Kurumi] " + text));
     }
 
     private KurumiClientController() {}
