@@ -84,6 +84,11 @@ public final class AIChatService {
         lastRequests.remove(actorId);
     }
 
+    public synchronized void disconnect(UUID actorId) {
+        conversations.disconnect(actorId);
+        lastRequests.remove(actorId);
+    }
+
     public List<ChatTurn> history(UUID actorId) {
         return conversations.history(actorId);
     }

@@ -23,6 +23,10 @@ class ConversationManagerTest {
         assertEquals("deepseek", conversations.selectedProfile(alice));
         assertEquals("ollama", conversations.selectedProfile(bob));
         assertThrows(UnsupportedOperationException.class, () -> conversations.history(alice).clear());
+        conversations.clear(alice);
+        assertTrue(conversations.history(alice).isEmpty());
+        assertEquals("deepseek", conversations.selectedProfile(alice),
+                "Clearing history must not unexpectedly switch the player's model");
     }
 
     @Test
@@ -38,5 +42,8 @@ class ConversationManagerTest {
         assertTrue(conversations.tryBegin(alice));
         conversations.finish(alice);
         assertFalse(conversations.isActive(alice));
+        conversations.selectProfile(alice, "deepseek");
+        conversations.disconnect(alice);
+        assertNull(conversations.selectedProfile(alice));
     }
 }

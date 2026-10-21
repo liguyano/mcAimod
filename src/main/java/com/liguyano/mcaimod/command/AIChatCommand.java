@@ -71,7 +71,7 @@ public final class AIChatCommand {
     }
 
     public void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player) service.clear(player.getUUID());
+        if (event.getEntity() instanceof ServerPlayer player) service.disconnect(player.getUUID());
     }
 
     private int ask(ServerPlayer player, String message) {

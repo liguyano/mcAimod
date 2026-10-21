@@ -24,6 +24,13 @@ public final class ConversationManager {
 
     public synchronized void clear(UUID actorId) {
         epochs.merge(actorId, 1L, Long::sum);
+        Session session = session(actorId);
+        session.turns.clear();
+        session.active = false;
+    }
+
+    public synchronized void disconnect(UUID actorId) {
+        epochs.merge(actorId, 1L, Long::sum);
         sessions.remove(actorId);
     }
 
