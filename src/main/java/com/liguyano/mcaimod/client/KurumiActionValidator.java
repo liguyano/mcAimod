@@ -8,7 +8,7 @@ import java.util.Optional;
  * This parser NEVER executes commands or touches game state.
  */
 public final class KurumiActionValidator {
-    public enum Type { FARM, STOP, SLEEP, CHAIN_ON, CHAIN_OFF, CHEST_OPEN, OPEN_DOOR, PRESS_BUTTON, PICKUP, DROP, CHEST_TAKE, CHEST_PUT }
+    public enum Type { FARM, STOP, SLEEP, CHAIN_ON, CHAIN_OFF, CHEST_OPEN, DROP_ALL, CHEST_PUT_ALL, OPEN_DOOR, PRESS_BUTTON, PICKUP, DROP, CHEST_TAKE, CHEST_PUT }
 
     public record Action(Type type, String itemId, int quantity, int radius) {}
 
