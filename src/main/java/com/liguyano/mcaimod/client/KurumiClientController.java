@@ -114,7 +114,7 @@ public final class KurumiClientController {
         }
         minecraft.getConnection().sendChat("[Kurumi] 好的，我听到了。");
         PROVIDER.chat(profile.get(), List.of(
-                new ChatMessage("system", "你是 Minecraft 中的 Kurumi。只输出 JSON 对象，不要 Markdown。字段 type 为 chat 或 action，reply 为简短中文回复。仅在玩家明确要求种田或收割时，使用 type=action、action=FARM、radius=16；明确要求停止时使用 action=STOP、radius=0。其他请求用 type=chat。不要生成其他动作。"),
+                new ChatMessage("system", "你是 Minecraft 中的 Kurumi。只输出 JSON 对象，不要 Markdown。字段 type 为 chat 或 action，reply 为简短中文回复。仅在明确要求种田或收割时输出 action=FARM、radius=16；明确要求停止时输出 action=STOP、radius=0；要求跟随玩家时输出 action=FOLLOW、target=玩家的精确游戏ID（若玩家说“我”，使用发言者ID）；明确提供完整整数坐标时输出 action=GOTO、x/y/z=整数坐标。所有动作都用 type=action。无法确认玩家ID或完整坐标时用 type=chat 并询问，不要声称已执行。其他请求用 type=chat。"),
                 new ChatMessage("user", message)))
                 .whenComplete((reply, error) -> minecraft.execute(() -> {
                     if (generation != requestGeneration) return;
@@ -132,13 +132,17 @@ public final class KurumiClientController {
                         return;
                     }
                     KurumiDecisionParser.Decision decision = parsed.get();
-                    if (decision.action().isPresent()) {
-                        KurumiActionValidator.Action action = decision.action().get();
+                    if (decision.action().isPresent() || !decision.target().isEmpty() || decision.x() != null) {
+                        KurumiActionValidator.Action action = decision.action().orElse(null);
                         if (!autoFarmEnabled) {
                             notice("自动操作未开启，请先输入 /kurumi auto on。");
                             return;
                         }
-                        BaritoneBridge.Result result = switch (action.type()) {
+                        BaritoneBridge.Result result = decision.action().isEmpty()
+                                ? (!decision.target().isEmpty()
+                                    ? BaritoneBridge.followPlayer(decision.target())
+                                    : BaritoneBridge.gotoCoordinates(decision.x(), decision.y(), decision.z()))
+                                : switch (action.type()) {
                             case FARM -> BaritoneBridge.farm(action.radius());
                             case STOP -> BaritoneBridge.stop();
                             default -> new BaritoneBridge.Result(false, "暂不支持此操作");
