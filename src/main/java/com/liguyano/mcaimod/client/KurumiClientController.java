@@ -111,13 +111,13 @@ public final class KurumiClientController {
         } catch (Exception error) {
             requestInFlight = false;
             GATE.finish();
-            notice("模型配置读取失败，请检查 config/mcaimod-models.json");
+            publicFailure("模型配置读取失败，暂时无法响应。");
             return;
         }
         if (profile.isEmpty()) {
             requestInFlight = false;
             GATE.finish();
-            notice("没有启用的模型配置。");
+            publicFailure("没有启用的模型配置，暂时无法响应。");
             return;
         }
         minecraft.getConnection().sendChat("[Kurumi] 好的，我听到了。");
@@ -142,14 +142,14 @@ public final class KurumiClientController {
                             minecraft.getConnection() == null) return;
                     if (error != null) {
                         finishRequest();
-                        notice("模型请求失败，请检查网络与模型配置。");
+                        publicFailure("模型请求失败，请检查网络或模型配置。");
                         return;
                     }
                     String tool = KurumiToolRequest.parse(reply);
                     if (tool != null) {
                         if (toolCalls >= MAX_TOOL_CALLS) {
                             finishRequest();
-                            notice("工具调用达到3次上限，任务停止。");
+                            publicFailure("工具调用达到次数上限，本次任务已停止。");
                             return;
                         }
                         List<ChatMessage> next = new ArrayList<>(conversation);
@@ -162,14 +162,14 @@ public final class KurumiClientController {
                     finishRequest();
                     Optional<KurumiDecisionParser.Decision> parsed = KurumiDecisionParser.parse(reply);
                     if (parsed.isEmpty()) {
-                        notice("模型没有返回有效的结构化回复，本次不执行操作。");
+                        publicFailure("没有理解这次操作请求，模型返回格式无效。");
                         return;
                     }
                     KurumiDecisionParser.Decision decision = parsed.get();
                     if (decision.action().isPresent() || !decision.target().isEmpty() || decision.x() != null || !decision.blockId().isEmpty()) {
                         KurumiActionValidator.Action action = decision.action().orElse(null);
                         if (!autoFarmEnabled) {
-                            notice("自动操作未开启，请先输入 /kurumi auto on。");
+                            publicFailure("自动操作未开启，需要先输入 /kurumi auto on。");
                             return;
                         }
                         BaritoneBridge.Result result = decision.action().isEmpty()
@@ -183,7 +183,7 @@ public final class KurumiClientController {
                             default -> new BaritoneBridge.Result(false, "暂不支持此操作");
                         };
                         if (!result.success()) {
-                            notice(result.message());
+                            publicFailure(result.message());
                             return;
                         }
                     }
@@ -194,6 +194,15 @@ public final class KurumiClientController {
                     HISTORY.put(sender, updated);
                     minecraft.getConnection().sendChat("[Kurumi] " + decision.reply());
                 }));
+    }
+
+    /** Public status uses fixed or validated messages, never raw model/network exception text. */
+    private static void publicFailure(String reason) {
+        notice(reason);
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player != null && minecraft.getConnection() != null) {
+            minecraft.getConnection().sendChat("[Kurumi] 抱歉，操作失败：" + reason);
+        }
     }
 
     private static void finishRequest() {
