@@ -115,7 +115,7 @@ public final class KurumiClientController {
         minecraft.getConnection().sendChat("[Kurumi] 好的，我听到了。");
         PROVIDER.chat(profile.get(), List.of(
                 new ChatMessage("system", "你是 Minecraft 中的 Kurumi。只输出 JSON 对象，不要 Markdown。字段 type 为 chat 或 action，reply 为简短中文回复。仅在明确要求种田或收割时输出 action=FARM、radius=16；明确要求停止时输出 action=STOP、radius=0；要求跟随玩家时输出 action=FOLLOW、target=玩家的精确游戏ID（若玩家说“我”，使用发言者ID）；明确提供完整整数坐标时输出 action=GOTO、x/y/z=整数坐标。所有动作都用 type=action。无法确认玩家ID或完整坐标时用 type=chat 并询问，不要声称已执行。其他请求用 type=chat。"),
-                new ChatMessage("user", message)))
+                new ChatMessage("user", "发言者玩家名：" + (minecraft.getConnection().getPlayerInfo(event.getSender()) == null ? "未知" : minecraft.getConnection().getPlayerInfo(event.getSender()).getProfile().name()) + "；消息：" + message)))
                 .whenComplete((reply, error) -> minecraft.execute(() -> {
                     if (generation != requestGeneration) return;
                     requestInFlight = false;
