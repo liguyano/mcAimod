@@ -65,7 +65,9 @@ public final class KurumiChestBridge {
         }
         if (mc.player.containerMenu instanceof ChestMenu) {
             if (itemId == null) return new BaritoneBridge.Result(true, "箱子界面已打开");
-            return transfer(itemId, quantity);
+            BaritoneBridge.Result outcome = transfer(itemId, quantity);
+            mc.player.closeContainer();
+            return outcome;
         }
         if (mc.player.containerMenu != mc.player.inventoryMenu)
             return new BaritoneBridge.Result(false, "请先关闭其他容器界面");
@@ -100,6 +102,7 @@ public final class KurumiChestBridge {
         if (mc.player.containerMenu instanceof ChestMenu) {
             pending = null;
             BaritoneBridge.Result result = transfer(task.itemId(), task.quantity());
+            mc.player.closeContainer();
             mc.getConnection().sendChat("[Kurumi] " + (result.success() ? result.message() : "抱歉，操作失败：" + result.message()));
         } else if (System.currentTimeMillis() - task.startedAt() > 5000) {
             pending = null;
