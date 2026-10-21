@@ -43,6 +43,33 @@ public final class KurumiDropBridge {
         }
         return new BaritoneBridge.Result(true, "已发送丢弃请求：" + itemId + " × " + quantity + "（以服务器实际处理为准）");
     }
+    /** Drop every stack matching the specified registered item ID. */
+    public static BaritoneBridge.Result dropItemAll(String itemId) {
+        if (itemId == null || !itemId.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+            return new BaritoneBridge.Result(false, "物品ID不合法");
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.gameMode == null)
+            return new BaritoneBridge.Result(false, "当前无法操作背包");
+        if (mc.player.containerMenu != mc.player.inventoryMenu)
+            return new BaritoneBridge.Result(false, "请先关闭箱子等界面");
+        int stacks = 0;
+        int total = 0;
+        for (int i = 0; i < 36; i++) {
+            var stack = mc.player.getInventory().getItem(i);
+            if (stack.isEmpty() || !itemId.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()))
+                continue;
+            total += stack.getCount();
+            int menuSlot = i < 9 ? i + 36 : i;
+            mc.gameMode.handleContainerInput(mc.player.inventoryMenu.containerId,
+                    menuSlot, 1, ContainerInput.THROW, mc.player);
+            stacks++;
+        }
+        return stacks == 0
+                ? new BaritoneBridge.Result(false, "背包中没有 " + itemId)
+                : new BaritoneBridge.Result(true, "已请求丢出 " + itemId + " 共 " + total
+                        + " 个，分布在 " + stacks + " 组（以服务器处理为准）");
+    }
+
     /** Drop every stack from the 36 regular inventory slots, excluding armor and offhand. */
     public static BaritoneBridge.Result dropAll() {
         Minecraft mc = Minecraft.getInstance();
