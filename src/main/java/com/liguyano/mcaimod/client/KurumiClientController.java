@@ -24,6 +24,7 @@ public final class KurumiClientController {
             new KurumiWakeRouter(Clock.systemUTC(), Duration.ofSeconds(30));
     private static final OpenAiCompatibleProvider PROVIDER = new OpenAiCompatibleProvider();
     private static boolean enabled = false;
+    private static boolean autoFarmEnabled = false;
     private static long generation = 0;
 
     public static void install() {
@@ -51,6 +52,17 @@ public final class KurumiClientController {
                     notice("已关闭聊天监听。");
                     return 1;
                 }))
+                .then(Commands.literal("auto")
+                        .then(Commands.literal("on").executes(context -> {
+                            autoFarmEnabled = true;
+                            notice("已允许公共聊天触发 Baritone 农作（任何玩家均可触发）。");
+                            return 1;
+                        }))
+                        .then(Commands.literal("off").executes(context -> {
+                            autoFarmEnabled = false;
+                            notice("已禁止公共聊天触发农作。");
+                            return 1;
+                        })))
                 .then(Commands.literal("farm").executes(context -> {
                     BaritoneBridge.Result result = BaritoneBridge.farm(16);
                     notice(result.message());
@@ -64,7 +76,7 @@ public final class KurumiClientController {
                     return 1;
                 }))
                 .then(Commands.literal("status").executes(context -> {
-                    notice("聊天监听：" + (enabled ? "开启" : "关闭") + "；Baritone：" + (BaritoneBridge.available() ? "已检测到" : "未检测到") + "；聊天自动操作：尚未开启");
+                    notice("聊天监听：" + (enabled ? "开启" : "关闭") + "；自动农作：" + (autoFarmEnabled ? "开启" : "关闭") + "；Baritone：" + (BaritoneBridge.available() ? "已检测到" : "未检测到") + "；聊天自动操作：尚未开启");
                     return 1;
                 })));
     }
@@ -74,7 +86,22 @@ public final class KurumiClientController {
         if (!enabled || minecraft.player == null || minecraft.getConnection() == null) return;
         if (minecraft.player.getUUID().equals(event.getSender())) return;
         String message = event.getPlayerChatMessage().signedContent();
+        Optional<KurumiFarmIntent.Intent> intent = KurumiFarmIntent.parse(message);
+        if (intent.isPresent() && intent.get().kind() == KurumiFarmIntent.Kind.STOP) {
+            generation++;
+            GATE.reset();
+            BaritoneBridge.Result stopped = BaritoneBridge.stop();
+            notice(stopped.message());
+            return;
+        }
         if (!GATE.tryAccept(message)) return;
+        if (intent.isPresent() && intent.get().kind() == KurumiFarmIntent.Kind.FARM && autoFarmEnabled) {
+            BaritoneBridge.Result result = BaritoneBridge.farm(intent.get().radius());
+            if (result.success()) minecraft.getConnection().sendChat("[Kurumi] 好的，我去照看农田。");
+            else notice(result.message());
+            GATE.finish();
+            return;
+        }
         long requestGeneration = generation;
         // Acknowledgement is public and uses the player's normal chat account.
 
