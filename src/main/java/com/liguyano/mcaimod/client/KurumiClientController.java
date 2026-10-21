@@ -8,6 +8,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.client.event.ClientChatReceivedEvent;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.minecraft.commands.Commands;
 import net.neoforged.fml.loading.FMLPaths;
@@ -28,6 +29,12 @@ public final class KurumiClientController {
     public static void install() {
         NeoForge.EVENT_BUS.addListener(KurumiClientController::onPlayerChat);
         NeoForge.EVENT_BUS.addListener(KurumiClientController::registerCommands);
+        NeoForge.EVENT_BUS.addListener(KurumiClientController::onLogout);
+    }
+
+    private static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
+        generation++;
+        GATE.reset();
     }
 
     private static void registerCommands(RegisterClientCommandsEvent event) {
@@ -64,7 +71,7 @@ public final class KurumiClientController {
         if (!GATE.tryAccept(message)) return;
         long requestGeneration = generation;
         // Acknowledgement is public and uses the player's normal chat account.
-        minecraft.getConnection().sendChat("好的，我听到了。");
+
         Optional<ModelProfile> profile;
         try {
             profile = ModelProfiles.load(FMLPaths.CONFIGDIR.get().resolve("mcaimod-models.json")).first();
@@ -78,6 +85,7 @@ public final class KurumiClientController {
             notice("没有启用的模型配置。");
             return;
         }
+        minecraft.getConnection().sendChat("[Kurumi] 好的，我听到了。");
         PROVIDER.chat(profile.get(), List.of(
                 new ChatMessage("system", "你是 Minecraft 中的 Kurumi。只回答简短的中文聊天内容，不要声称已经执行任何游戏动作。不要输出指令。"),
                 new ChatMessage("user", message)))
