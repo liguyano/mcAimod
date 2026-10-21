@@ -6,6 +6,8 @@ import com.liguyano.mcaimod.command.AIChatCommand;
 import com.liguyano.mcaimod.model.ModelProfiles;
 import com.liguyano.mcaimod.model.OpenAiCompatibleProvider;
 import net.neoforged.fml.loading.FMLPaths;
+import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
 
@@ -20,6 +22,9 @@ public final class AICompanionMod {
     public static final String MOD_ID = "mcaimod";
 
     public AICompanionMod() {
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+            com.liguyano.mcaimod.client.KurumiClientController.install();
+        }
         Path configFile = FMLPaths.CONFIGDIR.get().resolve("mcaimod-models.json");
         installDefaultConfig(configFile);
         ModelProfiles profiles;
