@@ -10,7 +10,7 @@ import net.neoforged.neoforge.client.event.ClientChatReceivedEvent;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.client.command.ClientCommands;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.neoforged.fml.loading.FMLPaths;
 
 import java.time.Clock;
@@ -42,13 +42,13 @@ public final class KurumiClientController {
     }
 
     private static void registerCommands(RegisterClientCommandsEvent event) {
-        event.getDispatcher().register(ClientCommands.literal("kurumi")
-                .then(ClientCommands.literal("on").executes(context -> {
+        event.getDispatcher().register(LiteralArgumentBuilder.literal("kurumi")
+                .then(LiteralArgumentBuilder.literal("on").executes(context -> {
                     enabled = true;
                     notice("已启用聊天监听（仅本机）。");
                     return 1;
                 }))
-                .then(ClientCommands.literal("off").executes(context -> {
+                .then(LiteralArgumentBuilder.literal("off").executes(context -> {
                     enabled = false;
                     autoFarmEnabled = false;
                     generation++;
@@ -57,30 +57,30 @@ public final class KurumiClientController {
                     notice("已关闭聊天监听。");
                     return 1;
                 }))
-                .then(ClientCommands.literal("auto")
-                        .then(ClientCommands.literal("on").executes(context -> {
+                .then(LiteralArgumentBuilder.literal("auto")
+                        .then(LiteralArgumentBuilder.literal("on").executes(context -> {
                             autoFarmEnabled = true;
                             notice("已允许公共聊天触发 Baritone 农作（任何玩家均可触发）。");
                             return 1;
                         }))
-                        .then(ClientCommands.literal("off").executes(context -> {
+                        .then(LiteralArgumentBuilder.literal("off").executes(context -> {
                             autoFarmEnabled = false;
                             notice("已禁止公共聊天触发农作。");
                             return 1;
                         })))
-                .then(ClientCommands.literal("farm").executes(context -> {
+                .then(LiteralArgumentBuilder.literal("farm").executes(context -> {
                     BaritoneBridge.Result result = BaritoneBridge.farm(16);
                     notice(result.message());
                     return result.success() ? 1 : 0;
                 }))
-                .then(ClientCommands.literal("stop").executes(context -> {
+                .then(LiteralArgumentBuilder.literal("stop").executes(context -> {
                     generation++;
                     GATE.reset();
                     BaritoneBridge.Result result = BaritoneBridge.stop();
                     notice("已取消等待中的 Kurumi 请求。" + result.message());
                     return 1;
                 }))
-                .then(ClientCommands.literal("status").executes(context -> {
+                .then(LiteralArgumentBuilder.literal("status").executes(context -> {
                     notice("聊天监听：" + (enabled ? "开启" : "关闭") + "；自动农作：" + (autoFarmEnabled ? "开启" : "关闭") + "；Baritone：" + (BaritoneBridge.available() ? "已检测到" : "未检测到") + "；动作识别：大模型");
                     return 1;
                 })));
