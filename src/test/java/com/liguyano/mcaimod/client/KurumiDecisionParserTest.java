@@ -73,6 +73,14 @@ class KurumiDecisionParserTest {
         assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"取出全部\",\"action\":\"CHEST_TAKE_ALL\",\"quantity\":64}").isEmpty());
     }
 
+    @Test void acceptsTpaActions() {
+        for (String action : java.util.List.of("TPA_REQUEST", "TPA_ACCEPT")) {
+            String json = "{\"type\":\"action\",\"reply\":\"好的\",\"action\":\"" + action + "\"}";
+            assertEquals(KurumiActionValidator.Type.valueOf(action),
+                    KurumiDecisionParser.parse(json).orElseThrow().action().orElseThrow().type());
+        }
+    }
+
     @Test void acceptsNormalChat() {
         var decision = KurumiDecisionParser.parse("{\"type\":\"chat\",\"reply\":\"你好呀\"}").orElseThrow();
         assertTrue(decision.action().isEmpty());
