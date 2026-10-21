@@ -22,7 +22,7 @@ import java.util.Optional;
 /** Local-only multiplayer chat integration. Actions remain disabled until game-side adapters exist. */
 public final class KurumiClientController {
     private static final KurumiWakeRouter GATE =
-            new KurumiWakeRouter(Clock.systemUTC(), Duration.ofSeconds(30));
+            new KurumiWakeRouter(Clock.systemUTC(), Duration.ofSeconds(5));
     private static final OpenAiCompatibleProvider PROVIDER = new OpenAiCompatibleProvider();
     private static boolean enabled = false;
     private static boolean autoFarmEnabled = false;
