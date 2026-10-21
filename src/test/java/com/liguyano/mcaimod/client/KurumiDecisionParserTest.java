@@ -19,6 +19,13 @@ class KurumiDecisionParserTest {
         assertEquals(KurumiActionValidator.Type.SLEEP, decision.action().orElseThrow().type());
     }
 
+    @Test void acceptsDropAndRejectsInvalidQuantity() {
+        var decision = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"丢出圆石\",\"action\":\"DROP\",\"item_id\":\"minecraft:cobblestone\",\"quantity\":10,\"radius\":0}").orElseThrow();
+        assertEquals(KurumiActionValidator.Type.DROP, decision.action().orElseThrow().type());
+        assertEquals(10, decision.action().orElseThrow().quantity());
+        assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"丢出圆石\",\"action\":\"DROP\",\"item_id\":\"minecraft:cobblestone\",\"quantity\":65,\"radius\":0}").isEmpty());
+    }
+
     @Test void acceptsNormalChat() {
         var decision = KurumiDecisionParser.parse("{\"type\":\"chat\",\"reply\":\"你好呀\"}").orElseThrow();
         assertTrue(decision.action().isEmpty());
