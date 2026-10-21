@@ -43,7 +43,7 @@ public final class KurumiDecisionParser {
                 if (y < -64 || y > 320 || Math.abs((long)x) > 30000000 || Math.abs((long)z) > 30000000) return Optional.empty();
                 return Optional.of(new Decision(reply, Optional.empty(), "", x, y, z, ""));
             }
-            if (!"FARM".equals(name) && !"STOP".equals(name)) return Optional.empty();
+            if (!"FARM".equals(name) && !"STOP".equals(name) && !"SLEEP".equals(name)) return Optional.empty();
             String item = object.has("item_id") ? object.get("item_id").getAsString() : "";
             int quantity = object.has("quantity") ? object.get("quantity").getAsInt() : 0;
             int radius = object.has("radius") ? object.get("radius").getAsInt() : 0;
