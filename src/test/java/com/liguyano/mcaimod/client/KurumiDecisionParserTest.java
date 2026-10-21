@@ -19,6 +19,15 @@ class KurumiDecisionParserTest {
         assertTrue(decision.action().isEmpty());
     }
 
+    @Test void acceptsFollowAndGoto() {
+        var follow = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"开始跟随\",\"action\":\"FOLLOW\",\"target\":\"SekaiSaionji\"}").orElseThrow();
+        assertEquals("SekaiSaionji", follow.target());
+        var gotoDecision = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"前往坐标\",\"action\":\"GOTO\",\"x\":120,\"y\":64,\"z\":-30}").orElseThrow();
+        assertEquals(120, gotoDecision.x());
+        assertEquals(-30, gotoDecision.z());
+        assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"走\",\"action\":\"GOTO\",\"x\":120,\"y\":64}").isEmpty());
+    }
+
     @Test void rejectsUnsupportedOrMalformedActions() {
         assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"执行\",\"action\":\"DROP\",\"item_id\":\"minecraft:diamond\",\"quantity\":64}").isEmpty());
         assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"执行\",\"action\":\"FARM\",\"radius\":32}").isEmpty());
