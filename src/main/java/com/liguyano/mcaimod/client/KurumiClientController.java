@@ -78,7 +78,7 @@ public final class KurumiClientController {
                     return 1;
                 }))
                 .then(Commands.literal("status").executes(context -> {
-                    notice("聊天监听：" + (enabled ? "开启" : "关闭") + "；自动农作：" + (autoFarmEnabled ? "开启" : "关闭") + "；Baritone：" + (BaritoneBridge.available() ? "已检测到" : "未检测到") + "；聊天自动操作：尚未开启");
+                    notice("聊天监听：" + (enabled ? "开启" : "关闭") + "；自动农作：" + (autoFarmEnabled ? "开启" : "关闭") + "；Baritone：" + (BaritoneBridge.available() ? "已检测到" : "未检测到") + "；动作识别：大模型");
                     return 1;
                 })));
     }
@@ -88,22 +88,7 @@ public final class KurumiClientController {
         if (!enabled || minecraft.player == null || minecraft.getConnection() == null) return;
         if (minecraft.player.getUUID().equals(event.getSender())) return;
         String message = event.getPlayerChatMessage().signedContent();
-        Optional<KurumiFarmIntent.Intent> intent = KurumiFarmIntent.parse(message);
-        if (autoFarmEnabled && intent.isPresent() && intent.get().kind() == KurumiFarmIntent.Kind.STOP) {
-            generation++;
-            GATE.reset();
-            BaritoneBridge.Result stopped = BaritoneBridge.stop();
-            notice(stopped.message());
-            return;
-        }
         if (!GATE.tryAccept(message)) return;
-        if (intent.isPresent() && intent.get().kind() == KurumiFarmIntent.Kind.FARM && autoFarmEnabled) {
-            BaritoneBridge.Result result = BaritoneBridge.farm(intent.get().radius());
-            if (result.success()) minecraft.getConnection().sendChat("[Kurumi] 好的，我去照看农田。");
-            else notice(result.message());
-            GATE.finish();
-            return;
-        }
         long requestGeneration = generation;
         // Acknowledgement is public and uses the player's normal chat account.
 
@@ -122,7 +107,7 @@ public final class KurumiClientController {
         }
         minecraft.getConnection().sendChat("[Kurumi] 好的，我听到了。");
         PROVIDER.chat(profile.get(), List.of(
-                new ChatMessage("system", "你是 Minecraft 中的 Kurumi。只回答简短的中文聊天内容，不要声称已经执行任何游戏动作。不要输出指令。"),
+                new ChatMessage("system", "你是 Minecraft 中的 Kurumi。请理解玩家自然语言意图，只输出一个 JSON 对象，不要 Markdown。格式：{\"type\":\"chat|action\",\"reply\":\"简短中文回复\",\"action\":\"FARM|STOP\",\"radius\":16}。普通聊天用 type=chat 且省略 action/radius。只有明确要求种田、照看农田或收割时才选 FARM，radius 固定16；明确要求停止 Baritone 时选 STOP，radius 固定0。其他操作暂不支持，请以普通聊天解释。绝不输出未经允许的其他操作。"),
                 new ChatMessage("user", message)))
                 .whenComplete((reply, error) -> minecraft.execute(() -> {
                     GATE.finish();
@@ -132,10 +117,29 @@ public final class KurumiClientController {
                         notice("模型请求失败，请检查网络与模型配置。");
                         return;
                     }
-                    String safe = reply == null ? "" : reply.strip().replaceAll("[\\r\\n]+", " ");
-                    if (safe.length() > 160) safe = safe.substring(0, 160);
-                    if (safe.isEmpty() || safe.startsWith("/")) return;
-                    minecraft.getConnection().sendChat("[Kurumi] " + safe);
+                    Optional<KurumiDecisionParser.Decision> parsed = KurumiDecisionParser.parse(reply);
+                    if (parsed.isEmpty()) {
+                        notice("模型没有返回有效的结构化回复，本次不执行操作。");
+                        return;
+                    }
+                    KurumiDecisionParser.Decision decision = parsed.get();
+                    if (decision.action().isPresent()) {
+                        KurumiActionValidator.Action action = decision.action().get();
+                        if (!autoFarmEnabled) {
+                            minecraft.getConnection().sendChat("[Kurumi] 自动操作未开启，请先输入 /kurumi auto on。");
+                            return;
+                        }
+                        BaritoneBridge.Result result = switch (action.type()) {
+                            case FARM -> BaritoneBridge.farm(action.radius());
+                            case STOP -> BaritoneBridge.stop();
+                            default -> new BaritoneBridge.Result(false, "暂不支持此操作");
+                        };
+                        if (!result.success()) {
+                            notice(result.message());
+                            return;
+                        }
+                    }
+                    minecraft.getConnection().sendChat("[Kurumi] " + decision.reply());
                 }));
     }
 
