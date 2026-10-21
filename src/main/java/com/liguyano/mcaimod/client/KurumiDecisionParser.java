@@ -6,7 +6,7 @@ import java.util.Optional;
 
 /** Parse a model response as data, never as an executable command. */
 public final class KurumiDecisionParser {
-    public record Decision(String reply, Optional<KurumiActionValidator.Action> action, String target, Integer x, Integer y, Integer z) {}
+    public record Decision(String reply, Optional<KurumiActionValidator.Action> action, String target, Integer x, Integer y, Integer z, String blockId) {}
 
     public static Optional<Decision> parse(String raw) {
         if (raw == null || raw.length() > 8192) return Optional.empty();
@@ -17,20 +17,31 @@ public final class KurumiDecisionParser {
             if (reply.isEmpty() || reply.length() > 160 || reply.startsWith("/")) return Optional.empty();
             if (!object.has("type") || !object.get("type").isJsonPrimitive()) return Optional.empty();
             String type = object.get("type").getAsString();
-            if ("chat".equals(type)) return Optional.of(new Decision(reply, Optional.empty(), "", null, null, null));
+            if ("chat".equals(type)) return Optional.of(new Decision(reply, Optional.empty(), "", null, null, null, ""));
             if (!"action".equals(type)) return Optional.empty();
             if (!object.has("action") || !object.get("action").isJsonPrimitive()) return Optional.empty();
             String name = object.get("action").getAsString();
+            if ("MINE".equals(name)) {
+                String block = object.has("block_id") ? object.get("block_id").getAsString() : "";
+                if (!block.matches("minecraft:[a-z0-9_]{1,64}")) return Optional.empty();
+                if (!java.util.Set.of("minecraft:oak_log", "minecraft:spruce_log",
+                        "minecraft:birch_log", "minecraft:jungle_log", "minecraft:acacia_log",
+                        "minecraft:dark_oak_log", "minecraft:mangrove_log",
+                        "minecraft:cherry_log", "minecraft:pale_oak_log",
+                        "minecraft:crimson_stem", "minecraft:warped_stem").contains(block))
+                    return Optional.empty();
+                return Optional.of(new Decision(reply, Optional.empty(), "", null, null, null, block));
+            }
             if ("FOLLOW".equals(name)) {
                 String target = object.has("target") ? object.get("target").getAsString() : "";
                 if (!target.matches("[A-Za-z0-9_]{3,16}")) return Optional.empty();
-                return Optional.of(new Decision(reply, Optional.empty(), target, null, null, null));
+                return Optional.of(new Decision(reply, Optional.empty(), target, null, null, null, ""));
             }
             if ("GOTO".equals(name)) {
                 if (!object.has("x") || !object.has("y") || !object.has("z")) return Optional.empty();
                 int x = object.get("x").getAsInt(), y = object.get("y").getAsInt(), z = object.get("z").getAsInt();
                 if (y < -64 || y > 320 || Math.abs((long)x) > 30000000 || Math.abs((long)z) > 30000000) return Optional.empty();
-                return Optional.of(new Decision(reply, Optional.empty(), "", x, y, z));
+                return Optional.of(new Decision(reply, Optional.empty(), "", x, y, z, ""));
             }
             if (!"FARM".equals(name) && !"STOP".equals(name)) return Optional.empty();
             String item = object.has("item_id") ? object.get("item_id").getAsString() : "";
@@ -38,7 +49,7 @@ public final class KurumiDecisionParser {
             int radius = object.has("radius") ? object.get("radius").getAsInt() : 0;
             if ("FARM".equals(name) && radius != 16 || "STOP".equals(name) && radius != 0) return Optional.empty();
             Optional<KurumiActionValidator.Action> action = KurumiActionValidator.validate(name, item, quantity, radius);
-            return action.map(value -> new Decision(reply, Optional.of(value), "", null, null, null));
+            return action.map(value -> new Decision(reply, Optional.of(value), "", null, null, null, ""));
         } catch (RuntimeException error) {
             return Optional.empty();
         }
