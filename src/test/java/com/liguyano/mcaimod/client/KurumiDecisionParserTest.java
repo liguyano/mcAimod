@@ -14,6 +14,11 @@ class KurumiDecisionParserTest {
         assertEquals(KurumiActionValidator.Type.STOP, decision.action().orElseThrow().type());
     }
 
+    @Test void acceptsSleep() {
+        var decision = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"尝试睡觉\",\"action\":\"SLEEP\",\"radius\":0}").orElseThrow();
+        assertEquals(KurumiActionValidator.Type.SLEEP, decision.action().orElseThrow().type());
+    }
+
     @Test void acceptsNormalChat() {
         var decision = KurumiDecisionParser.parse("{\"type\":\"chat\",\"reply\":\"你好呀\"}").orElseThrow();
         assertTrue(decision.action().isEmpty());
