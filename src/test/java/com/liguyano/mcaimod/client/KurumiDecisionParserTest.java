@@ -67,6 +67,12 @@ class KurumiDecisionParserTest {
         }
     }
 
+    @Test void acceptsTakeAllFromChest() {
+        var decision = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"取出全部\",\"action\":\"CHEST_TAKE_ALL\",\"radius\":0}").orElseThrow();
+        assertEquals(KurumiActionValidator.Type.CHEST_TAKE_ALL, decision.action().orElseThrow().type());
+        assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"取出全部\",\"action\":\"CHEST_TAKE_ALL\",\"quantity\":64}").isEmpty());
+    }
+
     @Test void acceptsNormalChat() {
         var decision = KurumiDecisionParser.parse("{\"type\":\"chat\",\"reply\":\"你好呀\"}").orElseThrow();
         assertTrue(decision.action().isEmpty());
