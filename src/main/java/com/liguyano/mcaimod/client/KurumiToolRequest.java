@@ -4,7 +4,7 @@ import com.google.gson.JsonParser;
 import java.util.Set;
 public final class KurumiToolRequest {
     private static final Set<String> ALLOWED = Set.of("get_player_status", "get_environment",
-            "scan_nearby_entities", "scan_nearby_blocks", "get_inventory");
+            "scan_nearby_entities", "scan_nearby_blocks", "scan_dropped_items", "get_inventory");
     public static String parse(String raw) {
         if (raw == null || raw.length() > 8192) return null;
         try {
