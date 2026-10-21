@@ -43,5 +43,27 @@ public final class KurumiDropBridge {
         }
         return new BaritoneBridge.Result(true, "已发送丢弃请求：" + itemId + " × " + quantity + "（以服务器实际处理为准）");
     }
+    /** Drop every stack from the 36 regular inventory slots, excluding armor and offhand. */
+    public static BaritoneBridge.Result dropAll() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.gameMode == null)
+            return new BaritoneBridge.Result(false, "当前无法操作背包");
+        if (mc.player.containerMenu != mc.player.inventoryMenu)
+            return new BaritoneBridge.Result(false, "请先关闭箱子等界面");
+        int stacks = 0;
+        for (int i = 0; i < 36; i++) {
+            var stack = mc.player.getInventory().getItem(i);
+            if (stack.isEmpty()) continue;
+            int menuSlot = i < 9 ? i + 36 : i;
+            mc.gameMode.handleContainerInput(mc.player.inventoryMenu.containerId,
+                    menuSlot, 1, ContainerInput.THROW, mc.player);
+            stacks++;
+        }
+        return stacks == 0
+                ? new BaritoneBridge.Result(false, "背包主物品栏和快捷栏已经是空的")
+                : new BaritoneBridge.Result(true, "已请求丢出 " + stacks
+                        + " 组物品（不包括盔甲和副手，以服务器处理为准）");
+    }
+
     private KurumiDropBridge() {}
 }
