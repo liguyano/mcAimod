@@ -1,0 +1,118 @@
+# mcAimod — Minecraft 26.2 NeoForge AI Companion
+
+第一版 AI 伙伴 Mod：在游戏中与大模型聊天，让模型根据**当前玩家的真实游戏状态**回答问题。支持通过配置切换 **Ollama、DeepSeek、OpenAI** 等使用 Chat Completions 接口的服务。未来可复用聊天层接入智能 NPC，V0.1 不添加 NPC。
+
+## 要求
+
+- Minecraft **26.2**（Java 版）
+- 对应的 **NeoForge 26.2**（本项目开发基线 `26.2.0.93`）
+- **JDK 25**（开发和运行所需；不是 Java 17 或 Java 21）
+- 一个可访问的模型服务；本地 Ollama 或拥有相应 API Key 的云模型
+
+使用 NeoForge 官方 [26.2 ModDevGradle MDK](https://github.com/NeoForgeMDKs/MDK-26.2-ModDevGradle) 初始化。无需自行安装 Gradle，仓库自带 wrapper。
+
+## 快速开始
+
+1. 安装 JDK 25，确认 `java -version` 显示 25。
+2. 在仓库根目录使用 PowerShell：
+
+   ```powershell
+   .\gradlew.bat runClient
+   ```
+
+   或者在 Linux/macOS：
+
+   ```bash
+   ./gradlew runClient
+   ```
+
+3. 首次启动会创建开发实例中的 `run/config/mcaimod-models.json`。正式服务器/客户端对应配置在该实例的 `config/mcaimod-models.json`。修改配置后需要**重启游戏/服务器**。
+4. 在游戏内输入 `/ai 你好，我现在在哪里？`。
+
+默认 `ollama` 配置连接游戏服务端机器上的 `127.0.0.1:11434`，模型为 `qwen3:8b`。需要提前安装并运行 Ollama，例如：
+
+```bash
+ollama pull qwen3:8b
+ollama serve
+```
+
+如果你已经以后台服务方式运行 Ollama，则只需确保服务在监听，无需再开一个 `ollama serve`。远程专用服务器上的 `127.0.0.1` 指的是**服务器自身**，不是玩家电脑。
+
+## 模型切换
+
+首次启动会自动生成配置；也可以参考仓库里的 [`config/mcaimod-models.example.json`](config/mcaimod-models.example.json)。每条 `profile` 可设置：
+
+| 字段 | 说明 |
+| --- | --- |
+| `name` | `/ai model use` 使用的名字 |
+| `base_url` | 接口前缀，例如 `https://api.deepseek.com/v1` |
+| `model_id` | 具体模型名称 |
+| `api_key_env` | API Key 的**环境变量名称**，本地无认证模型可留空 |
+| `request_timeout` | 超时秒数（1–300） |
+| `max_output_tokens` | 输出 token 上限（1–8192） |
+| `enabled` | 是否允许玩家选择该模型 |
+
+启用 DeepSeek：
+
+1. 在服务端操作系统设置 `DEEPSEEK_API_KEY` 环境变量，确保启动游戏/服务器的进程能读取。
+2. 在 `mcaimod-models.json` 找到 `deepseek`，把 `enabled` 改为 `true`。
+3. 重启后游戏内输入 `/ai model use deepseek`。
+
+Windows PowerShell 的**当前窗口临时环境变量**示例（请自行填入自己的密钥，不要分享到聊天/仓库）：
+
+```powershell
+$env:DEEPSEEK_API_KEY = "你的密钥"
+.\gradlew.bat runClient
+```
+
+OpenAI 同理，使用 `OPENAI_API_KEY` 并启用 `openai` 配置。可以增加其他 Chat Completions 兼容模型配置。此首版使用常见的 `max_tokens` 参数；如使用仅接受 `max_completion_tokens` 的模型，请选用兼容模型或后续适配该参数。
+
+安全限制：远程接口必须是 HTTPS；普通 HTTP **仅允许本机回环地址** `127.0.0.1`、`localhost` 或 `::1`。不要将真实 API Key 填入 JSON，`api_key_env` 只接受环境变量名称。每个配置是否启用由服务器管理员决定，玩家无法通过聊天指令任意输入 URL。
+
+## 游戏指令
+
+| 指令 | 功能 |
+| --- | --- |
+| `/ai <消息>` | 向当前选定的大模型发送消息，自动附带游戏状态 |
+| `/ai status` | 当前模型、会话长度、是否请求中、坐标隐私开关 |
+| `/ai model list` | 列出管理员启用的模型 |
+| `/ai model use <名字>` | 只为自己切换模型，不影响其他玩家 |
+| `/ai clear` | 清空自己的聊天记忆并使旧请求失效 |
+
+示例：
+
+- `/ai 我现在在哪个生物群系？`
+- `/ai 我血量够不够去打附近的怪？`
+- `/ai 我主手拿着什么？接下来建议做什么？`
+
+## 采集哪些游戏信息？
+
+在服务器线程读取一个不可变快照：
+
+- 维度、生物群系、天气、世界时钟、玩家生命值和饥饿值
+- 主副手物品、头胸腿脚装备、状态效果
+- 身边 **16 格内已经加载** 的实体，按距离只选最近 **12** 个
+- 可选整数坐标，默认 `share_exact_coordinates: false`，不会上传精确坐标
+
+向模型发送的历史**只在内存**存放，每位玩家最多最近 10 轮问答、彼此隔离。不会上传玩家 IP、完整背包、其他玩家的聊天记录，也不会运行 AI 建议中的指令。若使用云模型，请注意这些状态信息将发送至所选提供商；若想数据仅留在本机，使用本地 Ollama。
+
+出于服务器性能考虑：HTTP 异步发送，游戏主线程不等待网络；每名玩家同一时间只允许一个请求，两个请求之间至少 4 秒；每次提问不超过 1000 字符。断线或清空会话后，不展示已过期的回答。
+
+## 打包与安装
+
+```powershell
+.\gradlew.bat test build
+```
+
+Linux/macOS：`./gradlew test build`。成功后检查 `build/libs/` 内生成的 Mod JAR，并将其放到 NeoForge 26.2 实例 `mods/` 中。
+
+- **单人游戏**：客户端安装本 Mod，游戏内部集成服务器负责请求模型。
+- **专用服务器**：服务器安装本 Mod 并配置服务端密钥；玩家需要支持相应 NeoForge 模组加载的客户端环境。所有 API Key 仅在服务器侧使用。
+
+CI 工作流 `.github/workflows/build.yml` 使用 Temurin 25 运行 Gradle 构建。单元测试采用本地模拟 HTTP 接口，不调用收费的真实模型 API。
+
+## 当前范围
+
+**V0.1 已实现**：模型 profile、异步文字聊天、服务器采样、短期记忆、模型切换、错误处理与指令入口。
+
+**尚未实现**：独立聊天 GUI、语音、模型流式回复、能行动的 AI NPC、长期记忆、让 AI 执行游戏操作。
