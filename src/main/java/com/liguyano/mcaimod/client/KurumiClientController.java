@@ -108,6 +108,12 @@ public final class KurumiClientController {
         if (minecraft.player.getUUID().equals(event.getSender())) return;
         String message = event.getPlayerChatMessage().signedContent();
         if (requestInFlight || !GATE.tryAccept(message)) return;
+        String senderNameForMemory = minecraft.getConnection().getPlayerInfo(event.getSender()) == null
+                ? "" : minecraft.getConnection().getPlayerInfo(event.getSender()).getProfile().name();
+        if (KurumiLocationMemory.handle(message, senderNameForMemory)) {
+            GATE.finish();
+            return;
+        }
         requestInFlight = true;
         long requestGeneration = generation;
         // Acknowledgement is public and uses the player's normal chat account.
