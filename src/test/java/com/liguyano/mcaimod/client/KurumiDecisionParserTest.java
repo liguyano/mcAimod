@@ -28,6 +28,12 @@ class KurumiDecisionParserTest {
         assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"走\",\"action\":\"GOTO\",\"x\":120,\"y\":64}").isEmpty());
     }
 
+    @Test void validatesTreeHarvesting() {
+        var mine = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"开始砍树\",\"action\":\"MINE\",\"block_id\":\"minecraft:oak_log\"}").orElseThrow();
+        assertEquals("minecraft:oak_log", mine.blockId());
+        assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"执行\",\"action\":\"MINE\",\"block_id\":\"minecraft:command_block\"}").isEmpty());
+    }
+
     @Test void rejectsUnsupportedOrMalformedActions() {
         assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"执行\",\"action\":\"DROP\",\"item_id\":\"minecraft:diamond\",\"quantity\":64}").isEmpty());
         assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"执行\",\"action\":\"FARM\",\"radius\":32}").isEmpty());
