@@ -107,6 +107,8 @@ public final class KurumiClientController {
         if (!enabled || minecraft.player == null || minecraft.getConnection() == null) return;
         if (minecraft.player.getUUID().equals(event.getSender())) return;
         String message = event.getPlayerChatMessage().signedContent();
+        // An explicit '=' prefix opts out of Kurumi handling, including owner auto-address.
+        if (message.stripLeading().startsWith("=")) return;
         String senderNameForMemory = minecraft.getConnection().getPlayerInfo(event.getSender()) == null
                 ? "" : minecraft.getConnection().getPlayerInfo(event.getSender()).getProfile().name();
         boolean isOwner = "SekaiSaionji".equals(senderNameForMemory);
