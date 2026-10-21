@@ -39,6 +39,14 @@ class KurumiDecisionParserTest {
         assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"去捡钻石\",\"action\":\"PICKUP\",\"item_id\":\"minecraft:diamond\",\"quantity\":0,\"radius\":0}").isEmpty());
     }
 
+    @Test void acceptsChestOpenAndPut() {
+        var open = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"打开箱子\",\"action\":\"CHEST_OPEN\",\"radius\":0}").orElseThrow();
+        assertEquals(KurumiActionValidator.Type.CHEST_OPEN, open.action().orElseThrow().type());
+        var put = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"放入圆石\",\"action\":\"CHEST_PUT\",\"item_id\":\"minecraft:cobblestone\",\"quantity\":32,\"radius\":0}").orElseThrow();
+        assertEquals(KurumiActionValidator.Type.CHEST_PUT, put.action().orElseThrow().type());
+        assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"放入圆石\",\"action\":\"CHEST_PUT\",\"item_id\":\"minecraft:cobblestone\",\"quantity\":0,\"radius\":0}").isEmpty());
+    }
+
     @Test void acceptsNormalChat() {
         var decision = KurumiDecisionParser.parse("{\"type\":\"chat\",\"reply\":\"你好呀\"}").orElseThrow();
         assertTrue(decision.action().isEmpty());
