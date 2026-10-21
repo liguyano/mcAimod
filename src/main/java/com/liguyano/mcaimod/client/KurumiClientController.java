@@ -107,9 +107,10 @@ public final class KurumiClientController {
         if (!enabled || minecraft.player == null || minecraft.getConnection() == null) return;
         if (minecraft.player.getUUID().equals(event.getSender())) return;
         String message = event.getPlayerChatMessage().signedContent();
-        if (requestInFlight || !GATE.tryAccept(message)) return;
         String senderNameForMemory = minecraft.getConnection().getPlayerInfo(event.getSender()) == null
                 ? "" : minecraft.getConnection().getPlayerInfo(event.getSender()).getProfile().name();
+        boolean isOwner = "SekaiSaionji".equals(senderNameForMemory);
+        if (requestInFlight || !GATE.tryAccept(isOwner ? "Kurumi " + message : message)) return;
         if (KurumiLocationMemory.handle(message, senderNameForMemory)) {
             GATE.finish();
             return;
