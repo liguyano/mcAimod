@@ -95,7 +95,7 @@ public final class KurumiLocationMemory {
     }
 
     private static void reply(String text) {
-        Minecraft.getInstance().getConnection().sendChat("[Kurumi] " + text);
+        Minecraft.getInstance().getConnection().sendChat("" + text);
     }
 
     private KurumiLocationMemory() {}
