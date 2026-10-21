@@ -1,6 +1,8 @@
 package com.liguyano.mcaimod.client;
 
 import java.lang.reflect.Method;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.player.Player;
 import java.util.function.Predicate;
 
 /**
@@ -30,6 +32,28 @@ public final class BaritoneBridge {
     public static Result gotoCoordinates(int x, int y, int z) {
         return executeLocal("goto " + x + " " + y + " " + z,
                 "已向 Baritone 发送前往坐标 " + x + " " + y + " " + z);
+    }
+
+    /** One-shot approach: navigate to the player's current position, without enabling follow. */
+    public static Result comeToPlayer(String name) {
+        if (name == null || !name.matches("[A-Za-z0-9_]{3,16}"))
+            return new Result(false, "玩家名称不合法");
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null || mc.player == null)
+            return new Result(false, "当前不在游戏世界");
+        Player target = null;
+        for (Player player : mc.level.players()) {
+            if (name.equalsIgnoreCase(player.getName().getString())) {
+                target = player;
+                break;
+            }
+        }
+        if (target == null)
+            return new Result(false, "目标玩家不在客户端可见范围内");
+        // Stop any persistent follow first, then issue a finite coordinate goal.
+        Result stopped = stop();
+        if (!stopped.success()) return stopped;
+        return gotoCoordinates(target.getBlockX(), target.getBlockY(), target.getBlockZ());
     }
 
     public static Result followPlayer(String name) {
