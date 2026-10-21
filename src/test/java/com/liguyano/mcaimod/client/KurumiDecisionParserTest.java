@@ -78,6 +78,11 @@ class KurumiDecisionParserTest {
         assertTrue(decision.action().isEmpty());
     }
 
+    @Test void distinguishesComeFromFollow() {
+        var come = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"来了\",\"action\":\"COME\",\"target\":\"SekaiSaionji\"}").orElseThrow();
+        assertEquals("come:SekaiSaionji", come.target());
+    }
+
     @Test void acceptsFollowAndGoto() {
         var follow = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"开始跟随\",\"action\":\"FOLLOW\",\"target\":\"SekaiSaionji\"}").orElseThrow();
         assertEquals("SekaiSaionji", follow.target());
