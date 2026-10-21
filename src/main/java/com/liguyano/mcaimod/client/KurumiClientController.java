@@ -35,6 +35,7 @@ public final class KurumiClientController {
 
     private static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
         generation++;
+        autoFarmEnabled = false;
         GATE.reset();
     }
 
@@ -47,6 +48,7 @@ public final class KurumiClientController {
                 }))
                 .then(Commands.literal("off").executes(context -> {
                     enabled = false;
+                    autoFarmEnabled = false;
                     generation++;
                     GATE.reset();
                     notice("已关闭聊天监听。");
@@ -87,7 +89,7 @@ public final class KurumiClientController {
         if (minecraft.player.getUUID().equals(event.getSender())) return;
         String message = event.getPlayerChatMessage().signedContent();
         Optional<KurumiFarmIntent.Intent> intent = KurumiFarmIntent.parse(message);
-        if (intent.isPresent() && intent.get().kind() == KurumiFarmIntent.Kind.STOP) {
+        if (autoFarmEnabled && intent.isPresent() && intent.get().kind() == KurumiFarmIntent.Kind.STOP) {
             generation++;
             GATE.reset();
             BaritoneBridge.Result stopped = BaritoneBridge.stop();
