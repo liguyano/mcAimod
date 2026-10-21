@@ -33,6 +33,12 @@ class KurumiDecisionParserTest {
         assertEquals(KurumiActionValidator.Type.CHAIN_OFF, off.action().orElseThrow().type());
     }
 
+    @Test void acceptsPickupAndRejectsInvalidQuantity() {
+        var decision = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"去捡钻石\",\"action\":\"PICKUP\",\"item_id\":\"minecraft:diamond\",\"quantity\":1,\"radius\":0}").orElseThrow();
+        assertEquals(KurumiActionValidator.Type.PICKUP, decision.action().orElseThrow().type());
+        assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"去捡钻石\",\"action\":\"PICKUP\",\"item_id\":\"minecraft:diamond\",\"quantity\":0,\"radius\":0}").isEmpty());
+    }
+
     @Test void acceptsNormalChat() {
         var decision = KurumiDecisionParser.parse("{\"type\":\"chat\",\"reply\":\"你好呀\"}").orElseThrow();
         assertTrue(decision.action().isEmpty());
