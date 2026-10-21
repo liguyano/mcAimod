@@ -26,6 +26,13 @@ class KurumiDecisionParserTest {
         assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"丢出圆石\",\"action\":\"DROP\",\"item_id\":\"minecraft:cobblestone\",\"quantity\":65,\"radius\":0}").isEmpty());
     }
 
+    @Test void acceptsChainMiningToggle() {
+        var on = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"开启连锁破坏\",\"action\":\"CHAIN_ON\",\"radius\":0}").orElseThrow();
+        assertEquals(KurumiActionValidator.Type.CHAIN_ON, on.action().orElseThrow().type());
+        var off = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"关闭连锁破坏\",\"action\":\"CHAIN_OFF\",\"radius\":0}").orElseThrow();
+        assertEquals(KurumiActionValidator.Type.CHAIN_OFF, off.action().orElseThrow().type());
+    }
+
     @Test void acceptsNormalChat() {
         var decision = KurumiDecisionParser.parse("{\"type\":\"chat\",\"reply\":\"你好呀\"}").orElseThrow();
         assertTrue(decision.action().isEmpty());
