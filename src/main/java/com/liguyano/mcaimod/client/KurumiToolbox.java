@@ -6,6 +6,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.entity.item.ItemEntity;
 
 import java.util.Comparator;
 
@@ -46,6 +47,24 @@ public final class KurumiToolbox {
                             found.add(item);
                         });
                 out.add("entities", found);
+            }
+            case "scan_dropped_items" -> {
+                JsonArray found = new JsonArray();
+                mc.level.getEntities(mc.player, mc.player.getBoundingBox().inflate(48),
+                        entity -> entity instanceof ItemEntity).stream()
+                        .map(entity -> (ItemEntity) entity)
+                        .sorted(Comparator.comparingDouble(entity -> entity.distanceToSqr(mc.player)))
+                        .limit(64).forEach(entity -> {
+                            JsonObject item = new JsonObject();
+                            item.addProperty("item_id", BuiltInRegistries.ITEM.getKey(entity.getItem().getItem()).toString());
+                            item.addProperty("count", entity.getItem().getCount());
+                            item.addProperty("x", entity.getBlockX());
+                            item.addProperty("y", entity.getBlockY());
+                            item.addProperty("z", entity.getBlockZ());
+                            item.addProperty("distance_squared", entity.distanceToSqr(mc.player));
+                            found.add(item);
+                        });
+                out.add("items", found);
             }
             case "scan_nearby_blocks" -> {
                 JsonArray found = new JsonArray();
