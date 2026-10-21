@@ -17,6 +17,10 @@ import net.neoforged.fml.loading.FMLPaths;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.UUID;
 import java.util.Optional;
 
 /** Local-only multiplayer chat integration. Actions remain disabled until game-side adapters exist. */
@@ -24,6 +28,7 @@ public final class KurumiClientController {
     private static final KurumiWakeRouter GATE =
             new KurumiWakeRouter(Clock.systemUTC(), Duration.ofSeconds(5));
     private static final OpenAiCompatibleProvider PROVIDER = new OpenAiCompatibleProvider();
+    private static final Map<UUID, List<ChatMessage>> HISTORY = new HashMap<>();
     private static boolean enabled = false;
     private static boolean autoFarmEnabled = false;
     private static long generation = 0;
@@ -40,6 +45,7 @@ public final class KurumiClientController {
         requestInFlight = false;
         autoFarmEnabled = false;
         GATE.reset();
+        HISTORY.clear();
     }
 
     private static void registerCommands(RegisterClientCommandsEvent event) {
@@ -55,6 +61,7 @@ public final class KurumiClientController {
                     generation++;
                     requestInFlight = false;
                     GATE.reset();
+                    HISTORY.clear();
                     notice("已关闭聊天监听。");
                     return 1;
                 }))
@@ -113,9 +120,13 @@ public final class KurumiClientController {
             return;
         }
         minecraft.getConnection().sendChat("[Kurumi] 好的，我听到了。");
-        PROVIDER.chat(profile.get(), List.of(
-                new ChatMessage("system", "你是 Minecraft 中的 Kurumi。只输出 JSON 对象，不要 Markdown。字段 type 为 chat 或 action，reply 为简短中文回复。仅在明确要求种田或收割时输出 action=FARM、radius=16；明确要求停止时输出 action=STOP、radius=0；要求跟随玩家时输出 action=FOLLOW、target=玩家的精确游戏ID（若玩家说“我”，使用发言者ID）；明确提供完整整数坐标时输出 action=GOTO、x/y/z=整数坐标。所有动作都用 type=action。无法确认玩家ID或完整坐标时用 type=chat 并询问，不要声称已执行。其他请求用 type=chat。"),
-                new ChatMessage("user", "发言者玩家名：" + (minecraft.getConnection().getPlayerInfo(event.getSender()) == null ? "未知" : minecraft.getConnection().getPlayerInfo(event.getSender()).getProfile().name()) + "；消息：" + message)))
+        UUID sender = event.getSender();
+        List<ChatMessage> conversation = new ArrayList<>();
+        conversation.add(new ChatMessage("system", "你是 Minecraft 中的 Kurumi。只输出 JSON 对象，不要 Markdown。type 为 chat 或 action，reply 为简短中文。动作：FARM radius=16、STOP radius=0、FOLLOW target=精确玩家名、GOTO x/y/z=完整整数坐标、MINE block_id=具体原木 minecraft:xxx_log 或菌柄 minecraft:xxx_stem。跟随我时用本条消息提供的发言者玩家名。缺少坐标或树种时询问，不能假装已执行。不要输出其他动作。"));
+        conversation.addAll(HISTORY.getOrDefault(sender, List.of()));
+        String senderName = minecraft.getConnection().getPlayerInfo(sender) == null ? "未知" : minecraft.getConnection().getPlayerInfo(sender).getProfile().name();
+        conversation.add(new ChatMessage("user", "发言者玩家名：" + senderName + "；消息：" + message));
+        PROVIDER.chat(profile.get(), conversation)
                 .whenComplete((reply, error) -> minecraft.execute(() -> {
                     if (generation != requestGeneration) return;
                     requestInFlight = false;
@@ -132,15 +143,15 @@ public final class KurumiClientController {
                         return;
                     }
                     KurumiDecisionParser.Decision decision = parsed.get();
-                    if (decision.action().isPresent() || !decision.target().isEmpty() || decision.x() != null) {
+                    if (decision.action().isPresent() || !decision.target().isEmpty() || decision.x() != null || !decision.blockId().isEmpty()) {
                         KurumiActionValidator.Action action = decision.action().orElse(null);
                         if (!autoFarmEnabled) {
                             notice("自动操作未开启，请先输入 /kurumi auto on。");
                             return;
                         }
                         BaritoneBridge.Result result = decision.action().isEmpty()
-                                ? (!decision.target().isEmpty()
-                                    ? BaritoneBridge.followPlayer(decision.target())
+                                ? (!decision.blockId().isEmpty() ? BaritoneBridge.mineBlock(decision.blockId())
+                                    : !decision.target().isEmpty() ? BaritoneBridge.followPlayer(decision.target())
                                     : BaritoneBridge.gotoCoordinates(decision.x(), decision.y(), decision.z()))
                                 : switch (action.type()) {
                             case FARM -> BaritoneBridge.farm(action.radius());
@@ -152,6 +163,11 @@ public final class KurumiClientController {
                             return;
                         }
                     }
+                    List<ChatMessage> updated = new ArrayList<>(HISTORY.getOrDefault(sender, List.of()));
+                    updated.add(new ChatMessage("user", message));
+                    updated.add(new ChatMessage("assistant", decision.reply()));
+                    if (updated.size() > 12) updated = new ArrayList<>(updated.subList(updated.size() - 12, updated.size()));
+                    HISTORY.put(sender, updated);
                     minecraft.getConnection().sendChat("[Kurumi] " + decision.reply());
                 }));
     }
