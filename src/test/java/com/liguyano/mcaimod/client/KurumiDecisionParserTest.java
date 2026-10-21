@@ -55,6 +55,18 @@ class KurumiDecisionParserTest {
         }
     }
 
+    @Test void acceptsAllStacksOfOneItem() {
+        for (String action : java.util.List.of("DROP_ITEM_ALL", "CHEST_PUT_ITEM_ALL")) {
+            String valid = "{\"type\":\"action\",\"reply\":\"好的\",\"action\":\"" + action
+                    + "\",\"item_id\":\"minecraft:cobblestone\",\"radius\":0}";
+            assertEquals(KurumiActionValidator.Type.valueOf(action),
+                    KurumiDecisionParser.parse(valid).orElseThrow().action().orElseThrow().type());
+            String invalid = "{\"type\":\"action\",\"reply\":\"好的\",\"action\":\"" + action
+                    + "\",\"item_id\":\"minecraft:cobblestone\",\"quantity\":64}";
+            assertTrue(KurumiDecisionParser.parse(invalid).isEmpty());
+        }
+    }
+
     @Test void acceptsNormalChat() {
         var decision = KurumiDecisionParser.parse("{\"type\":\"chat\",\"reply\":\"你好呀\"}").orElseThrow();
         assertTrue(decision.action().isEmpty());
