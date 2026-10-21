@@ -35,7 +35,7 @@ public final class KurumiDecisionParser {
             if ("FOLLOW".equals(name) || "COME".equals(name)) {
                 String target = object.has("target") ? object.get("target").getAsString() : "";
                 if (!target.matches("[A-Za-z0-9_]{3,16}")) return Optional.empty();
-                return Optional.of(new Decision(reply, Optional.empty(), target, null, null, null, ""));
+                return Optional.of(new Decision(reply, Optional.empty(), "COME".equals(name) ? "come:" + target : target, null, null, null, ""));
             }
             if ("GOTO".equals(name)) {
                 if (!object.has("x") || !object.has("y") || !object.has("z")) return Optional.empty();
