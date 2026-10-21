@@ -47,6 +47,14 @@ class KurumiDecisionParserTest {
         assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"放入圆石\",\"action\":\"CHEST_PUT\",\"item_id\":\"minecraft:cobblestone\",\"quantity\":0,\"radius\":0}").isEmpty());
     }
 
+    @Test void acceptsBulkInventoryActions() {
+        for (String action : java.util.List.of("DROP_ALL", "CHEST_PUT_ALL")) {
+            var result = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"好的\",\"action\":\"" + action + "\",\"radius\":0}").orElseThrow();
+            assertEquals(KurumiActionValidator.Type.valueOf(action), result.action().orElseThrow().type());
+            assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"好的\",\"action\":\"" + action + "\",\"quantity\":64}").isEmpty());
+        }
+    }
+
     @Test void acceptsNormalChat() {
         var decision = KurumiDecisionParser.parse("{\"type\":\"chat\",\"reply\":\"你好呀\"}").orElseThrow();
         assertTrue(decision.action().isEmpty());
