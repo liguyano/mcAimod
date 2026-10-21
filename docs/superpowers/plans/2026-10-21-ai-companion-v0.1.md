@@ -31,7 +31,7 @@
 
 ---
 
-## Task 1: Initialize official NeoForge MDK and test framework
+### Task 1: Initialize official NeoForge MDK and test framework
 
 **Files:**
 - Create: `build.gradle`, `settings.gradle`, `gradle.properties`, `gradlew`, `gradlew.bat`, `gradle/wrapper/*`, `.gitignore`, `.gitattributes`, `src/main/templates/META-INF/neoforge.mods.toml`.
@@ -48,7 +48,7 @@
 - [ ] **Step 4: Run** `./gradlew test build`. Expected: BUILD SUCCESSFUL and output JAR in `build/libs`.
 - [ ] **Step 5: Commit** `chore: bootstrap NeoForge 26.2 mod project`.
 
-## Task 2: Immutable player/world snapshots
+### Task 2: Immutable player/world snapshots
 
 **Files:**
 - Create: `src/main/java/com/liguyano/mcaimod/context/ActorSnapshot.java`.
@@ -67,7 +67,7 @@
 - [ ] **Step 4: Run** targeted test and build; expected GREEN.
 - [ ] **Step 5: Commit** `feat: capture bounded player world context`.
 
-## Task 3: Per-player short-term conversation management
+### Task 3: Per-player short-term conversation management
 
 **Files:**
 - Create: `src/main/java/com/liguyano/mcaimod/chat/ChatTurn.java`.
@@ -84,7 +84,7 @@
 - [ ] **Step 4: Run** tests and build; expected GREEN.
 - [ ] **Step 5: Commit** `feat: isolate bounded conversation sessions`.
 
-## Task 4: Configurable model profiles and HTTP provider
+### Task 4: Configurable model profiles and HTTP provider
 
 **Files:**
 - Create: `src/main/java/com/liguyano/mcaimod/model/ModelProfile.java`, `ModelProfiles.java`, `ChatMessage.java`, `ModelProvider.java`, `OpenAiCompatibleProvider.java`, `ModelException.java`.
@@ -94,7 +94,7 @@
 **Interfaces:**
 - Produces: `record ChatMessage(String role, String content)`.
 - Produces: `record ModelProfile(String name, URI baseUrl, String modelId, String apiKeyEnv, Duration timeout, int maxOutputTokens)`.
-- Produces: `ModelProfiles.load(Path configFile): ModelProfiles`, `get(String name): Optional<ModelProfile>`, `names(): Set<String>`.
+- Produces: `ModelProfiles.load(Path configFile): ModelProfiles (path `config/mcaimod-models.json`, document how to copy shipped example)`, `get(String name): Optional<ModelProfile>`, `names(): Set<String>`.
 - Produces: `interface ModelProvider { CompletableFuture<String> chat(ModelProfile profile, List<ChatMessage> messages); }`.
 
 - [ ] **Step 1: Use local JDK `HttpServer` tests** for exact JSON roles/model path, proper Bearer key only from env, 200 response, 401, 429, malformed JSON, timeout, and invalid/untrusted endpoint URLs.
@@ -103,7 +103,7 @@
 - [ ] **Step 4: Run** targeted tests and build; expected GREEN.
 - [ ] **Step 5: Commit** `feat: support switchable chat completion models`.
 
-## Task 5: Prompt composer and context minimization
+### Task 5: Prompt composer and context minimization
 
 **Files:**
 - Create: `src/main/java/com/liguyano/mcaimod/chat/PromptBuilder.java`.
@@ -118,17 +118,17 @@
 - [ ] **Step 4: Run** targeted tests; expected GREEN.
 - [ ] **Step 5: Commit** `feat: build safe context-aware prompts`.
 
-## Task 6: End-to-end chat commands and async orchestration
+### Task 6: End-to-end chat commands and async orchestration
 
 **Files:**
 - Create: `src/main/java/com/liguyano/mcaimod/chat/AIChatService.java`.
 - Create: `src/main/java/com/liguyano/mcaimod/command/AIChatCommand.java`.
 - Modify: `src/main/java/com/liguyano/mcaimod/AICompanionMod.java`.
-- Test: `src/test/java/com/liguyano/mcaimod/chat/AIChatServiceTest.java`.
+- Test: `src/test/java/com/liguyano/mcaimod/chat/AIChatServiceTest.java` (pure Java fakes, no live `ServerPlayer` required).
 
 **Interfaces:**
 - Consumes: `GameContextCollector.capture`, `PromptBuilder.build`, `ConversationManager`, `ModelProfiles`, `ModelProvider.chat`.
-- Produces: `AIChatService.ask(ServerPlayer player, String text)`, `clear(UUID)`, `selectProfile(UUID,String)`, `status(UUID)`.
+- Produces: `AIChatService.ask(UUID actorId, ActorSnapshot snapshot, String text): CompletionStage<String>`, `clear(UUID)`, `selectProfile(UUID,String)`, `status(UUID)`; Minecraft command layer owns player lookup, snapshot capture, and server-thread feedback.
 - Commands: `/ai <greedy_text>`, `/ai clear`, `/ai status`, `/ai model list`, `/ai model use <profile>`.
 
 - [ ] **Step 1: Test** empty/whitespace/over-1000 characters, per-player 4-second rate limit, busy sessions, timeout/failure not persisted, disconnect response suppression, correct player feedback scheduling and profile authorization.
@@ -137,7 +137,7 @@
 - [ ] **Step 4: Run** `./gradlew test build`; expected GREEN; manually verify `./gradlew runClient` and `./gradlew runServer` where supported.
 - [ ] **Step 5: Commit** `feat: expose AI chat commands in Minecraft`.
 
-## Task 7: Documentation, security checks, and packaging
+### Task 7: Documentation, security checks, and packaging
 
 **Files:**
 - Create/modify: `README.md`, `.gitignore`, `.github/workflows/build.yml`, `config/mcaimod-models.example.json`.
