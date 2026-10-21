@@ -54,7 +54,7 @@ class KurumiDecisionParserTest {
     }
 
     @Test void rejectsUnsupportedOrMalformedActions() {
-        assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"执行\",\"action\":\"DROP\",\"item_id\":\"minecraft:diamond\",\"quantity\":64}").isEmpty());
+        assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"执行\",\"action\":\"DROP\",\"item_id\":\"minecraft:diamond\",\"quantity\":0}").isEmpty());
         assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"执行\",\"action\":\"FARM\",\"radius\":32}").isEmpty());
         assertTrue(KurumiDecisionParser.parse("{\"reply\":\"你好\"}").isEmpty());
         assertTrue(KurumiDecisionParser.parse("not json").isEmpty());
