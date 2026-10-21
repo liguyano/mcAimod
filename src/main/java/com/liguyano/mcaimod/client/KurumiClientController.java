@@ -123,7 +123,7 @@ public final class KurumiClientController {
         minecraft.getConnection().sendChat("[Kurumi] 好的，我听到了。");
         UUID sender = event.getSender();
         List<ChatMessage> conversation = new ArrayList<>();
-        conversation.add(new ChatMessage("system", "你是 Minecraft 中的 Kurumi。只输出 JSON 对象，不要 Markdown。type 为 chat 或 action，reply 为简短中文。动作：FARM radius=16、STOP radius=0、FOLLOW target=精确玩家名、GOTO x/y/z=完整整数坐标、MINE block_id=具体原木 minecraft:xxx_log 或菌柄 minecraft:xxx_stem。跟随我时用本条消息提供的发言者玩家名。缺少坐标或树种时询问，不能假装已执行。可以调用只读工具，输出 JSON 对象 type=tool、tool=工具名。工具名可选 get_player_status、get_environment、scan_nearby_entities、scan_nearby_blocks、get_inventory。收到工具结果后再决定下一步，最多3次调用。不要编造观察结果。不要输出其他动作。"));
+        conversation.add(new ChatMessage("system", "你是 Minecraft 中的 Kurumi。只输出 JSON 对象，不要 Markdown。type 为 chat 或 action，reply 为简短中文。动作：FARM radius=16、STOP radius=0、SLEEP radius=0（睡觉，尝试使用附近床）、FOLLOW target=精确玩家名、GOTO x/y/z=完整整数坐标、MINE block_id=具体原木 minecraft:xxx_log 或菌柄 minecraft:xxx_stem。跟随我时用本条消息提供的发言者玩家名。缺少坐标或树种时询问，不能假装已执行。可以调用只读工具，输出 JSON 对象 type=tool、tool=工具名。工具名可选 get_player_status、get_environment、scan_nearby_entities、scan_nearby_blocks、get_inventory。收到工具结果后再决定下一步，最多3次调用。不要编造观察结果。不要输出其他动作。"));
         conversation.addAll(HISTORY.getOrDefault(sender, List.of()));
         String senderName = minecraft.getConnection().getPlayerInfo(sender) == null ? "未知" : minecraft.getConnection().getPlayerInfo(sender).getProfile().name();
         conversation.add(new ChatMessage("user", "发言者玩家名：" + senderName + "；消息：" + message));
@@ -177,6 +177,7 @@ public final class KurumiClientController {
                                 : switch (action.type()) {
                             case FARM -> BaritoneBridge.farm(action.radius());
                             case STOP -> BaritoneBridge.stop();
+                            case SLEEP -> KurumiSleepBridge.sleep();
                             default -> new BaritoneBridge.Result(false, "暂不支持此操作");
                         };
                         if (!result.success()) {
@@ -187,7 +188,7 @@ public final class KurumiClientController {
                     List<ChatMessage> updated = new ArrayList<>(HISTORY.getOrDefault(sender, List.of()));
                     updated.add(new ChatMessage("user", message));
                     updated.add(new ChatMessage("assistant", decision.reply()));
-                    if (updated.size() > 12) updated = new ArrayList<>(updated.subList(updated.size() - 12, updated.size()));
+                    if (updated.size() > 20) updated = new ArrayList<>(updated.subList(updated.size() - 20, updated.size()));
                     HISTORY.put(sender, updated);
                     minecraft.getConnection().sendChat("[Kurumi] " + decision.reply());
                 }));
