@@ -43,7 +43,7 @@ public final class KurumiDecisionParser {
                 if (y < -64 || y > 320 || Math.abs((long)x) > 30000000 || Math.abs((long)z) > 30000000) return Optional.empty();
                 return Optional.of(new Decision(reply, Optional.empty(), "", x, y, z, ""));
             }
-            if (!"FARM".equals(name) && !"STOP".equals(name) && !"SLEEP".equals(name) && !"DROP_ITEM_ALL".equals(name) && !"CHEST_PUT_ITEM_ALL".equals(name) && !"DROP_ALL".equals(name) && !"CHEST_PUT_ALL".equals(name) && !"CHEST_TAKE_ALL".equals(name) && !"CHEST_OPEN".equals(name) && !"CHEST_PUT".equals(name) && !"PICKUP".equals(name) && !"DROP".equals(name) && !"CHAIN_ON".equals(name) && !"CHAIN_OFF".equals(name)) return Optional.empty();
+            if (!"FARM".equals(name) && !"STOP".equals(name) && !"SLEEP".equals(name) && !"DROP_ITEM_ALL".equals(name) && !"CHEST_PUT_ITEM_ALL".equals(name) && !"DROP_ALL".equals(name) && !"CHEST_PUT_ALL".equals(name) && !"CHEST_TAKE_ALL".equals(name) && !"CHEST_OPEN".equals(name) && !"CHEST_PUT".equals(name) && !"PICKUP_ALL".equals(name) && !"PICKUP_ITEM_ALL".equals(name) && !"PICKUP".equals(name) && !"DROP".equals(name) && !"CHAIN_ON".equals(name) && !"CHAIN_OFF".equals(name)) return Optional.empty();
             String item = object.has("item_id") ? object.get("item_id").getAsString() : "";
             int quantity = object.has("quantity") ? object.get("quantity").getAsInt() : 0;
             int radius = object.has("radius") ? object.get("radius").getAsInt() : 0;
