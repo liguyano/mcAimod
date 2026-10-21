@@ -32,6 +32,11 @@ public final class KurumiDecisionParser {
                     return Optional.empty();
                 return Optional.of(new Decision(reply, Optional.empty(), "", null, null, null, block));
             }
+            if ("TPA_REQUEST_TO".equals(name)) {
+                String target = object.has("target") ? object.get("target").getAsString() : "";
+                if (!target.matches("[A-Za-z0-9_]{3,16}")) return Optional.empty();
+                return Optional.of(new Decision(reply, Optional.empty(), "tpa:" + target, null, null, null, ""));
+            }
             if ("FOLLOW".equals(name) || "COME".equals(name)) {
                 String target = object.has("target") ? object.get("target").getAsString() : "";
                 if (!target.matches("[A-Za-z0-9_]{3,16}")) return Optional.empty();
