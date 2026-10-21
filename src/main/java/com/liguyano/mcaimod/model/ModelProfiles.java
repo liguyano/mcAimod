@@ -34,14 +34,14 @@ public final class ModelProfiles {
         Map<String, ModelProfile> profiles = new LinkedHashMap<>();
         for (JsonElement element : entries) {
             JsonObject item = element.getAsJsonObject();
-            if (item.has("api_key") || item.has("apiKey")) {
-                throw new IllegalArgumentException("Inline API keys are forbidden; use api_key_env");
+            if (item.has("apiKey")) {
+                throw new IllegalArgumentException("Use api_key (snake_case) in model profiles");
             }
             if (!bool(item, "enabled", true)) continue;
             ModelProfile profile = new ModelProfile(required(item, "name"),
                     URI.create(required(item, "base_url")), required(item, "model_id"),
                     string(item, "api_key_env", ""), Duration.ofSeconds(number(item, "request_timeout", 30)),
-                    number(item, "max_output_tokens", 512));
+                    number(item, "max_output_tokens", 512), string(item, "api_key", ""));
             if (profiles.putIfAbsent(profile.name(), profile) != null) {
                 throw new IllegalArgumentException("Duplicate model profile " + profile.name());
             }

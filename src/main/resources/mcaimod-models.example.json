@@ -5,10 +5,21 @@
       "name": "ollama",
       "base_url": "http://127.0.0.1:11434/v1",
       "model_id": "qwen3:8b",
+      "api_key": "",
       "api_key_env": "",
       "request_timeout": 60,
       "max_output_tokens": 512,
       "enabled": true
+    },
+    {
+      "name": "aliyun",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "model_id": "qwen3.8-max",
+      "api_key": "",
+      "api_key_env": "",
+      "request_timeout": 60,
+      "max_output_tokens": 1024,
+      "enabled": false
     },
     {
       "name": "deepseek",

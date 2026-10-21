@@ -34,8 +34,11 @@ public final class OpenAiCompatibleProvider implements ModelProvider {
     public CompletableFuture<String> chat(ModelProfile profile, List<ChatMessage> messages) {
         final HttpRequest request;
         try {
-            String key = profile.apiKeyEnv().isBlank() ? "" : environment.apply(profile.apiKeyEnv());
-            if (!profile.apiKeyEnv().isBlank() && (key == null || key.isBlank())) {
+            String key = profile.apiKey();
+            if (key.isBlank() && !profile.apiKeyEnv().isBlank()) {
+                key = environment.apply(profile.apiKeyEnv());
+            }
+            if ((key == null || key.isBlank()) && !profile.apiKeyEnv().isBlank()) {
                 throw new ModelException("Missing server environment key " + profile.apiKeyEnv());
             }
             JsonObject payload = new JsonObject();

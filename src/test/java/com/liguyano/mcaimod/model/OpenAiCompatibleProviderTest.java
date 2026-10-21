@@ -3,10 +3,13 @@ package com.liguyano.mcaimod.model;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
@@ -19,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class OpenAiCompatibleProviderTest {
     private HttpServer server;
+    @TempDir Path tempDir;
 
     @AfterEach
     void stop() {
@@ -52,6 +56,30 @@ class OpenAiCompatibleProviderTest {
         assertTrue(request.get().contains("\"model\":\"fake-model\""));
         assertTrue(request.get().contains("\"role\":\"user\""));
         assertEquals("Bearer secret-test-token", bearer.get());
+    }
+
+    @Test
+    void usesInlineApiKeyFromJsonInPreferenceToEnvironment() throws Exception {
+        AtomicReference<String> bearer = new AtomicReference<>();
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v1/chat/completions", exchange -> {
+            bearer.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            byte[] answer = "{\"choices\":[{\"message\":{\"content\":\"OK\"}}]}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, answer.length);
+            exchange.getResponseBody().write(answer);
+            exchange.close();
+        });
+        server.start();
+        Path config = tempDir.resolve("models.json");
+        Files.writeString(config, """
+                {"profiles":[{"name":"aliyun","base_url":"http://127.0.0.1:%d/v1",
+                  "model_id":"qwen3.8-max","api_key":"unit-test-inline-token","api_key_env":"TEST_KEY"}]}
+                """.formatted(server.getAddress().getPort()));
+        ModelProfile configured = ModelProfiles.load(config).get("aliyun").orElseThrow();
+        ModelProvider provider = new OpenAiCompatibleProvider(HttpClient.newHttpClient(), env -> "environment-token");
+        assertEquals("OK", provider.chat(configured, List.of(new ChatMessage("user", "hello")))
+                .get(4, TimeUnit.SECONDS));
+        assertEquals("Bearer unit-test-inline-token", bearer.get());
     }
 
     @Test

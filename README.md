@@ -1,6 +1,6 @@
 # mcAimod — Minecraft 26.2 NeoForge AI Companion
 
-第一版 AI 伙伴 Mod：在游戏中与大模型聊天，让模型根据**当前玩家的真实游戏状态**回答问题。支持通过配置切换 **Ollama、DeepSeek、OpenAI** 等使用 Chat Completions 接口的服务。未来可复用聊天层接入智能 NPC，V0.1 不添加 NPC。
+第一版 AI 伙伴 Mod：在游戏中与大模型聊天，让模型根据**当前玩家的真实游戏状态**回答问题。支持通过配置切换 **Ollama、阿里云百炼（Qwen）、DeepSeek、OpenAI** 等使用 Chat Completions 接口的服务。未来可复用聊天层接入智能 NPC，V0.1 不添加 NPC。
 
 ## 要求
 
@@ -47,10 +47,34 @@ ollama serve
 | `name` | `/ai model use` 使用的名字 |
 | `base_url` | 接口前缀，例如 `https://api.deepseek.com/v1` |
 | `model_id` | 具体模型名称 |
+| `api_key` | 可直接填写 API Key（明文，仅保存在服务器本地配置）；留空时按 `api_key_env` 读取 |
 | `api_key_env` | API Key 的**环境变量名称**，本地无认证模型可留空 |
 | `request_timeout` | 超时秒数（1–300） |
 | `max_output_tokens` | 输出 token 上限（1–8192） |
 | `enabled` | 是否允许玩家选择该模型 |
+
+### 阿里云 Qwen3.8-Max（在 JSON 中配置密钥）
+
+打开游戏实例的 `config/mcaimod-models.json`，在 `profiles` 数组中新增下面的配置（已有配置则直接修改）。下面使用公共百炼接口地址；如果你使用工作空间专属 API 地址，请替换为自己的 `base_url`：
+
+```json
+{
+  "name": "aliyun",
+  "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  "model_id": "qwen3.8-max",
+  "api_key": "这里填写你新生成的API Key",
+  "api_key_env": "",
+  "request_timeout": 60,
+  "max_output_tokens": 1024,
+  "enabled": true
+}
+```
+
+注意这是 `profiles` 数组中的**一个对象**，不是整个配置文件；已有其他模型时须按 JSON 语法用逗号隔开。**重启游戏或服务器**后输入 `/ai model use aliyun`，再用 `/ai 你好` 测试。
+
+首次生成的配置示例中 `aliyun` 默认 `enabled: false`、`api_key: ""`，填写真实密钥后再启用。**已生成的 `mcaimod-models.json` 不会被更新覆盖**，升级 Mod 后需要自行增加 `api_key` 字段或 `aliyun` profile。
+
+配置优先级：`api_key` 不为空时使用它；为空时回退读取 `api_key_env` 指向的环境变量；两者都为空时不发送 Authorization 请求头（适合本地 Ollama）。
 
 启用 DeepSeek：
 
@@ -67,7 +91,7 @@ $env:DEEPSEEK_API_KEY = "你的密钥"
 
 OpenAI 同理，使用 `OPENAI_API_KEY` 并启用 `openai` 配置。可以增加其他 Chat Completions 兼容模型配置。此首版使用常见的 `max_tokens` 参数；如使用仅接受 `max_completion_tokens` 的模型，请选用兼容模型或后续适配该参数。
 
-安全限制：远程接口必须是 HTTPS；普通 HTTP **仅允许本机回环地址** `127.0.0.1`、`localhost` 或 `::1`。不要将真实 API Key 填入 JSON，`api_key_env` 只接受环境变量名称。每个配置是否启用由服务器管理员决定，玩家无法通过聊天指令任意输入 URL。
+安全限制：远程接口必须是 HTTPS；普通 HTTP **仅允许本机回环地址** `127.0.0.1`、`localhost` 或 `::1`。JSON 中的 `api_key` 是**明文存储**，只适用于自己管理的电脑或服务器，不要上传到 GitHub、分享给别人或把它包含在发布的 Mod JAR 中；多人服务器推荐使用 `api_key_env` 环境变量。项目 `.gitignore` 已忽略 `config/mcaimod-models.json` 和开发实例 `run/`，但这并不能阻止密钥被你手动复制到其他文件。每个配置是否启用由服务器管理员决定，玩家无法通过聊天指令任意输入 URL。
 
 ## 游戏指令
 

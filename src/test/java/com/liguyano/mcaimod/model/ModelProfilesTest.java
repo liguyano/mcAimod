@@ -30,8 +30,26 @@ class ModelProfilesTest {
                 """);
         assertThrows(IllegalArgumentException.class, () -> ModelProfiles.load(file));
 
+    }
+
+    @Test
+    void acceptsInlineApiKeyWithoutExposingItInProfileLogs() throws Exception {
+        Path file = tempDir.resolve("models.json");
         Files.writeString(file, """
-                {"profiles":[{"name":"bad","base_url":"https://api.example.com/v1","model_id":"test","api_key":"plaintext-secret"}]}
+                {"profiles":[{"name":"aliyun","base_url":"https://api.example.com/compatible-mode/v1",
+                  "model_id":"qwen3.8-max","api_key":"unit-test-inline-secret","api_key_env":"TEST_KEY"}]}
+                """);
+        ModelProfile profile = ModelProfiles.load(file).get("aliyun").orElseThrow();
+        assertEquals("qwen3.8-max", profile.modelId());
+        assertFalse(profile.toString().contains("unit-test-inline-secret"));
+    }
+
+    @Test
+    void stillRejectsUnknownCamelCaseApiKeyField() throws Exception {
+        Path file = tempDir.resolve("models.json");
+        Files.writeString(file, """
+                {"profiles":[{"name":"bad","base_url":"https://api.example.com/v1",
+                  "model_id":"test","apiKey":"unit-test-inline-secret"}]}
                 """);
         assertThrows(IllegalArgumentException.class, () -> ModelProfiles.load(file));
     }
