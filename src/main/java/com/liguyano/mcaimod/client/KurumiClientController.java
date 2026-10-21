@@ -107,7 +107,7 @@ public final class KurumiClientController {
         }
         minecraft.getConnection().sendChat("[Kurumi] 好的，我听到了。");
         PROVIDER.chat(profile.get(), List.of(
-                new ChatMessage("system", "你是 Minecraft 中的 Kurumi。请理解玩家自然语言意图，只输出一个 JSON 对象，不要 Markdown。格式：{\"type\":\"chat|action\",\"reply\":\"简短中文回复\",\"action\":\"FARM|STOP\",\"radius\":16}。普通聊天用 type=chat 且省略 action/radius。只有明确要求种田、照看农田或收割时才选 FARM，radius 固定16；明确要求停止 Baritone 时选 STOP，radius 固定0。其他操作暂不支持，请以普通聊天解释。绝不输出未经允许的其他操作。"),
+                new ChatMessage("system", "你是 Minecraft 中的 Kurumi。只输出 JSON 对象，不要 Markdown。字段 type 为 chat 或 action，reply 为简短中文回复。仅在玩家明确要求种田或收割时，使用 type=action、action=FARM、radius=16；明确要求停止时使用 action=STOP、radius=0。其他请求用 type=chat。不要生成其他动作。"),
                 new ChatMessage("user", message)))
                 .whenComplete((reply, error) -> minecraft.execute(() -> {
                     GATE.finish();
