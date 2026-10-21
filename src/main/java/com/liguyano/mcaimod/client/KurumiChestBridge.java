@@ -99,29 +99,37 @@ public final class KurumiChestBridge {
             return new BaritoneBridge.Result(false, "箱子界面尚未打开");
         int chestSlots = menu.getRowCount() * 9;
         int remaining = quantity;
+        int sent = 0;
         for (int slot = chestSlots; slot < chestSlots + 36 && remaining > 0; slot++) {
             var stack = menu.getSlot(slot).getItem();
             if (stack.isEmpty() || !itemId.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()))
                 continue;
-            int move = Math.min(remaining, stack.getCount());
-            // Pick up the source stack, place individual items into matching/empty chest slots,
-            // then return any remainder to its original inventory slot.
-            mc.gameMode.handleContainerInput(menu.containerId, slot, 0, ContainerInput.PICKUP, mc.player);
-            for (int dst = 0; dst < chestSlots && move > 0; dst++) {
-                var target = menu.getSlot(dst).getItem();
-                if (!target.isEmpty() && (!itemId.equals(BuiltInRegistries.ITEM.getKey(target.getItem()).toString())
-                        || target.getCount() >= target.getMaxStackSize())) continue;
-                int capacity = target.isEmpty() ? stack.getMaxStackSize() : target.getMaxStackSize() - target.getCount();
-                int count = Math.min(move, capacity);
-                for (int k = 0; k < count; k++)
+            int count = stack.getCount();
+            if (count <= remaining) {
+                // Shift-click performs vanilla stacking: existing matching stacks are filled first.
+                // Never right-click every item into separately selected destination slots.
+                mc.gameMode.handleContainerInput(menu.containerId, slot, 0, ContainerInput.QUICK_MOVE, mc.player);
+                int left = menu.getSlot(slot).getItem().getCount();
+                int moved = Math.max(0, count - left);
+                remaining -= moved;
+                sent += moved;
+            } else {
+                // Partial stack: reserve one empty chest slot and keep the destination fixed.
+                // Using a different destination for each click caused fragmented 1-2 item stacks.
+                int dst = -1;
+                for (int i = 0; i < chestSlots; i++) {
+                    if (menu.getSlot(i).getItem().isEmpty()) { dst = i; break; }
+                }
+                if (dst < 0) break;
+                mc.gameMode.handleContainerInput(menu.containerId, slot, 0, ContainerInput.PICKUP, mc.player);
+                for (int i = 0; i < remaining; i++)
                     mc.gameMode.handleContainerInput(menu.containerId, dst, 1, ContainerInput.PICKUP, mc.player);
-                move -= count;
-                remaining -= count;
+                mc.gameMode.handleContainerInput(menu.containerId, slot, 0, ContainerInput.PICKUP, mc.player);
+                sent += remaining;
+                remaining = 0;
             }
-            mc.gameMode.handleContainerInput(menu.containerId, slot, 0, ContainerInput.PICKUP, mc.player);
         }
-        int sent = quantity - remaining;
-        return sent == 0 ? new BaritoneBridge.Result(false, "箱子已满或没有可用的存放空间")
+        return sent == 0 ? new BaritoneBridge.Result(false, "箱子空间不足，或物品无法转移")
                 : new BaritoneBridge.Result(true, "已尝试向箱子放入 " + itemId + " × " + sent
                         + (remaining > 0 ? "；剩余" + remaining + "个未放入" : "")
                         + "（以服务器同步结果为准）");
