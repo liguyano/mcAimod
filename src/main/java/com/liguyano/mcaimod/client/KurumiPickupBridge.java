@@ -61,14 +61,14 @@ public final class KurumiPickupBridge {
         if (System.currentTimeMillis() - startedAt > 120000) {
             cancel();
             BaritoneBridge.stop();
-            mc.getConnection().sendChat("[Kurumi] 连续拾取已超时，已停止。");
+            mc.getConnection().sendChat("连续拾取已超时，已停止。");
             return;
         }
         var targets = nearby(mc, activeFilter);
         if (targets.isEmpty()) {
             cancel();
             BaritoneBridge.stop();
-            mc.getConnection().sendChat("[Kurumi] 附近已没有符合条件的可见掉落物，拾取任务结束。");
+            mc.getConnection().sendChat("附近已没有符合条件的可见掉落物，拾取任务结束。");
             return;
         }
         ItemEntity target = targets.get(0);
@@ -76,7 +76,7 @@ public final class KurumiPickupBridge {
             var result = BaritoneBridge.gotoCoordinates(target.getBlockX(), target.getBlockY(), target.getBlockZ());
             if (!result.success()) {
                 cancel();
-                mc.getConnection().sendChat("[Kurumi] 拾取导航失败：" + result.message());
+                mc.getConnection().sendChat("拾取导航失败：" + result.message());
                 return;
             }
             lastTargetId = target.getId();
