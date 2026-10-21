@@ -33,10 +33,10 @@ public final class KurumiToolbox {
             }
             case "scan_nearby_entities" -> {
                 JsonArray found = new JsonArray();
-                mc.level.getEntities(mc.player, mc.player.getBoundingBox().inflate(24),
+                mc.level.getEntities(mc.player, mc.player.getBoundingBox().inflate(48),
                         e -> true).stream()
                         .sorted(Comparator.comparingDouble(e -> e.distanceToSqr(mc.player)))
-                        .limit(24).forEach(e -> {
+                        .limit(64).forEach(e -> {
                             JsonObject item = new JsonObject();
                             item.addProperty("type", BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).toString());
                             item.addProperty("name", e.getName().getString());
@@ -51,8 +51,8 @@ public final class KurumiToolbox {
                 JsonArray found = new JsonArray();
                 BlockPos origin = mc.player.blockPosition();
                 int count = 0;
-                for (BlockPos pos : BlockPos.betweenClosed(origin.offset(-8,-4,-8), origin.offset(8,4,8))) {
-                    if (count >= 48) break;
+                for (BlockPos pos : BlockPos.betweenClosed(origin.offset(-16,-6,-16), origin.offset(16,6,16))) {
+                    if (count >= 96) break;
                     if (!mc.level.hasChunkAt(pos)) continue;
                     BlockState state = mc.level.getBlockState(pos);
                     String id = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
