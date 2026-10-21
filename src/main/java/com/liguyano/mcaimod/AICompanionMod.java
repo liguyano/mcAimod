@@ -22,7 +22,7 @@ public final class AICompanionMod {
     public static final String MOD_ID = "mcaimod";
 
     public AICompanionMod() {
-        if (FMLLoader.getDist() == Dist.CLIENT) {
+        if (FMLLoader.getCurrent().getDist() == Dist.CLIENT) {
             com.liguyano.mcaimod.client.KurumiClientController.install();
         }
         Path configFile = FMLPaths.CONFIGDIR.get().resolve("mcaimod-models.json");
