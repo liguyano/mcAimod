@@ -51,14 +51,20 @@ public final class KurumiClientController {
                     notice("已关闭聊天监听。");
                     return 1;
                 }))
+                .then(Commands.literal("farm").executes(context -> {
+                    BaritoneBridge.Result result = BaritoneBridge.farm(16);
+                    notice(result.message());
+                    return result.success() ? 1 : 0;
+                }))
                 .then(Commands.literal("stop").executes(context -> {
                     generation++;
                     GATE.reset();
-                    notice("已取消等待中的 Kurumi 请求。");
+                    BaritoneBridge.Result result = BaritoneBridge.stop();
+                    notice("已取消等待中的 Kurumi 请求。" + result.message());
                     return 1;
                 }))
                 .then(Commands.literal("status").executes(context -> {
-                    notice("聊天监听：" + (enabled ? "开启" : "关闭") + "；自动操作：尚未实现");
+                    notice("聊天监听：" + (enabled ? "开启" : "关闭") + "；Baritone：" + (BaritoneBridge.available() ? "已检测到" : "未检测到") + "；聊天自动操作：尚未开启");
                     return 1;
                 })));
     }
