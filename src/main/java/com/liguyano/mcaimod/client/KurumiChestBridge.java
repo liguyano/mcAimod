@@ -17,6 +17,7 @@ import net.neoforged.neoforge.common.NeoForge;
 public final class KurumiChestBridge {
     private record Pending(String itemId, int quantity, long startedAt) {}
     private static Pending pending;
+    private static final String ALL_ITEMS = "*";
 
     public static void install() {
         NeoForge.EVENT_BUS.addListener(KurumiChestBridge::onTick);
@@ -33,13 +34,15 @@ public final class KurumiChestBridge {
         return interact(itemId, quantity);
     }
 
+    public static BaritoneBridge.Result putAll() { return interact(ALL_ITEMS, 0); }
+
     private static BaritoneBridge.Result interact(String itemId, int quantity) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null || mc.gameMode == null)
             return new BaritoneBridge.Result(false, "当前不在游戏世界");
         if (pending != null)
             return new BaritoneBridge.Result(false, "上一项箱子操作尚未完成");
-        if (itemId != null) {
+        if (itemId != null && !ALL_ITEMS.equals(itemId)) {
             int count = 0;
             for (int i = 0; i < 36; i++) {
                 var stack = mc.player.getInventory().getItem(i);
@@ -98,6 +101,20 @@ public final class KurumiChestBridge {
         if (mc.player == null || mc.gameMode == null || !(mc.player.containerMenu instanceof ChestMenu menu))
             return new BaritoneBridge.Result(false, "箱子界面尚未打开");
         int chestSlots = menu.getRowCount() * 9;
+        if (ALL_ITEMS.equals(itemId)) {
+            int stacks = 0;
+            for (int slot = chestSlots; slot < chestSlots + 36; slot++) {
+                var stack = menu.getSlot(slot).getItem();
+                if (stack.isEmpty()) continue;
+                mc.gameMode.handleContainerInput(menu.containerId, slot, 0,
+                        ContainerInput.QUICK_MOVE, mc.player);
+                stacks++;
+            }
+            return stacks == 0
+                    ? new BaritoneBridge.Result(false, "背包主物品栏和快捷栏为空")
+                    : new BaritoneBridge.Result(true, "已尝试将 " + stacks
+                            + " 组物品快速放入箱子（不含盔甲、副手；以服务器同步为准）");
+        }
         int remaining = quantity;
         int sent = 0;
         for (int slot = chestSlots; slot < chestSlots + 36 && remaining > 0; slot++) {
