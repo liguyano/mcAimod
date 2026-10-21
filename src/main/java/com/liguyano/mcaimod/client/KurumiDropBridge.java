@@ -2,7 +2,7 @@ package com.liguyano.mcaimod.client;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 
 /** Drops items through the normal inventory click packets, not client-only stack edits. */
 public final class KurumiDropBridge {
@@ -32,11 +32,11 @@ public final class KurumiDropBridge {
             int menuSlot = i < 9 ? i + 36 : i;
             if (count == stack.getCount()) {
                 mc.gameMode.handleInventoryMouseClick(mc.player.inventoryMenu.containerId,
-                        menuSlot, 1, ClickType.THROW, mc.player);
+                        menuSlot, 1, ContainerInput.THROW, mc.player);
             } else {
                 for (int j = 0; j < count; j++) {
                     mc.gameMode.handleInventoryMouseClick(mc.player.inventoryMenu.containerId,
-                            menuSlot, 0, ClickType.THROW, mc.player);
+                            menuSlot, 0, ContainerInput.THROW, mc.player);
                 }
             }
             remaining -= count;
