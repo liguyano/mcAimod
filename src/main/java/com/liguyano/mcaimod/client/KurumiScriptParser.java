@@ -13,6 +13,8 @@ public final class KurumiScriptParser {
     private static final Pattern COUNT = Pattern.compile("(check_chest|check_inventory)\\(\"([a-z0-9_.:-]+)\"\\)\\s*(<=|>=|==|!=|<|>)\\s*(\\d+)");
     private static final Pattern ASSIGN = Pattern.compile("([a-z][a-z0-9_]{0,23})\\s*=\\s*(\\d{1,4})");
     private static final Pattern COUNT_VAR = Pattern.compile("(check_chest|check_inventory)\\(\"([a-z0-9_.:-]+)\"\\)\\s*(<=|>=|==|!=|<|>)\\s*([a-z][a-z0-9_]{0,23})");
+    private static final Pattern DISTANCE = Pattern.compile("check_distance\\(\"(block|entity|player|item)\",\\s*\"([A-Za-z0-9_.:-]+)\"\\)\\s*(<=|>=|==|!=|<|>)\\s*(\\d+)");
+    private static final Pattern DISTANCE_VAR = Pattern.compile("check_distance\\(\"(block|entity|player|item)\",\\s*\"([A-Za-z0-9_.:-]+)\"\\)\\s*(<=|>=|==|!=|<|>)\\s*([a-z][a-z0-9_]{0,23})");
     private static final Pattern RESULT = Pattern.compile("result\\.success");
     private static final Pattern FARM = Pattern.compile("(?:(result)\\s*=\\s*)?farm\\((\\d{1,2})\\)");
     private static final Pattern TALK = Pattern.compile("talk\\(\"([^\"\\r\\n]{1,120})\"\\)");
@@ -63,6 +65,15 @@ public final class KurumiScriptParser {
                     String replacement = comparison.group(1) + "(\"" + comparison.group(2)
                             + "\") " + comparison.group(3) + " " + value;
                     code = code.substring(0, code.indexOf(' ') + 1) + replacement + ":";
+                }
+                Matcher distanceVar = DISTANCE_VAR.matcher(expression);
+                if (distanceVar.matches()) {
+                    Integer value = constants.get(distanceVar.group(4));
+                    if (value == null) return Optional.empty();
+                    code = code.substring(0, code.indexOf(' ') + 1)
+                            + "check_distance(\"" + distanceVar.group(1) + "\",\""
+                            + distanceVar.group(2) + "\") " + distanceVar.group(3)
+                            + " " + value + ":";
                 }
                 lines.add(new Line(n / 4, code, sourceLine));
             }
@@ -210,6 +221,22 @@ public final class KurumiScriptParser {
         if (RESULT.matcher(expression).matches() || expression.equals("not result.success")) {
             node.addProperty("source", "result");
             node.addProperty("operator", expression.startsWith("not ") ? "LT" : "GE");
+            return node;
+        }
+        Matcher distance = DISTANCE.matcher(expression);
+        if (distance.matches()) {
+            String kind = distance.group(1), target = distance.group(2);
+            if ("player".equals(kind) ? !target.matches("[A-Za-z0-9_]{1,16}")
+                    : !target.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+                throw new IllegalArgumentException("invalid distance target");
+            node.addProperty("source", "distance");
+            node.addProperty("item_id", kind + ":" + target);
+            node.addProperty("operator", switch (distance.group(3)) {
+                case "<" -> "LT"; case "<=" -> "LE"; case "==" -> "EQ";
+                case "!=" -> "NE"; case ">=" -> "GE"; case ">" -> "GT";
+                default -> throw new IllegalArgumentException();
+            });
+            node.addProperty("count", Integer.parseInt(distance.group(4)));
             return node;
         }
         Matcher m = COUNT.matcher(expression);
