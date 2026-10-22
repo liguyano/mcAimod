@@ -245,3 +245,25 @@ CI 工作流 `.github/workflows/build.yml` 使用 Temurin 25 运行 Gradle 构�
 ```
 
 每个 WHILE 最多 20 次，最多 3 层嵌套、48 个静态节点、160 次动作，总运行时限 5 分钟。所有 ACTION 均委托现有执行器进行前后验证，失败则停止整个程序；目前尚不支持用 IF 分支处理动作失败返回值，IF 只支持背包和箱子数量判断。战斗动作仍只能确认攻击尝试结束，不代表目标已被击败。旧的 `EXECUTE_PLAN` 仍然可用。
+
+
+### Python 风格任务脚本（EXECUTE_SCRIPT）
+
+现在可直接编写缩进式伪代码（**不是执行真正的 Python**），由白名单解析器转换成受控指令树。脚本作为模型 JSON 响应中的 `script` 字符串传入，换行需要 JSON 转义。示例脚本：
+
+```python
+# 循环刷怪并收集腐肉
+while check_chest("minecraft:rotten_flesh") < 64:
+    result = attack_mob("minecraft:zombie")
+    if result.success:
+        result = pickup_item_all("minecraft:rotten_flesh")
+        if result.success:
+            chest_put_item_all("minecraft:rotten_flesh")
+        else:
+            break
+    else:
+        break
+return "任务结束"
+```
+
+脚本支持 `while`、`if`、`else`、`break`、`return`、`result = action(...)`、`result.success`、`not result.success`、`check_chest(...)`、`check_inventory(...)`。动作函数白名单：`attack_mob`、`attack_player`、`pickup_item_all`、`chest_put_item_all`、`equip_armor`、`equip_main_hand`、`mine`。不支持任意变量、运算、导入模块或执行系统代码。动作成功表示原执行器验证通过；攻击目前仅代表攻击尝试结束，不能证明目标死亡。每级缩进必须为 4 个空格；保留循环次数、总时间与动作数上限。
