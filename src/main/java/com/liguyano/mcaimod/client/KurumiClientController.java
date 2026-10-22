@@ -55,6 +55,7 @@ public final class KurumiClientController {
         KurumiChestCraftTask.install();
         KurumiPlanExecutor.install();
         KurumiPseudoExecutor.install();
+        KurumiWebMonitor.install();
         KurumiChestInspector.install();
     }
 
