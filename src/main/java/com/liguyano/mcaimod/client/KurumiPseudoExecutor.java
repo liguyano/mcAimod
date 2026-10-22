@@ -27,6 +27,9 @@ public final class KurumiPseudoExecutor {
     private static boolean running;
     private static boolean awaitingAction;
     private static boolean awaitingChest;
+    private static boolean awaitingCome;
+    private static int comeX, comeY, comeZ;
+    private static long comeStarted;
     private static KurumiTaskPlanner.Condition pendingCondition;
     private static KurumiTaskPlanner.Statement pendingStatement;
     private static int actions;
@@ -42,6 +45,7 @@ public final class KurumiPseudoExecutor {
         running = false;
         awaitingAction = false;
         awaitingChest = false;
+        awaitingCome = false;
         frames.clear();
         KurumiChestInspector.cancel();
         KurumiPlanExecutor.cancel();
@@ -70,6 +74,7 @@ public final class KurumiPseudoExecutor {
         assignedResult = false;
         awaitingAction = false;
         awaitingChest = false;
+        awaitingCome = false;
         pendingCondition = null;
         pendingStatement = null;
         running = true;
@@ -93,6 +98,7 @@ public final class KurumiPseudoExecutor {
         pendingStatement = null;
         pendingCondition = null;
         awaitingChest = false;
+        awaitingCome = false;
         if (frame == null || stmt == null) { cancel(); return; }
         if ("IF".equals(stmt.op())) {
             frame.index++;
@@ -115,6 +121,23 @@ public final class KurumiPseudoExecutor {
         if (System.currentTimeMillis() - started > TIMEOUT) {
             say("伪代码超过5分钟，已停止");
             cancel();
+            return;
+        }
+        if (awaitingCome) {
+            double dx = mc.player.getX() - (comeX + 0.5);
+            double dy = mc.player.getY() - comeY;
+            double dz = mc.player.getZ() - (comeZ + 0.5);
+            if (dx * dx + dy * dy + dz * dz <= 9.0) {
+                awaitingCome = false;
+                lastResultSuccess = true;
+                KurumiWebMonitor.log("come() check_position: 已抵达目标坐标附近");
+            } else if (System.currentTimeMillis() - comeStarted > 90000L) {
+                awaitingCome = false;
+                lastResultSuccess = false;
+                BaritoneBridge.stop();
+                KurumiWebMonitor.log("come() check_position: 等待90秒超时");
+                if (!assignedResult) { say("未抵达目标，已停止后续动作"); cancel(); }
+            }
             return;
         }
         if (awaitingAction) {
@@ -208,7 +231,23 @@ public final class KurumiPseudoExecutor {
                     assignedResult = "ACTION_RESULT".equals(stmt.op());
                     KurumiWebMonitor.log(stmt.step().action() + " 命令：" + result.message());
                     frame.index++;
-                    if (!result.success() && !assignedResult) cancel();
+                    if (!result.success() && !assignedResult) { cancel(); return; }
+                    if (result.success() && "COME".equals(stmt.step().action())) {
+                        var target = mc.level.players().stream()
+                                .filter(p -> stmt.step().target().equalsIgnoreCase(p.getName().getString()))
+                                .findFirst();
+                        if (target.isEmpty()) {
+                            lastResultSuccess = false;
+                            if (!assignedResult) cancel();
+                            return;
+                        }
+                        comeX = target.get().getBlockX();
+                        comeY = target.get().getBlockY();
+                        comeZ = target.get().getBlockZ();
+                        comeStarted = System.currentTimeMillis();
+                        awaitingCome = true;
+                        KurumiWebMonitor.log("come() check_position: 等待到达 " + comeX + "," + comeY + "," + comeZ);
+                    }
                     return;
                 }
                 if (++actions > MAX_ACTIONS) {
