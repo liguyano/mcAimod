@@ -20,6 +20,7 @@ public final class KurumiPlanExecutor {
     public static boolean busy() { return active != null; }
     public static void cancel() {
         active = null;
+        KurumiCombatBridge.cancel();
         KurumiChestInspector.cancel();
         KurumiChestBridge.cancel();
         KurumiAutoCraftBridge.cancel();
@@ -54,6 +55,7 @@ public final class KurumiPlanExecutor {
     private static boolean verified(KurumiTaskPlanner.Step s, int before) {
         int current = KurumiTaskChecks.inventoryCount(s.itemId());
         return switch (s.action()) {
+            case "ATTACK_MOB", "ATTACK_PLAYER" -> !KurumiCombatBridge.busy();
             case "GOTO" -> KurumiTaskChecks.within(s.x(), s.y(), s.z(), 3);
             case "EQUIP_MAIN_HAND" -> {
                 Minecraft mc = Minecraft.getInstance();
@@ -67,6 +69,8 @@ public final class KurumiPlanExecutor {
     }
     private static BaritoneBridge.Result dispatch(KurumiTaskPlanner.Step s) {
         return switch (s.action()) {
+            case "ATTACK_MOB" -> KurumiCombatBridge.attackMob(s.target());
+            case "ATTACK_PLAYER" -> KurumiCombatBridge.attackPlayer(s.target());
             case "GOTO" -> BaritoneBridge.gotoCoordinates(s.x(), s.y(), s.z());
             case "EQUIP_MAIN_HAND" -> KurumiEquipBridge.mainHand(s.itemId());
             case "CHEST_TAKE" -> KurumiChestBridge.takeItem(s.itemId(), s.quantity());
@@ -98,9 +102,11 @@ public final class KurumiPlanExecutor {
         long now = System.currentTimeMillis();
         active = new Run(r.plan(), r.index(), r.started(), now, 0, -1, Phase.START, r.retries() + 1);
     }
+    private static String sAction(Run r) { return r.plan().steps().get(r.index()).action(); }
     private static void next(Run r) {
         long elapsed = (System.currentTimeMillis() - r.stepStarted()) / 1000;
-        say("步骤 " + (r.index() + 1) + " 已检查通过，耗时 " + elapsed + " 秒");
+        say("步骤 " + (r.index() + 1) + (sAction(r).startsWith("ATTACK_")
+                ? " 攻击尝试已结束（不代表目标被击败）" : " 已检查通过") + "，耗时 " + elapsed + " 秒");
         KurumiTaskPlanner.Step s = r.plan().steps().get(r.index());
         if (s.action().equals("MINE") || s.action().equals("GOTO")) BaritoneBridge.stop();
         if (r.index() + 1 == r.plan().steps().size()) {
@@ -154,6 +160,7 @@ public final class KurumiPlanExecutor {
                 say("开始步骤 " + (r.index() + 1) + "/" + r.plan().steps().size() + "：" + s.action());
             }
             case VERIFY -> {
+                if (s.action().startsWith("ATTACK_") && now - r.stepStarted() < 700) return;
                 if (!verified(s, r.inventoryBefore())) return;
                 if ((isChest(s.action()) && KurumiChestBridge.busy())
                         || (s.action().equals("CRAFT_ITEM") && KurumiAutoCraftBridge.busy())
