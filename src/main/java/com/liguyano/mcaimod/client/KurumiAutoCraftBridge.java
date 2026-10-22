@@ -37,13 +37,10 @@ public final class KurumiAutoCraftBridge {
             return new BaritoneBridge.Result(false, "尚未进入游戏");
         if (job != null) return new BaritoneBridge.Result(false, "上一项合成任务仍在执行");
         int initial = count(itemId);
-        Object recipeId = findRecipe(itemId);
-        if (recipeId == null)
-            return new BaritoneBridge.Result(false, "客户端配方书没有找到 " + itemId + " 的可用合成配方；不会猜测材料");
         BaritoneBridge.Result opened = KurumiCraftingBridge.open();
         if (!opened.success()) return opened;
-        job = new Job(itemId, quantity, initial, System.currentTimeMillis(), 0, recipeId);
-        return new BaritoneBridge.Result(true, "已找到配方，正在等待工作台打开并由服务器放入材料");
+        job = new Job(itemId, quantity, initial, System.currentTimeMillis(), 0, null);
+        return new BaritoneBridge.Result(true, "正在等待工作台打开，随后查询配方并尝试合成");
     }
 
     public static String lookup(String itemId) {
@@ -85,13 +82,19 @@ public final class KurumiAutoCraftBridge {
             return;
         }
         if (current.stage() == 0) {
-            if (!placeRecipe(menu, current.recipeId())) {
+            Object recipeId = findRecipe(current.itemId());
+            if (recipeId == null) {
+                job = null;
+                report("工作台已打开，但客户端未找到 " + current.itemId() + " 的可用配方；请检查配方是否解锁");
+                return;
+            }
+            if (!placeRecipe(menu, recipeId)) {
                 job = null;
                 report("无法调用服务器配方放置接口，已停止，不会乱动背包");
                 return;
             }
             job = new Job(current.itemId(), current.requested(), current.initial(),
-                    current.started(), 1, current.recipeId());
+                    current.started(), 1, recipeId);
             return;
         }
         ItemStack result = menu.getSlot(0).getItem();
