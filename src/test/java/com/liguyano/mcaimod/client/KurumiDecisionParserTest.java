@@ -5,12 +5,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class KurumiDecisionParserTest {
     private static String request(String script) {
-        return new com.google.gson.JsonObject() {{
-            addProperty("type", "action");
-            addProperty("action", "EXECUTE_SCRIPT");
-            addProperty("reply", "主人~");
-            addProperty("script", script);
-        }}.toString();
+        String escaped = script.replace("\\", "\\\\").replace("\"", "\\\"")
+                .replace("\n", "\\n").replace("\r", "\\r");
+        return "{\"type\":\"action\",\"action\":\"EXECUTE_SCRIPT\","
+                + "\"reply\":\"主人~\",\"script\":\"" + escaped + "\"}";
     }
 
     @Test void acceptsScriptSpeech() {
