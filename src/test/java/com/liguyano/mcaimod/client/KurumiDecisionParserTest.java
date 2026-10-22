@@ -4,112 +4,42 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class KurumiDecisionParserTest {
-    @Test void acceptsFarmFromModel() {
-        var decision = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"好的，我去种田\",\"action\":\"FARM\",\"radius\":16}").orElseThrow();
-        assertEquals(KurumiActionValidator.Type.FARM, decision.action().orElseThrow().type());
+    private static String request(String script) {
+        return new com.google.gson.JsonObject() {{
+            addProperty("type", "action");
+            addProperty("action", "EXECUTE_SCRIPT");
+            addProperty("reply", "主人~");
+            addProperty("script", script);
+        }}.toString();
     }
 
-    @Test void acceptsStopFromModel() {
-        var decision = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"好的，停止\",\"action\":\"STOP\",\"radius\":0}").orElseThrow();
-        assertEquals(KurumiActionValidator.Type.STOP, decision.action().orElseThrow().type());
-    }
-
-    @Test void acceptsSleep() {
-        var decision = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"尝试睡觉\",\"action\":\"SLEEP\",\"radius\":0}").orElseThrow();
-        assertEquals(KurumiActionValidator.Type.SLEEP, decision.action().orElseThrow().type());
-    }
-
-    @Test void acceptsDropAndRejectsInvalidQuantity() {
-        var decision = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"丢出圆石\",\"action\":\"DROP\",\"item_id\":\"minecraft:cobblestone\",\"quantity\":10,\"radius\":0}").orElseThrow();
-        assertEquals(KurumiActionValidator.Type.DROP, decision.action().orElseThrow().type());
-        assertEquals(10, decision.action().orElseThrow().quantity());
-        assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"丢出圆石\",\"action\":\"DROP\",\"item_id\":\"minecraft:cobblestone\",\"quantity\":65,\"radius\":0}").isEmpty());
-    }
-
-    @Test void acceptsChainMiningToggle() {
-        var on = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"开启连锁破坏\",\"action\":\"CHAIN_ON\",\"radius\":0}").orElseThrow();
-        assertEquals(KurumiActionValidator.Type.CHAIN_ON, on.action().orElseThrow().type());
-        var off = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"关闭连锁破坏\",\"action\":\"CHAIN_OFF\",\"radius\":0}").orElseThrow();
-        assertEquals(KurumiActionValidator.Type.CHAIN_OFF, off.action().orElseThrow().type());
-    }
-
-    @Test void acceptsPickupAndRejectsInvalidQuantity() {
-        var decision = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"去捡钻石\",\"action\":\"PICKUP\",\"item_id\":\"minecraft:diamond\",\"quantity\":1,\"radius\":0}").orElseThrow();
-        assertEquals(KurumiActionValidator.Type.PICKUP, decision.action().orElseThrow().type());
-        assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"去捡钻石\",\"action\":\"PICKUP\",\"item_id\":\"minecraft:diamond\",\"quantity\":0,\"radius\":0}").isEmpty());
-    }
-
-    @Test void acceptsChestOpenAndPut() {
-        var open = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"打开箱子\",\"action\":\"CHEST_OPEN\",\"radius\":0}").orElseThrow();
-        assertEquals(KurumiActionValidator.Type.CHEST_OPEN, open.action().orElseThrow().type());
-        var put = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"放入圆石\",\"action\":\"CHEST_PUT\",\"item_id\":\"minecraft:cobblestone\",\"quantity\":32,\"radius\":0}").orElseThrow();
-        assertEquals(KurumiActionValidator.Type.CHEST_PUT, put.action().orElseThrow().type());
-        assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"放入圆石\",\"action\":\"CHEST_PUT\",\"item_id\":\"minecraft:cobblestone\",\"quantity\":0,\"radius\":0}").isEmpty());
-    }
-
-    @Test void acceptsBulkInventoryActions() {
-        for (String action : java.util.List.of("DROP_ALL", "CHEST_PUT_ALL")) {
-            var result = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"好的\",\"action\":\"" + action + "\",\"radius\":0}").orElseThrow();
-            assertEquals(KurumiActionValidator.Type.valueOf(action), result.action().orElseThrow().type());
-            assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"好的\",\"action\":\"" + action + "\",\"quantity\":64}").isEmpty());
-        }
-    }
-
-    @Test void acceptsAllStacksOfOneItem() {
-        for (String action : java.util.List.of("DROP_ITEM_ALL", "CHEST_PUT_ITEM_ALL")) {
-            String valid = "{\"type\":\"action\",\"reply\":\"好的\",\"action\":\"" + action
-                    + "\",\"item_id\":\"minecraft:cobblestone\",\"radius\":0}";
-            assertEquals(KurumiActionValidator.Type.valueOf(action),
-                    KurumiDecisionParser.parse(valid).orElseThrow().action().orElseThrow().type());
-            String invalid = "{\"type\":\"action\",\"reply\":\"好的\",\"action\":\"" + action
-                    + "\",\"item_id\":\"minecraft:cobblestone\",\"quantity\":64}";
-            assertTrue(KurumiDecisionParser.parse(invalid).isEmpty());
-        }
-    }
-
-    @Test void acceptsTakeAllFromChest() {
-        var decision = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"取出全部\",\"action\":\"CHEST_TAKE_ALL\",\"radius\":0}").orElseThrow();
-        assertEquals(KurumiActionValidator.Type.CHEST_TAKE_ALL, decision.action().orElseThrow().type());
-        assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"取出全部\",\"action\":\"CHEST_TAKE_ALL\",\"quantity\":64}").isEmpty());
-    }
-
-    @Test void acceptsTpaActions() {
-        for (String action : java.util.List.of("TPA_REQUEST", "TPA_ACCEPT")) {
-            String json = "{\"type\":\"action\",\"reply\":\"好的\",\"action\":\"" + action + "\"}";
-            assertEquals(KurumiActionValidator.Type.valueOf(action),
-                    KurumiDecisionParser.parse(json).orElseThrow().action().orElseThrow().type());
-        }
-    }
-
-    @Test void acceptsNormalChat() {
-        var decision = KurumiDecisionParser.parse("{\"type\":\"chat\",\"reply\":\"你好呀\"}").orElseThrow();
+    @Test void acceptsScriptSpeech() {
+        var decision = KurumiDecisionParser.parse(request("talk(\"你好，主人~\")")).orElseThrow();
         assertTrue(decision.action().isEmpty());
+        assertTrue(decision.program().isPresent());
     }
 
-    @Test void distinguishesComeFromFollow() {
-        var come = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"来了\",\"action\":\"COME\",\"target\":\"SekaiSaionji\"}").orElseThrow();
-        assertEquals("come:SekaiSaionji", come.target());
+    @Test void acceptsScriptObservations() {
+        assertTrue(KurumiDecisionParser.parse(request("talk(get_environment())")).isPresent());
+        assertTrue(KurumiDecisionParser.parse(request("talk(get_inventory())")).isPresent());
+        assertTrue(KurumiDecisionParser.parse(request("talk(get_distance(\"block\",\"minecraft:oak_log\"))")).isPresent());
+        assertTrue(KurumiDecisionParser.parse(request("talk(check_position(1, 64, -2, 8))")).isPresent());
     }
 
-    @Test void acceptsFollowAndGoto() {
-        var follow = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"开始跟随\",\"action\":\"FOLLOW\",\"target\":\"SekaiSaionji\"}").orElseThrow();
-        assertEquals("SekaiSaionji", follow.target());
-        var gotoDecision = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"前往坐标\",\"action\":\"GOTO\",\"x\":120,\"y\":64,\"z\":-30}").orElseThrow();
-        assertEquals(120, gotoDecision.x());
-        assertEquals(-30, gotoDecision.z());
-        assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"走\",\"action\":\"GOTO\",\"x\":120,\"y\":64}").isEmpty());
+    @Test void acceptsScriptActions() {
+        assertTrue(KurumiDecisionParser.parse(request("result = mine(\"minecraft:oak_log\")")).isPresent());
+        assertTrue(KurumiDecisionParser.parse(request("stop()")).isPresent());
     }
 
-    @Test void validatesTreeHarvesting() {
-        var mine = KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"开始砍树\",\"action\":\"MINE\",\"block_id\":\"minecraft:oak_log\"}").orElseThrow();
-        assertEquals("minecraft:oak_log", mine.blockId());
-        assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"执行\",\"action\":\"MINE\",\"block_id\":\"minecraft:command_block\"}").isEmpty());
+    @Test void rejectsLegacyResponses() {
+        assertTrue(KurumiDecisionParser.parse("{\"type\":\"chat\",\"reply\":\"你好\"}").isEmpty());
+        assertTrue(KurumiDecisionParser.parse("{\"type\":\"tool\",\"tool\":\"get_environment\",\"reply\":\"查询\"}").isEmpty());
+        assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"action\":\"FARM\",\"reply\":\"开始\",\"radius\":16}").isEmpty());
     }
 
-    @Test void rejectsUnsupportedOrMalformedActions() {
-        assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"执行\",\"action\":\"DROP\",\"item_id\":\"minecraft:diamond\",\"quantity\":0}").isEmpty());
-        assertTrue(KurumiDecisionParser.parse("{\"type\":\"action\",\"reply\":\"执行\",\"action\":\"FARM\",\"radius\":32}").isEmpty());
-        assertTrue(KurumiDecisionParser.parse("{\"reply\":\"你好\"}").isEmpty());
+    @Test void rejectsMalformedScripts() {
+        assertTrue(KurumiDecisionParser.parse(request("java.lang.Runtime.getRuntime()")).isEmpty());
+        assertTrue(KurumiDecisionParser.parse(request("talk(get_distance(\"bad\",\"minecraft:stone\"))")).isEmpty());
         assertTrue(KurumiDecisionParser.parse("not json").isEmpty());
     }
 }
