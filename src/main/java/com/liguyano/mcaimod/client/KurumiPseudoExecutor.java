@@ -222,6 +222,16 @@ public final class KurumiPseudoExecutor {
                 frame.index++;
             }
             case "ACTION", "ACTION_RESULT" -> {
+                if ("CHAIN_ON".equals(stmt.step().action()) || "CHAIN_OFF".equals(stmt.step().action())) {
+                    if (++actions > MAX_ACTIONS) { cancel(); return; }
+                    var result = KurumiChainBridge.setEnabled("CHAIN_ON".equals(stmt.step().action()));
+                    lastResultSuccess = result.success();
+                    assignedResult = "ACTION_RESULT".equals(stmt.op());
+                    KurumiWebMonitor.log(stmt.step().action() + ": " + result.message());
+                    frame.index++;
+                    if (!result.success() && !assignedResult) cancel();
+                    return;
+                }
                 if ("COME".equals(stmt.step().action()) || "FOLLOW".equals(stmt.step().action())) {
                     if (++actions > MAX_ACTIONS) { cancel(); return; }
                     var result = "COME".equals(stmt.step().action())
