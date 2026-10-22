@@ -120,12 +120,12 @@ public final class KurumiWebMonitor {
             for(const k of ['state','line','operation','actions','iteration'])document.getElementById(k).textContent=d[k]??'-';
             document.getElementById('result').textContent=d.lastResultSuccess?'成功':'未成功/尚未验证';
             const code=document.getElementById('code');code.replaceChildren();
-            (d.script||'等待任务').split('\n').forEach((s,i)=>{
+            (d.script||'等待任务').split('\\n').forEach((s,i)=>{
               const row=document.createElement('div');if(i+1===d.line)row.className='active';
               const n=document.createElement('span');n.className='number';n.textContent=i+1;
               row.append(n,document.createTextNode(s));code.append(row);
             });
-            document.getElementById('logs').textContent=(d.events||[]).join('\n')||'暂无事件';
+            document.getElementById('logs').textContent=(d.events||[]).join('\\n')||'暂无事件';
           }catch(e){document.getElementById('state').textContent='连接断开';}
         }
         refresh();setInterval(refresh,1000);
