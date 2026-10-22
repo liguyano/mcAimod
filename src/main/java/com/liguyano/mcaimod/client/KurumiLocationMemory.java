@@ -28,6 +28,12 @@ public final class KurumiLocationMemory {
         String body = message.strip().replaceFirst("(?i)^.*?kurumi[，,：: ]*", "").strip();
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null || mc.getConnection() == null) return false;
+        // Explicit XYZ navigation is not a named waypoint lookup.
+        // Let the model generate goto(x,y,z) instead of replying "unknown location".
+        if (body.matches("(?s).*(?:坐标|座標|\\\\bgoto\\\\b).*")
+                && body.matches("(?s).*-?\\\\d+\\\\s*[,， ]+\\\\s*-?\\\\d+\\\\s*[,， ]+\\\\s*-?\\\\d+.*")) {
+            return false;
+        }
         Matcher save = SAVE.matcher(body), go = GO.matcher(body), where = WHERE.matcher(body);
         boolean list = body.contains("记住了哪些") || body.contains("地点列表") || body.contains("记忆的地点");
         boolean delete = body.startsWith("忘记") || body.startsWith("删除地点");
