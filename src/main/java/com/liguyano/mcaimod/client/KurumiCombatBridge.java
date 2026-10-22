@@ -5,6 +5,9 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.SwordItem;
+import net.minecraft.world.item.AxeItem;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import java.util.UUID;
@@ -14,10 +17,46 @@ public final class KurumiCombatBridge {
     private static UUID targetId;
     private static long started;
     private static long lastHit;
+    private static int previousSlot = -1;
     private static final double RANGE_SQUARED = 3.0 * 3.0;
 
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiCombatBridge::tick); }
-    public static void cancel() { targetId = null; }
+    public static void cancel() {
+        targetId = null;
+        Minecraft mc = Minecraft.getInstance();
+        if (previousSlot >= 0 && mc.player != null)
+            mc.player.getInventory().setSelectedSlot(previousSlot);
+        previousSlot = -1;
+    }
+
+    /** Prefer the strongest available hotbar sword, then axe; do not rearrange inventory. */
+    private static void selectWeapon() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+        var inventory = mc.player.getInventory();
+        int bestSlot = -1;
+        double bestScore = -1;
+        for (int slot = 0; slot < 9; slot++) {
+            ItemStack stack = inventory.getItem(slot);
+            if (stack.isEmpty()) continue;
+            double score;
+            if (stack.getItem() instanceof SwordItem) score = 100;
+            else if (stack.getItem() instanceof AxeItem) score = 50;
+            else continue;
+            String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+            if (id.contains("netherite")) score += 6;
+            else if (id.contains("diamond")) score += 5;
+            else if (id.contains("iron")) score += 4;
+            else if (id.contains("stone")) score += 3;
+            else if (id.contains("golden")) score += 2;
+            else if (id.contains("wooden")) score += 1;
+            if (score > bestScore) { bestScore = score; bestSlot = slot; }
+        }
+        if (bestSlot >= 0 && bestSlot != inventory.getSelectedSlot()) {
+            previousSlot = inventory.getSelectedSlot();
+            inventory.setSelectedSlot(bestSlot);
+        }
+    }
 
     public static BaritoneBridge.Result attackPlayer(String name) {
         if (name == null || !name.matches("[A-Za-z0-9_]{3,16}"))
@@ -57,10 +96,12 @@ public final class KurumiCombatBridge {
             return new BaritoneBridge.Result(false, "目标不可攻击");
         if (mc.player.distanceToSqr(target) > RANGE_SQUARED)
             return new BaritoneBridge.Result(false, "目标不在 3 格攻击范围内，请先靠近");
+        cancel();
+        selectWeapon();
         targetId = target.getUUID();
         started = System.currentTimeMillis();
         lastHit = 0;
-        return new BaritoneBridge.Result(true, "已锁定目标，开始近距离攻击，最多持续 10 秒");
+        return new BaritoneBridge.Result(true, "已锁定目标，已尝试切换快捷栏武器，最多攻击 10 秒");
     }
 
     private static void tick(ClientTickEvent.Post event) {
