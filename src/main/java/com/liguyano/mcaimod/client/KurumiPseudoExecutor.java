@@ -333,6 +333,17 @@ public final class KurumiPseudoExecutor {
                     }
                     return;
                 }
+                if ("MOVE".equals(stmt.step().action())) {
+                    if (++actions > MAX_ACTIONS) { cancel(); return; }
+                    var step = stmt.step();
+                    var result = BaritoneBridge.moveRelative(step.target(), step.quantity());
+                    lastResultSuccess = result.success();
+                    assignedResult = "ACTION_RESULT".equals(stmt.op());
+                    KurumiWebMonitor.log("MOVE: " + result.message());
+                    frame.index++;
+                    if (!result.success() && !assignedResult) cancel();
+                    return;
+                }
                 if ("GOTO_NAMED".equals(stmt.step().action())) {
                     if (++actions > MAX_ACTIONS) { cancel(); return; }
                     var result = KurumiLocationMemory.gotoNamed(stmt.step().target());
