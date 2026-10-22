@@ -15,6 +15,10 @@ public final class KurumiToolbox {
     public static String observe(String tool) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return "{\"error\":\"not_in_world\"}";
+        if (tool != null && tool.startsWith("check_nearby_chest:"))
+            return KurumiChestInspector.check(tool.substring("check_nearby_chest:".length()));
+        if (tool != null && tool.startsWith("get_nearby_chest_result:"))
+            return KurumiChestInspector.status(tool.substring("get_nearby_chest_result:".length()));
         if (tool != null && tool.startsWith("check_inventory_count:")) {
             String id = tool.substring("check_inventory_count:".length());
             JsonObject check = new JsonObject();
