@@ -198,8 +198,13 @@ public final class KurumiClientController {
                     if (!enabled || generation != requestGeneration || minecraft.player == null ||
                             minecraft.getConnection() == null) return;
                     if (error != null) {
+                        Throwable cause = error;
+                        while (cause.getCause() != null && cause.getCause() != cause) cause = cause.getCause();
+                        String detail = cause.getClass().getSimpleName() + ": "
+                                + (cause.getMessage() == null ? "(无详细信息)" : cause.getMessage());
+                        KurumiWebMonitor.log("模型请求失败：" + detail.substring(0, Math.min(detail.length(), 500)));
                         finishRequest();
-                        publicFailure("模型请求失败，请检查网络或模型配置。");
+                        publicFailure("模型请求失败，请检查 Web 面板中的详细错误。");
                         return;
                     }
                     KurumiWebMonitor.log("AI 原始回复：" + (reply == null ? "(null)" : reply.substring(0, Math.min(reply.length(), 4000))));
