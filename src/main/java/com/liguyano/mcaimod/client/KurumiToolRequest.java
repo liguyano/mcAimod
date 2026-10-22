@@ -16,6 +16,16 @@ public final class KurumiToolRequest {
                 return item.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
                         ? "get_crafting_recipe:" + item : null;
             }
+            if ("check_nearby_chest".equals(tool)) {
+                String item = object.has("item_id") ? object.get("item_id").getAsString() : "";
+                return item.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
+                        ? "check_nearby_chest:" + item : null;
+            }
+            if ("get_nearby_chest_result".equals(tool)) {
+                String item = object.has("item_id") ? object.get("item_id").getAsString() : "";
+                return item.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
+                        ? "get_nearby_chest_result:" + item : null;
+            }
             if ("check_inventory_count".equals(tool)) {
                 String item = object.has("item_id") ? object.get("item_id").getAsString() : "";
                 return item.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
