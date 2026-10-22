@@ -18,6 +18,8 @@ public final class KurumiPickupBridge {
         NeoForge.EVENT_BUS.addListener(KurumiPickupBridge::onTick);
     }
 
+    public static boolean busy() { return activeFilter != null; }
+
     public static void cancel() {
         activeFilter = null;
         lastTargetId = -1;
