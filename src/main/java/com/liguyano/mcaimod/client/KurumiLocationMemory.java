@@ -148,6 +148,53 @@ public final class KurumiLocationMemory {
         }
     }
 
+    /** Read-only grounded location context for the model; never infer coordinates. */
+    public static String contextForModel() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) return "世界尚未加载";
+        StringBuilder context = new StringBuilder();
+        context.append("Kurumi当前位置：")
+                .append(mc.player.getBlockX()).append(", ")
+                .append(mc.player.getBlockY()).append(", ")
+                .append(mc.player.getBlockZ()).append("；维度：")
+                .append(mc.level.dimension()).append("。");
+        Player owner = null;
+        for (Player p : mc.level.players()) {
+            if ("SekaiSaionji".equals(p.getName().getString())) { owner = p; break; }
+        }
+        if (owner == null) context.append("主人当前坐标不可见；不要猜测。");
+        else context.append("主人当前位置：")
+                .append(owner.getBlockX()).append(", ")
+                .append(owner.getBlockY()).append(", ")
+                .append(owner.getBlockZ()).append("。");
+        try {
+            String scope = mc.getCurrentServer() == null ? "singleplayer" : mc.getCurrentServer().ip;
+            String key = scope.replaceAll("[^a-zA-Z0-9_.:-]", "_");
+            Path path = FMLPaths.CONFIGDIR.get().resolve("mcaimod-locations.json");
+            if (!Files.exists(path)) return context.append("尚无已保存地点。").toString();
+            JsonObject root = JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject();
+            if (!root.has(key) || !root.get(key).isJsonObject())
+                return context.append("尚无当前服务器已保存地点。").toString();
+            JsonObject locations = root.getAsJsonObject(key);
+            context.append("当前服务器已保存地点（仅供查询或规划，不能跨维度直接寻路）：");
+            int count = 0;
+            for (Map.Entry<String, com.google.gson.JsonElement> entry : locations.entrySet()) {
+                if (count++ >= 20) { context.append("其余地点省略；"); break; }
+                if (!entry.getValue().isJsonObject()) continue;
+                JsonObject point = entry.getValue().getAsJsonObject();
+                if (!point.has("dimension") || !point.has("x") || !point.has("y") || !point.has("z")) continue;
+                context.append(entry.getKey()).append("=")
+                        .append(point.get("dimension").getAsString()).append(" (")
+                        .append(point.get("x").getAsInt()).append(",")
+                        .append(point.get("y").getAsInt()).append(",")
+                        .append(point.get("z").getAsInt()).append("); ");
+            }
+        } catch (RuntimeException | java.io.IOException ex) {
+            context.append("地点文件暂时无法读取；");
+        }
+        return context.toString();
+    }
+
     private static String clean(String text) {
         return text.strip().replaceAll("[。！？!?，,]+$", "").strip();
     }
