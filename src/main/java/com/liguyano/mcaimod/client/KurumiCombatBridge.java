@@ -22,6 +22,7 @@ public final class KurumiCombatBridge {
     private static int swappedHotbarSlot = -1;
     private static final double RANGE_SQUARED = 3.0 * 3.0;
 
+    public static boolean busy() { return targetId != null; }
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiCombatBridge::tick); }
     public static void cancel() {
         targetId = null;
