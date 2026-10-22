@@ -30,6 +30,8 @@ public final class KurumiPseudoExecutor {
     private static KurumiTaskPlanner.Condition pendingCondition;
     private static KurumiTaskPlanner.Statement pendingStatement;
     private static int actions;
+    private static boolean lastResultSuccess;
+    private static boolean assignedResult;
 
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiPseudoExecutor::tick); }
     public static boolean busy() { return running; }
@@ -59,6 +61,8 @@ public final class KurumiPseudoExecutor {
         frames.push(new Frame(program.statements(), null));
         started = System.currentTimeMillis();
         actions = 0;
+        lastResultSuccess = false;
+        assignedResult = false;
         awaitingAction = false;
         awaitingChest = false;
         pendingCondition = null;
@@ -110,8 +114,9 @@ public final class KurumiPseudoExecutor {
         if (awaitingAction) {
             if (KurumiPlanExecutor.busy()) return;
             awaitingAction = false;
-            if (!KurumiPlanExecutor.lastSucceeded()) {
-                say("伪代码动作失败，已停止（不会将失败视为成功）");
+            lastResultSuccess = KurumiPlanExecutor.lastSucceeded();
+            if (!lastResultSuccess && !assignedResult) {
+                say("伪代码动作失败，已停止");
                 cancel();
             }
             return;
@@ -139,7 +144,7 @@ public final class KurumiPseudoExecutor {
         }
         var stmt = frame.statements.get(frame.index);
         switch (stmt.op()) {
-            case "ACTION" -> {
+            case "ACTION", "ACTION_RESULT" -> {
                 if (++actions > MAX_ACTIONS) {
                     say("伪代码动作数量达到安全上限");
                     cancel();
@@ -153,12 +158,15 @@ public final class KurumiPseudoExecutor {
                     return;
                 }
                 frame.index++;
+                assignedResult = "ACTION_RESULT".equals(stmt.op());
                 awaitingAction = true;
             }
             case "IF", "WHILE" -> {
                 pendingStatement = stmt;
                 pendingCondition = stmt.condition();
-                if ("inventory".equals(pendingCondition.source())) {
+                if ("result".equals(pendingCondition.source())) {
+                    completeCondition(matches(lastResultSuccess ? 1 : 0, pendingCondition));
+                } else if ("inventory".equals(pendingCondition.source())) {
                     completeCondition(matches(KurumiTaskChecks.inventoryCount(pendingCondition.itemId()),
                             pendingCondition));
                 } else {
@@ -168,6 +176,11 @@ public final class KurumiPseudoExecutor {
                         cancel();
                     } else awaitingChest = true;
                 }
+            }
+            case "RETURN" -> {
+                running = false;
+                frames.clear();
+                say("伪代码执行 RETURN，任务结束");
             }
             case "BREAK" -> {
                 Frame target = null;
