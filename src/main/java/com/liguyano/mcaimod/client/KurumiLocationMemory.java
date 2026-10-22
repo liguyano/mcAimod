@@ -30,8 +30,9 @@ public final class KurumiLocationMemory {
         if (mc.player == null || mc.level == null || mc.getConnection() == null) return false;
         // Explicit XYZ navigation is not a named waypoint lookup.
         // Let the model generate goto(x,y,z) instead of replying "unknown location".
-        if ((body.contains("坐标") || body.contains("座標") || body.contains("goto"))
-                && body.matches("(?s).*-?[0-9]+[ ,，]+-?[0-9]+[ ,，]+-?[0-9]+.*")) {
+        // A coordinate triple anywhere in a multi-step request is not a named place.
+        // Examples: "去 -85 63 -17 的箱子" and "砍树后去(100,64,200)存箱".
+        if (body.matches("(?s).*-?[0-9]+[ ,，\\\\(]+-?[0-9]+[ ,，]+-?[0-9]+.*")) {
             return false;
         }
         Matcher save = SAVE.matcher(body), go = GO.matcher(body), where = WHERE.matcher(body);
