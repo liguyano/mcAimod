@@ -21,6 +21,13 @@ public final class KurumiDecisionParser {
             if (!"action".equals(type)) return Optional.empty();
             if (!object.has("action") || !object.get("action").isJsonPrimitive()) return Optional.empty();
             String name = object.get("action").getAsString();
+            if ("COLLECT_AND_STORE".equals(name)) {
+                String block = object.has("block_id") ? object.get("block_id").getAsString() : "";
+                int quantity = object.has("quantity") ? object.get("quantity").getAsInt() : 32;
+                if (!block.matches("minecraft:[a-z0-9_]{1,64}") || quantity < 1 || quantity > 64)
+                    return Optional.empty();
+                return Optional.of(new Decision(reply, Optional.empty(), "collect_store:" + quantity, null, null, null, block));
+            }
             if ("MINE".equals(name)) {
                 String block = object.has("block_id") ? object.get("block_id").getAsString() : "";
                 if (!block.matches("minecraft:[a-z0-9_]{1,64}")) return Optional.empty();
