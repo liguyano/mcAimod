@@ -265,7 +265,8 @@ public final class KurumiClientController {
                     KurumiDecisionParser.Decision decision = parsed.get();
                     if (decision.action().isPresent() || !decision.target().isEmpty() || decision.x() != null || !decision.blockId().isEmpty() || decision.plan().isPresent() || decision.program().isPresent()) {
                         KurumiActionValidator.Action action = decision.action().orElse(null);
-                        if (!autoFarmEnabled) {
+                        if (!autoFarmEnabled && !(decision.program().isPresent()
+                                && isReadOnlySpeech(decision.program().get().statements()))) {
                             publicFailure("自动操作未开启，需要先输入 /kurumi auto on。");
                             return;
                         }
@@ -357,6 +358,14 @@ public final class KurumiClientController {
                     HISTORY.put(sender, updated);
                     // All model speech is delivered by script talk(), not the reply metadata.
                 }));
+    }
+
+    private static boolean isReadOnlySpeech(List<KurumiTaskPlanner.Statement> statements) {
+        for (var stmt : statements) {
+            if (!"TALK".equals(stmt.op()) && !"OBSERVE_TALK".equals(stmt.op()))
+                return false;
+        }
+        return !statements.isEmpty();
     }
 
     /** Public status uses fixed or validated messages, never raw model/network exception text. */
