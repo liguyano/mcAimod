@@ -201,6 +201,22 @@ public final class KurumiClientController {
                         + "。用户说回家、去某个已保存地点时，先核对维度与名称，"
                         + "使用 goto(x,y,z) 前往对应坐标；仅在确认抵达后才能声称到达。"
                         + "多步骤指令须逐步执行，不能把发出寻路命令当成已经到达。"));
+        conversation.add(new ChatMessage("system",
+                "最高优先级输出规则：只允许一个 JSON 对象，type 必须是 action，action 必须是 EXECUTE_SCRIPT，"
+                + "必须有 reply 和 script 字符串。禁止 type=tool、type=chat、EXECUTE_PLAN、EXECUTE_PROGRAM 和其他旧动作。"
+                + "普通聊天也写在 script 的 talk(\\\"文本\\\") 中；不要仅靠 reply 发言。"
+                + "只读观察也必须写在 script 中，调用 talk(get_player_status())、talk(get_environment())、"
+                + "talk(scan_nearby_entities())、talk(scan_nearby_blocks())、talk(scan_dropped_items())、"
+                + "talk(get_inventory())、talk(get_distance(\\\"block\\\",\\\"minecraft:warped_stem\\\"))、"
+                + "talk(get_distance(\\\"player\\\",\\\"SekaiSaionji\\\"))、"
+                + "talk(find_nearest_block(\\\"minecraft:chest\\\"))、"
+                + "talk(check_inventory_count(\\\"minecraft:diamond\\\"))、"
+                + "talk(get_crafting_recipe(\\\"minecraft:chest\\\"))、"
+                + "talk(check_nearby_chest(\\\"minecraft:diamond\\\")) 或 "
+                + "talk(get_nearby_chest_result(\\\"minecraft:diamond\\\"))。"
+                + "观察结果通过 talk 发送到游戏聊天，不得自行编造。"
+                + "每条脚本最多12条 talk，发送间隔至少2秒，长结果可能截断。"
+                + "若无法执行用户要求，仍使用 EXECUTE_SCRIPT 并通过 talk 说明原因。"));
         conversation.addAll(HISTORY.getOrDefault(sender, List.of()));
         String senderName = minecraft.getConnection().getPlayerInfo(sender) == null ? "未知" : minecraft.getConnection().getPlayerInfo(sender).getProfile().name();
         conversation.add(new ChatMessage("user", "发言者玩家名：" + senderName + "；消息：" + message));
