@@ -10,7 +10,7 @@ import java.util.Optional;
 /** Validates a bounded, freely ordered sequence of supported game actions. */
 public final class KurumiTaskPlanner {
     public record Step(String action, String itemId, int quantity, Integer x, Integer y, Integer z, String target) {}
-    public record Plan(List<Step> steps, int quantity, int takeQuantity) {}
+    public record Plan(List<Step> steps, int quantity, int takeQuantity, int loopCount) {}
     private static final List<String> SUPPORTED = List.of(
             "EQUIP_MAIN_HAND", "EQUIP_ARMOR", "GOTO", "CHEST_TAKE", "CHEST_PUT",
             "CHEST_PUT_ITEM_ALL", "CRAFT_ITEM", "PICKUP_ITEM_ALL", "MINE",
@@ -25,6 +25,8 @@ public final class KurumiTaskPlanner {
             int takeQuantity = object.has("take_quantity") ? object.get("take_quantity").getAsInt() : defaultQuantity;
             if (defaultQuantity < 1 || defaultQuantity > 64 || takeQuantity < 1 || takeQuantity > 64)
                 return Optional.empty();
+            int loopCount = object.has("loop_count") ? object.get("loop_count").getAsInt() : 1;
+            if (loopCount < 1 || loopCount > 20) return Optional.empty();
             List<Step> steps = new ArrayList<>();
             for (JsonElement element : raw) {
                 if (!element.isJsonObject()) return Optional.empty();
@@ -60,7 +62,7 @@ public final class KurumiTaskPlanner {
                 }
                 steps.add(new Step(action, item, qty, x, y, z, target));
             }
-            return Optional.of(new Plan(List.copyOf(steps), defaultQuantity, takeQuantity));
+            return Optional.of(new Plan(List.copyOf(steps), defaultQuantity, takeQuantity, loopCount));
         } catch (RuntimeException e) { return Optional.empty(); }
     }
 
