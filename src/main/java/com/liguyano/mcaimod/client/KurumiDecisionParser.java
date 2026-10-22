@@ -32,6 +32,16 @@ public final class KurumiDecisionParser {
                     return Optional.empty();
                 return Optional.of(new Decision(reply, Optional.empty(), "", null, null, null, block));
             }
+            if ("ATTACK_PLAYER".equals(name)) {
+                String target = object.has("target") ? object.get("target").getAsString() : "";
+                if (!target.matches("[A-Za-z0-9_]{3,16}")) return Optional.empty();
+                return Optional.of(new Decision(reply, Optional.empty(), "attack_player:" + target, null, null, null, ""));
+            }
+            if ("ATTACK_MOB".equals(name)) {
+                String id = object.has("entity_id") ? object.get("entity_id").getAsString() : "";
+                if (!id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")) return Optional.empty();
+                return Optional.of(new Decision(reply, Optional.empty(), "attack_mob:" + id, null, null, null, ""));
+            }
             if ("TPA_REQUEST_TO".equals(name)) {
                 String target = object.has("target") ? object.get("target").getAsString() : "";
                 if (!target.matches("[A-Za-z0-9_]{3,16}")) return Optional.empty();
