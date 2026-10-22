@@ -110,6 +110,7 @@ public final class KurumiClientController {
                     KurumiLongTaskBridge.cancel();
                     KurumiChestCraftTask.cancel();
                     KurumiTaskRecovery.cancel();
+                    KurumiPlanExecutor.cancel();
                     BaritoneBridge.Result result = BaritoneBridge.stop();
                     notice("已取消等待中的 Kurumi 请求。" + result.message());
                     return 1;
@@ -223,6 +224,10 @@ public final class KurumiClientController {
                         }
                         if (KurumiLongTaskBridge.busy() && !decision.blockId().isEmpty() && !decision.target().startsWith("collect_store:")) {
                             publicFailure("长任务进行中，请先 /kurumi stop");
+                            return;
+                        }
+                        if (decision.plan().isPresent() && (KurumiLongTaskBridge.busy() || KurumiChestCraftTask.busy())) {
+                            publicFailure("已有长任务进行中，请先 /kurumi stop");
                             return;
                         }
                         if (KurumiPlanExecutor.busy()) {
