@@ -30,6 +30,8 @@ public final class KurumiPseudoExecutor {
     private static KurumiTaskPlanner.Condition pendingCondition;
     private static KurumiTaskPlanner.Statement pendingStatement;
     private static int actions;
+    private static int publicMessages;
+    private static long lastPublicMessageAt;
     private static boolean lastResultSuccess;
     private static boolean assignedResult;
 
@@ -61,6 +63,8 @@ public final class KurumiPseudoExecutor {
         frames.push(new Frame(program.statements(), null));
         started = System.currentTimeMillis();
         actions = 0;
+        publicMessages = 0;
+        lastPublicMessageAt = 0;
         lastResultSuccess = false;
         assignedResult = false;
         awaitingAction = false;
@@ -144,6 +148,27 @@ public final class KurumiPseudoExecutor {
         }
         var stmt = frame.statements.get(frame.index);
         switch (stmt.op()) {
+            case "TALK" -> {
+                // Send ordinary player chat to the server, not a local notice or command.
+                // Rate-limit scripted public messages to avoid flooding multiplayer chat.
+                long now = System.currentTimeMillis();
+                if (publicMessages >= 12) {
+                    say("伪代码 talk 次数超过上限，任务已停止");
+                    cancel();
+                    return;
+                }
+                if (now - lastPublicMessageAt < 2000) return;
+                String message = stmt.step().target();
+                if (message == null || message.isBlank() || message.length() > 120
+                        || message.startsWith("/") || message.indexOf('\n') >= 0) {
+                    cancel();
+                    return;
+                }
+                mc.getConnection().sendChat(message);
+                publicMessages++;
+                lastPublicMessageAt = now;
+                frame.index++;
+            }
             case "ACTION", "ACTION_RESULT" -> {
                 if (++actions > MAX_ACTIONS) {
                     say("伪代码动作数量达到安全上限");
