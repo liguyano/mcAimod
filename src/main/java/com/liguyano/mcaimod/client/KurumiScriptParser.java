@@ -18,6 +18,7 @@ public final class KurumiScriptParser {
     private static final Pattern RESULT = Pattern.compile("result\\.success");
     private static final Pattern FARM = Pattern.compile("(?:(result)\\s*=\\s*)?farm\\((\\d{1,2})\\)");
     // Read-only observations will be exposed through the script interpreter.
+    private static final Pattern OBSERVE = Pattern.compile("talk\\((get_player_status|get_environment|scan_nearby_entities|scan_nearby_blocks|scan_dropped_items|get_inventory)\\(\\)\\)");
     private static final Pattern TALK = Pattern.compile("talk\\(\"([^\"\\r\\n]{1,120})\"\\)");
 
     private static final Pattern ZERO = Pattern.compile("(stop|tpa_request|tpa_accept|craft_open|chest_open|chest_put_all|chest_take_all|drop_all|pickup_all)\\(\\)");
