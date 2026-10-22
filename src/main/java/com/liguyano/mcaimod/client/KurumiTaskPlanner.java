@@ -136,6 +136,7 @@ public final class KurumiTaskPlanner {
                 Plan parsed = parse(single).orElseThrow();
                 statements.add(new Statement(op, parsed.steps().get(0), null, List.of(), List.of()));
             } else throw new IllegalArgumentException("unsupported op");
+            if (node.has("line")) KurumiWebMonitor.registerLine(statements.get(statements.size() - 1), node.get("line").getAsInt());
         }
         return List.copyOf(statements);
     }
