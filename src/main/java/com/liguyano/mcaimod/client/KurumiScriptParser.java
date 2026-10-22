@@ -15,18 +15,20 @@ public final class KurumiScriptParser {
     private static final Pattern FARM = Pattern.compile("(?:(result)\\s*=\\s*)?farm\\((\\d{1,2})\\)");
     private static final Pattern TALK = Pattern.compile("talk\\(\"([^\"\\r\\n]{1,120})\"\\)");
     private static final Pattern RETURN = Pattern.compile("return\\s+\"[^\"\\r\\n]{0,100}\"");
-    private record Line(int indent, String code) {}
+    private record Line(int indent, String code, int number) {}
     private static final class Cursor { int at; }
     public static Optional<KurumiTaskPlanner.Program> parse(String source) {
         if (source == null || source.length() > 8192) return Optional.empty();
         try {
             var lines = new java.util.ArrayList<Line>();
+            int sourceLine = 0;
             for (String raw : source.replace("\r", "").split("\n")) {
+                sourceLine++;
                 if (raw.isBlank() || raw.stripLeading().startsWith("#")) continue;
                 int n = 0;
                 while (n < raw.length() && raw.charAt(n) == ' ') n++;
                 if (n % 4 != 0 || raw.indexOf('\t') >= 0) return Optional.empty();
-                lines.add(new Line(n / 4, raw.substring(n).stripTrailing()));
+                lines.add(new Line(n / 4, raw.substring(n).stripTrailing(), sourceLine));
             }
             if (lines.isEmpty() || lines.size() > 48 || lines.get(0).indent() != 0)
                 return Optional.empty();
@@ -35,7 +37,9 @@ public final class KurumiScriptParser {
             if (cursor.at != lines.size()) return Optional.empty();
             JsonObject obj = new JsonObject();
             obj.add("program", body);
-            return KurumiTaskPlanner.parseProgram(obj);
+            var parsed = KurumiTaskPlanner.parseProgram(obj);
+            parsed.ifPresent(program -> KurumiWebMonitor.register(program, source));
+            return parsed;
         } catch (RuntimeException e) { return Optional.empty(); }
     }
     private static JsonArray block(List<Line> lines, Cursor cursor, int indent, int depth) {
@@ -44,6 +48,7 @@ public final class KurumiScriptParser {
         while (cursor.at < lines.size() && lines.get(cursor.at).indent() == indent) {
             String code = lines.get(cursor.at++).code();
             JsonObject node = new JsonObject();
+            node.addProperty("line", lines.get(cursor.at - 1).number());
             if (code.startsWith("while ") && code.endsWith(":")
                     || code.startsWith("if ") && code.endsWith(":")) {
                 boolean loop = code.startsWith("while ");
