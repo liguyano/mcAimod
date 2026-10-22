@@ -15,6 +15,8 @@ public final class KurumiToolbox {
     public static String observe(String tool) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return "{\"error\":\"not_in_world\"}";
+        if (tool != null && tool.startsWith("get_crafting_recipe:"))
+            return KurumiAutoCraftBridge.lookup(tool.substring("get_crafting_recipe:".length()));
         JsonObject out = new JsonObject();
         out.addProperty("tool", tool);
         switch (tool) {
