@@ -162,6 +162,7 @@ Kurumi 与上面的服务端 `/ai` 问答功能不同，是客户端游戏内助
   "action": "EXECUTE_PLAN",
   "reply": "准备循环攻击、拾取并存放战利品",
   "loop_count": 3,
+  "break_conditions": [{"source": "chest", "item_id": "minecraft:rotten_flesh", "count": 64}],
   "steps": [
     {"action": "ATTACK_MOB", "entity_id": "minecraft:zombie"},
     {"action": "PICKUP_ITEM_ALL", "item_id": "minecraft:rotten_flesh"},
@@ -169,6 +170,8 @@ Kurumi 与上面的服务端 `/ai` 问答功能不同，是客户端游戏内助
   ]
 }
 ```
+
+可选 `break_conditions` 数组（最多 4 条），支持 `source: "inventory"`（背包）和 `source: "chest"`（附近普通箱子），指定 `item_id` 和 `count`（1–2304）；**任意一个条件满足即停止**。执行器在开始时和每个步骤完成后检查条件；箱子数量必须来自服务器同步的箱子菜单，检查失败时安全停止。检查到的数量不是本轮新增数量，而是当前总数量。箱子必须在可交互范围内。
 
 计划总时限 **5 分钟**，单步最多 **75 秒**，失败最多重试 **3 次**。目前自由计划失败后会重新检查并重试当前步骤，**并非任意失败都会触发大模型重新规划**。另有固定的 `COLLECT_AND_STORE` 长任务及其独立恢复逻辑。
 
