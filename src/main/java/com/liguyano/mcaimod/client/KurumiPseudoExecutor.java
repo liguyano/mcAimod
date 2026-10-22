@@ -295,11 +295,13 @@ public final class KurumiPseudoExecutor {
                     }
                     return;
                 }
-                if ("INTERACT".equals(stmt.step().action()) || "PUT_ITEM".equals(stmt.step().action())) {
+                if ("INTERACT".equals(stmt.step().action()) || "PUT_ITEM".equals(stmt.step().action()) || "TAKE_ITEM".equals(stmt.step().action())) {
                     if (++actions > MAX_ACTIONS) { cancel(); return; }
                     var step = stmt.step();
                     var result = "INTERACT".equals(step.action())
                             ? KurumiInteractionBridge.interact(step.itemId())
+                            : "TAKE_ITEM".equals(step.action())
+                            ? KurumiInteractionBridge.takeItem(step.itemId(), step.quantity())
                             : KurumiInteractionBridge.putItem(step.itemId(), step.quantity(), step.target());
                     lastResultSuccess = result.success();
                     assignedResult = "ACTION_RESULT".equals(stmt.op());
@@ -308,7 +310,8 @@ public final class KurumiPseudoExecutor {
                     if (!result.success() && !assignedResult) { cancel(); return; }
                     if (result.success() && "INTERACT".equals(step.action())
                             && java.util.Set.of("minecraft:furnace", "minecraft:blast_furnace",
-                                    "minecraft:smoker", "minecraft:chest", "minecraft:trapped_chest")
+                                    "minecraft:smoker", "minecraft:chest", "minecraft:trapped_chest",
+                                    "minecraft:crafting_table")
                                     .contains(step.itemId())) {
                         awaitingMenu = true;
                         menuStarted = System.currentTimeMillis();
