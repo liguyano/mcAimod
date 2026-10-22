@@ -316,9 +316,15 @@ public final class KurumiPseudoExecutor {
                     frame.index++;
                     if (!result.success() && !assignedResult) { cancel(); return; }
                     if (result.success() && "INTERACT".equals(step.action())
-                            && !java.util.Set.of("minecraft:lever", "minecraft:stone_button",
-                                    "minecraft:oak_button", "minecraft:oak_door", "minecraft:iron_door")
-                                    .contains(step.itemId())) {
+                            && (step.itemId().endsWith("_chest") || step.itemId().endsWith("_shulker_box")
+                                    || step.itemId().equals("minecraft:chest")
+                                    || step.itemId().equals("minecraft:trapped_chest")
+                                    || step.itemId().equals("minecraft:crafting_table")
+                                    || step.itemId().endsWith("_furnace")
+                                    || step.itemId().equals("minecraft:smoker")
+                                    || step.itemId().equals("minecraft:blast_furnace")
+                                    || step.itemId().equals("minecraft:barrel")
+                                    || step.itemId().equals("minecraft:hopper"))) {
                         awaitingMenu = true;
                         menuStarted = System.currentTimeMillis();
                     }
