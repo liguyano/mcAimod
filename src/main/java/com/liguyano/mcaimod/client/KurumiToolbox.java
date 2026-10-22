@@ -15,6 +15,63 @@ public final class KurumiToolbox {
     public static String observe(String tool) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return "{\"error\":\"not_in_world\"}";
+        if (tool != null && tool.startsWith("get_distance:")) {
+            String[] parts = tool.split(":", 3);
+            JsonObject out = new JsonObject();
+            if (parts.length != 3) return "{\"error\":\"invalid_target\"}";
+            String kind = parts[1], target = parts[2];
+            out.addProperty("kind", kind);
+            out.addProperty("target", target);
+            out.addProperty("unit", "blocks");
+            out.addProperty("search_radius", 48);
+            net.minecraft.world.phys.Vec3 eye = mc.player.position();
+            net.minecraft.world.phys.Vec3 nearest = null;
+            if ("block".equals(kind)) {
+                BlockPos origin = mc.player.blockPosition();
+                double best = 48.0 * 48.0;
+                for (BlockPos pos : BlockPos.betweenClosed(origin.offset(-48, -16, -48),
+                        origin.offset(48, 16, 48))) {
+                    if (!mc.level.hasChunkAt(pos)) continue;
+                    if (!target.equals(BuiltInRegistries.BLOCK.getKey(
+                            mc.level.getBlockState(pos).getBlock()).toString())) continue;
+                    var candidate = net.minecraft.world.phys.Vec3.atCenterOf(pos);
+                    double d = eye.distanceToSqr(candidate);
+                    if (d < best) { best = d; nearest = candidate; }
+                }
+            } else {
+                java.util.List<? extends net.minecraft.world.entity.Entity> entities;
+                if ("player".equals(kind)) {
+                    entities = mc.level.players();
+                } else {
+                    entities = mc.level.getEntities(mc.player,
+                            mc.player.getBoundingBox().inflate(48), e -> true);
+                }
+                double best = 48.0 * 48.0;
+                for (var entity : entities) {
+                    if (entity == mc.player) continue;
+                    boolean match = switch (kind) {
+                        case "player" -> target.equalsIgnoreCase(entity.getName().getString());
+                        case "entity" -> target.equals(BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
+                        case "item" -> entity instanceof ItemEntity drop
+                                && target.equals(BuiltInRegistries.ITEM.getKey(drop.getItem().getItem()).toString());
+                        default -> false;
+                    };
+                    if (!match) continue;
+                    double d = eye.distanceToSqr(entity.position());
+                    if (d < best) { best = d; nearest = entity.position(); }
+                }
+            }
+            out.addProperty("found", nearest != null);
+            if (nearest != null) {
+                out.addProperty("distance", Math.round(eye.distanceTo(nearest) * 100.0) / 100.0);
+                out.addProperty("x", nearest.x);
+                out.addProperty("y", nearest.y);
+                out.addProperty("z", nearest.z);
+            } else {
+                out.addProperty("note", "未在已加载的搜索范围内发现目标，不代表目标不存在");
+            }
+            return out.toString();
+        }
         if (tool != null && tool.startsWith("find_nearest_block:")) {
             String blockId = tool.substring("find_nearest_block:".length());
             JsonObject result = new JsonObject();
