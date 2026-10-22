@@ -23,6 +23,8 @@ import java.util.Set;
 public final class KurumiAutoCraftBridge {
     private record Job(String itemId, int requested, int initial, long started, int stage, Object recipeId) {}
     private static Job job;
+    private static boolean lastSucceeded;
+    public static boolean lastSucceeded() { return lastSucceeded; }
 
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiAutoCraftBridge::tick); }
     public static boolean busy() { return job != null; }
@@ -36,6 +38,7 @@ public final class KurumiAutoCraftBridge {
         if (mc.player == null || mc.gameMode == null)
             return new BaritoneBridge.Result(false, "尚未进入游戏");
         if (job != null) return new BaritoneBridge.Result(false, "上一项合成任务仍在执行");
+        lastSucceeded = false;
         int initial = count(itemId);
         BaritoneBridge.Result opened = KurumiCraftingBridge.open();
         if (!opened.success()) return opened;
@@ -67,7 +70,7 @@ public final class KurumiAutoCraftBridge {
         Job current = job;
         if (current == null) return;
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.gameMode == null) { job = null; return; }
+        if (mc.player == null || mc.gameMode == null) { lastSucceeded = false; job = null; return; }
         if (System.currentTimeMillis() - current.started() > 15000) {
             job = null;
             report("合成等待超时，已停止；请检查材料或工作台");
@@ -76,6 +79,7 @@ public final class KurumiAutoCraftBridge {
         if (!(mc.player.containerMenu instanceof CraftingMenu menu)) return;
         int done = count(current.itemId()) - current.initial();
         if (done >= current.requested()) {
+            lastSucceeded = true;
             job = null;
             mc.player.closeContainer();
             report("合成完成，已获得 " + done + " 个 " + current.itemId());
@@ -103,6 +107,7 @@ public final class KurumiAutoCraftBridge {
             job = new Job(current.itemId(), current.requested(), current.initial(),
                     current.started(), 2, current.recipeId());
         } else if (current.stage() == 2 && done > 0) {
+            lastSucceeded = done >= current.requested();
             job = null;
             mc.player.closeContainer();
             report("已获得 " + done + " 个 " + current.itemId()
