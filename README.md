@@ -219,3 +219,29 @@ CI 工作流 `.github/workflows/build.yml` 使用 Temurin 25 运行 Gradle 构�
 ## 当前范围
 
 基础 `/ai` 问答与 Kurumi 客户端助手并存。**v0.3.0** 已有受限的游戏动作、自由组合任务、箱子检查、逐步验证及部分任务恢复功能；仍缺少完善的任意计划 LLM 重规划、严格的目标数量校验、长期记忆和完整游戏内自动化测试。独立 NPC、语音和流式回复不属于当前已验证功能。
+
+
+### 受控伪代码任务（EXECUTE_PROGRAM）
+
+复杂任务可使用结构化伪代码 AST：`ACTION`、`IF`、`WHILE`、`BREAK`。不执行模型生成的任意 Python/Java 代码。条件读取背包或附近箱子里某物品的实际数量，支持 `LT`、`LE`、`EQ`、`GE`、`GT`、`NE` 六种比较运算符。箱子条件通过服务器同步菜单检查，无法检查时停止。
+
+```json
+{
+  "type": "action",
+  "action": "EXECUTE_PROGRAM",
+  "reply": "循环攻击、拾取并存放腐肉，直到箱子有64个",
+  "program": [
+    {
+      "op": "WHILE",
+      "condition": {"source": "chest", "item_id": "minecraft:rotten_flesh", "operator": "LT", "count": 64},
+      "body": [
+        {"op": "ACTION", "step": {"action": "ATTACK_MOB", "entity_id": "minecraft:zombie"}},
+        {"op": "ACTION", "step": {"action": "PICKUP_ITEM_ALL", "item_id": "minecraft:rotten_flesh"}},
+        {"op": "ACTION", "step": {"action": "CHEST_PUT_ITEM_ALL", "item_id": "minecraft:rotten_flesh"}}
+      ]
+    }
+  ]
+}
+```
+
+每个 WHILE 最多 20 次，最多 3 层嵌套、48 个静态节点、160 次动作，总运行时限 5 分钟。所有 ACTION 均委托现有执行器进行前后验证，失败则停止整个程序；目前尚不支持用 IF 分支处理动作失败返回值，IF 只支持背包和箱子数量判断。战斗动作仍只能确认攻击尝试结束，不代表目标已被击败。旧的 `EXECUTE_PLAN` 仍然可用。
