@@ -186,6 +186,30 @@ public final class KurumiScriptParser {
                 }
                 node.addProperty("op", "ACTION");
                 node.add("step", step);
+            } else if (OBSERVE.matcher(code).matches()) {
+                Matcher m = OBSERVE.matcher(code);
+                m.matches();
+                node.addProperty("op", "OBSERVE_TALK");
+                node.addProperty("tool", m.group(1));
+            } else if (OBSERVE_ARG.matcher(code).matches()) {
+                Matcher m = OBSERVE_ARG.matcher(code);
+                m.matches();
+                String method = m.group(1), first = m.group(2), second = m.group(3);
+                String tool;
+                if ("get_distance".equals(method)) {
+                    if (second == null || !java.util.Set.of("block", "entity", "player", "item").contains(first))
+                        throw new IllegalArgumentException("invalid distance arguments");
+                    if ("player".equals(first) ? !second.matches("[A-Za-z0-9_]{1,16}")
+                            : !second.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+                        throw new IllegalArgumentException("invalid distance target");
+                    tool = method + ":" + first + ":" + second;
+                } else {
+                    if (second != null || !first.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+                        throw new IllegalArgumentException("invalid observation target");
+                    tool = method + ":" + first;
+                }
+                node.addProperty("op", "OBSERVE_TALK");
+                node.addProperty("tool", tool);
             } else if (TALK.matcher(code).matches()) {
                 node.addProperty("op", "TALK");
                 node.addProperty("message", TALK.matcher(code).replaceFirst("$1"));
