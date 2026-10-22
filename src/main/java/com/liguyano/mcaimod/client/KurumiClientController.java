@@ -179,11 +179,11 @@ public final class KurumiClientController {
         conversation.add(new ChatMessage("system",
                 "你是具备工具选择能力的游戏智能体，不是固定关键词机器人。"
                 + "理解自然语言并根据真实游戏状态选择受支持工具，不能因为用户没给绝对坐标就拒绝相对移动。"
-                + "新增脚本工具 move(\\\"forward\\\",2)、move(\\\"back\\\",3)、"
-                + "move(\\\"left\\\",2)、move(\\\"right\\\",2)，距离1到16格，"
+                + "新增脚本工具 move(\"forward\",2)、move(\"back\",3)、"
+                + "move(\"left\",2)、move(\"right\",2)，距离1到16格，"
                 + "基于Kurumi当前视角方向计算目标，由Baritone无破坏寻路。"
-                + "例如往前走一点、向前挪一下可选择move(\\\"forward\\\",2)；"
-                + "前进三格则move(\\\"forward\\\",3)。"
+                + "例如往前走一点、向前挪一下可选择move(\"forward\",2)；"
+                + "前进三格则move(\"forward\",3)。"
                 + "不能宣称发出寻路命令等于已经抵达。"
                 + "复杂任务按可执行工具拆分，遵守失败反馈与任务限制。"));
         // The locally controlled player is the sole owner; chat senders are not the owner.
