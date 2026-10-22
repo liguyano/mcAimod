@@ -11,6 +11,16 @@ public final class KurumiToolRequest {
             JsonObject object = JsonParser.parseString(raw.strip()).getAsJsonObject();
             if (!object.has("type") || !"tool".equals(object.get("type").getAsString())) return null;
             String tool = object.get("tool").getAsString();
+            if ("get_distance".equals(tool)) {
+                String kind = object.has("kind") ? object.get("kind").getAsString() : "";
+                String target = object.has("target") ? object.get("target").getAsString() : "";
+                if (!Set.of("block", "entity", "player", "item").contains(kind)
+                        || target.length() > 128 || target.isBlank()) return null;
+                if ("player".equals(kind))
+                    return target.matches("[A-Za-z0-9_]{1,16}") ? "get_distance:player:" + target : null;
+                return target.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
+                        ? "get_distance:" + kind + ":" + target : null;
+            }
             if ("find_nearest_block".equals(tool)) {
                 String block = object.has("block_id") ? object.get("block_id").getAsString() : "";
                 return block.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
