@@ -28,6 +28,8 @@ public final class KurumiPseudoExecutor {
     private static boolean awaitingAction;
     private static boolean awaitingChest;
     private static boolean awaitingCome;
+    private static boolean awaitingExternal;
+    private static long externalStarted;
     private static int comeX, comeY, comeZ;
     private static long comeStarted;
     private static KurumiTaskPlanner.Condition pendingCondition;
@@ -46,6 +48,7 @@ public final class KurumiPseudoExecutor {
         awaitingAction = false;
         awaitingChest = false;
         awaitingCome = false;
+        awaitingExternal = false;
         frames.clear();
         KurumiChestInspector.cancel();
         KurumiPlanExecutor.cancel();
@@ -75,6 +78,7 @@ public final class KurumiPseudoExecutor {
         awaitingAction = false;
         awaitingChest = false;
         awaitingCome = false;
+        awaitingExternal = false;
         pendingCondition = null;
         pendingStatement = null;
         running = true;
@@ -121,6 +125,19 @@ public final class KurumiPseudoExecutor {
         if (System.currentTimeMillis() - started > TIMEOUT) {
             say("伪代码超过5分钟，已停止");
             cancel();
+            return;
+        }
+        if (awaitingExternal) {
+            if (KurumiLongTaskBridge.busy() || KurumiAutoCraftBridge.busy()
+                    || KurumiChestBridge.busy() || KurumiPickupBridge.busy()) {
+                if (System.currentTimeMillis() - externalStarted > 90000L) {
+                    KurumiWebMonitor.log("异步操作等待超时，停止脚本");
+                    cancel();
+                }
+                return;
+            }
+            awaitingExternal = false;
+            KurumiWebMonitor.log("异步操作已结束；结果可能仍需服务器确认");
             return;
         }
         if (awaitingCome) {
@@ -252,7 +269,12 @@ public final class KurumiPseudoExecutor {
                     assignedResult = "ACTION_RESULT".equals(stmt.op());
                     KurumiWebMonitor.log(step.action() + ": " + result.message());
                     frame.index++;
-                    if (!result.success() && !assignedResult) cancel();
+                    if (!result.success() && !assignedResult) { cancel(); return; }
+                    if (result.success() && (KurumiLongTaskBridge.busy() || KurumiAutoCraftBridge.busy()
+                            || KurumiChestBridge.busy() || KurumiPickupBridge.busy())) {
+                        awaitingExternal = true;
+                        externalStarted = System.currentTimeMillis();
+                    }
                     return;
                 }
                 if ("CHAIN_ON".equals(stmt.step().action()) || "CHAIN_OFF".equals(stmt.step().action())) {
