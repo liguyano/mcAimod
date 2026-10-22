@@ -136,6 +136,33 @@ public final class KurumiTaskPlanner {
             } else if ("ACTION".equals(op) || "ACTION_RESULT".equals(op)) {
                 JsonObject stepNode = node.getAsJsonObject("step");
                 String special = stepNode.get("action").getAsString();
+                // Script-only actions use their own validated parameters; the legacy
+                // EXECUTE_PLAN validator intentionally does not accept these actions.
+                if (java.util.Set.of("COLLECT_AND_STORE", "STOP", "TPA_REQUEST", "TPA_ACCEPT",
+                        "TPA_REQUEST_TO", "CRAFT_OPEN", "CHEST_OPEN", "CHEST_PUT_ALL",
+                        "CHEST_TAKE_ALL", "DROP_ALL", "DROP_ITEM_ALL", "DROP",
+                        "PICKUP", "PICKUP_ALL").contains(special)) {
+                    String item = stepNode.has("item_id") ? stepNode.get("item_id").getAsString() : "";
+                    String target = stepNode.has("target") ? stepNode.get("target").getAsString() : "";
+                    int quantity = stepNode.has("quantity") ? stepNode.get("quantity").getAsInt() : 1;
+                    boolean needsItem = java.util.Set.of("COLLECT_AND_STORE", "DROP_ITEM_ALL",
+                            "DROP", "PICKUP").contains(special);
+                    if (needsItem && !item.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+                        throw new IllegalArgumentException("invalid item id");
+                    if (java.util.Set.of("COLLECT_AND_STORE", "DROP", "PICKUP").contains(special)
+                            && (quantity < 1 || quantity > 64))
+                        throw new IllegalArgumentException("invalid quantity");
+                    if ("TPA_REQUEST_TO".equals(special)
+                            && !target.matches("[A-Za-z0-9_]{3,16}"))
+                        throw new IllegalArgumentException("invalid player");
+                    statements.add(new Statement(op,
+                            new Step(special, item, quantity, null, null, null, target),
+                            null, List.of(), List.of()));
+                    if (node.has("line"))
+                        KurumiWebMonitor.registerLine(statements.get(statements.size() - 1),
+                                node.get("line").getAsInt());
+                    continue;
+                }
                 if ("COME".equals(special) || "FOLLOW".equals(special)) {
                     String target = stepNode.get("target").getAsString();
                     if (!target.matches("[A-Za-z0-9_]{3,16}")) throw new IllegalArgumentException("invalid player");
