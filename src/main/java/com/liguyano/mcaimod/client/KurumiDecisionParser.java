@@ -25,6 +25,11 @@ public final class KurumiDecisionParser {
                 return KurumiTaskPlanner.parse(object).map(plan ->
                         new Decision(reply, Optional.empty(), "", null, null, null, "", Optional.of(plan), Optional.empty()));
             }
+            if ("EXECUTE_SCRIPT".equals(name)) {
+                if (!object.has("script") || !object.get("script").isJsonPrimitive()) return Optional.empty();
+                return KurumiScriptParser.parse(object.get("script").getAsString()).map(program ->
+                        new Decision(reply, Optional.empty(), "", null, null, null, "", Optional.empty(), Optional.of(program)));
+            }
             if ("EXECUTE_PROGRAM".equals(name)) {
                 return KurumiTaskPlanner.parseProgram(object).map(program ->
                         new Decision(reply, Optional.empty(), "", null, null, null, "", Optional.empty(), Optional.of(program)));
