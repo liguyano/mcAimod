@@ -20,9 +20,15 @@ public final class KurumiChestInspector {
     private static String lastItem;
     private static String lastResult;
     private static long observedAt;
+    private static int lastCount = -1;
 
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiChestInspector::tick); }
     public static void cancel() { requested = null; }
+    public static boolean busy() { return requested != null; }
+    public static int observedCount(String itemId) {
+        return requested == null && itemId != null && itemId.equals(lastItem)
+                && System.currentTimeMillis() - observedAt < 10_000 ? lastCount : -1;
+    }
     public static String check(String itemId) {
         if (itemId == null || !itemId.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
             return "{\"error\":\"invalid_item_id\"}";
@@ -50,6 +56,7 @@ public final class KurumiChestInspector {
         requested = itemId;
         started = System.currentTimeMillis();
         lastResult = null;
+        lastCount = -1;
         return "{\"status\":\"pending\",\"message\":\"waiting_for_server_chest_menu\"}";
     }
     public static String status(String itemId) {
@@ -74,6 +81,7 @@ public final class KurumiChestInspector {
         result.addProperty("enough_for_one", count >= 1);
         result.addProperty("source", "server_synced_chest_menu");
         lastItem = id;
+        lastCount = count;
         lastResult = result.toString();
         observedAt = System.currentTimeMillis();
         if (close) Minecraft.getInstance().player.closeContainer();
@@ -88,6 +96,7 @@ public final class KurumiChestInspector {
             requested = null;
         } else if (System.currentTimeMillis() - started > 5000) {
             lastItem = requested;
+            lastCount = -1;
             lastResult = "{\"status\":\"error\",\"error\":\"chest_open_timeout\"}";
             observedAt = System.currentTimeMillis();
             requested = null;
