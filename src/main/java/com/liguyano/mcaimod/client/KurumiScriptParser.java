@@ -11,6 +11,8 @@ import java.util.regex.Pattern;
 public final class KurumiScriptParser {
     private static final Pattern CALL = Pattern.compile("(?:(result)\\s*=\\s*)?([a-z_]+)\\(\"([A-Za-z0-9_.:-]+)\"\\)");
     private static final Pattern COUNT = Pattern.compile("(check_chest|check_inventory)\\(\"([a-z0-9_.:-]+)\"\\)\\s*(<=|>=|==|!=|<|>)\\s*(\\d+)");
+    private static final Pattern ASSIGN = Pattern.compile("([a-z][a-z0-9_]{0,23})\\s*=\\s*(\\d{1,4})");
+    private static final Pattern COUNT_VAR = Pattern.compile("(check_chest|check_inventory)\\(\"([a-z0-9_.:-]+)\"\\)\\s*(<=|>=|==|!=|<|>)\\s*([a-z][a-z0-9_]{0,23})");
     private static final Pattern RESULT = Pattern.compile("result\\.success");
     private static final Pattern FARM = Pattern.compile("(?:(result)\\s*=\\s*)?farm\\((\\d{1,2})\\)");
     private static final Pattern SLEEP = Pattern.compile("(?:(result)\\s*=\\s*)?sleep\\(\\)");
@@ -31,6 +33,7 @@ public final class KurumiScriptParser {
         if (source == null || source.length() > 8192) return Optional.empty();
         try {
             var lines = new java.util.ArrayList<Line>();
+            var constants = new java.util.HashMap<String, Integer>();
             int sourceLine = 0;
             for (String raw : source.replace("\r", "").split("\n")) {
                 sourceLine++;
@@ -38,7 +41,30 @@ public final class KurumiScriptParser {
                 int n = 0;
                 while (n < raw.length() && raw.charAt(n) == ' ') n++;
                 if (n % 4 != 0 || raw.indexOf('\t') >= 0) return Optional.empty();
-                lines.add(new Line(n / 4, raw.substring(n).stripTrailing(), sourceLine));
+                String code = raw.substring(n).stripTrailing();
+                Matcher assignment = ASSIGN.matcher(code);
+                if (assignment.matches()) {
+                    if (n != 0 || constants.containsKey(assignment.group(1))
+                            || constants.size() >= 8 || "result".equals(assignment.group(1)))
+                        return Optional.empty();
+                    int value = Integer.parseInt(assignment.group(2));
+                    if (value < 1 || value > 2304) return Optional.empty();
+                    constants.put(assignment.group(1), value);
+                    continue;
+                }
+                String expression = code.startsWith("while ") && code.endsWith(":")
+                        ? code.substring(6, code.length() - 1).strip()
+                        : code.startsWith("if ") && code.endsWith(":")
+                        ? code.substring(3, code.length() - 1).strip() : "";
+                Matcher comparison = COUNT_VAR.matcher(expression);
+                if (comparison.matches()) {
+                    Integer value = constants.get(comparison.group(4));
+                    if (value == null) return Optional.empty();
+                    String replacement = comparison.group(1) + "(\"" + comparison.group(2)
+                            + "\") " + comparison.group(3) + " " + value;
+                    code = code.substring(0, code.indexOf(' ') + 1) + replacement + ":";
+                }
+                lines.add(new Line(n / 4, code, sourceLine));
             }
             if (lines.isEmpty() || lines.size() > 48 || lines.get(0).indent() != 0)
                 return Optional.empty();
