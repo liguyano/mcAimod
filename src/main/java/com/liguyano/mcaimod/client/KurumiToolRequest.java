@@ -11,6 +11,11 @@ public final class KurumiToolRequest {
             JsonObject object = JsonParser.parseString(raw.strip()).getAsJsonObject();
             if (!object.has("type") || !"tool".equals(object.get("type").getAsString())) return null;
             String tool = object.get("tool").getAsString();
+            if ("get_crafting_recipe".equals(tool)) {
+                String item = object.has("item_id") ? object.get("item_id").getAsString() : "";
+                return item.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
+                        ? "get_crafting_recipe:" + item : null;
+            }
             return ALLOWED.contains(tool) ? tool : null;
         } catch (RuntimeException ex) { return null; }
     }
