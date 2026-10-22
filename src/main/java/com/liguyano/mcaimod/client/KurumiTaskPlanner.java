@@ -112,6 +112,13 @@ public final class KurumiTaskPlanner {
                 List<Statement> otherwise = "IF".equals(op) && node.has("else")
                         ? parseStatements(node.getAsJsonArray("else"), depth + 1, budget) : List.of();
                 statements.add(new Statement(op, null, condition, body, otherwise));
+            } else if ("TALK".equals(op)) {
+                String message = node.get("message").getAsString();
+                if (message.isBlank() || message.length() > 120
+                        || message.indexOf('\n') >= 0 || message.indexOf('\r') >= 0
+                        || message.startsWith("/")) throw new IllegalArgumentException("invalid talk");
+                statements.add(new Statement(op, new Step("TALK", "", 1, null, null, null, message),
+                        null, List.of(), List.of()));
             } else if ("RETURN".equals(op)) {
                 statements.add(new Statement(op, null, null, List.of(), List.of()));
             } else if ("BREAK".equals(op)) {
@@ -133,9 +140,9 @@ public final class KurumiTaskPlanner {
         String id = "result".equals(source) ? "" : node.get("item_id").getAsString();
         String operator = node.get("operator").getAsString();
         int count = "result".equals(source) ? 1 : node.get("count").getAsInt();
-        if (!List.of("inventory", "chest").contains(source)
+        if (!List.of("inventory", "chest", "result").contains(source)
                 || !List.of("LT", "LE", "EQ", "GE", "GT", "NE").contains(operator)
-                || !id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
+                || (!"result".equals(source) && !id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
                 || count < 0 || count > 2304) throw new IllegalArgumentException("condition");
         return new Condition(source, id, operator, count);
     }
