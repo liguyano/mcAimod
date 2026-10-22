@@ -45,8 +45,8 @@ public final class KurumiTaskPlanner {
                     String source = check.get("source").getAsString();
                     String id = check.get("item_id").getAsString();
                     int count = check.get("count").getAsInt();
-                    if (!List.of("inventory", "chest").contains(source)
-                            || !id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
+                    if (!List.of("inventory", "chest", "result").contains(source)
+                            || (!"result".equals(source) && !id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
                             || count < 1 || count > 2304) return Optional.empty();
                     conditions.add(new BreakCondition(source, id, count));
                 }
@@ -112,9 +112,11 @@ public final class KurumiTaskPlanner {
                 List<Statement> otherwise = "IF".equals(op) && node.has("else")
                         ? parseStatements(node.getAsJsonArray("else"), depth + 1, budget) : List.of();
                 statements.add(new Statement(op, null, condition, body, otherwise));
+            } else if ("RETURN".equals(op)) {
+                statements.add(new Statement(op, null, null, List.of(), List.of()));
             } else if ("BREAK".equals(op)) {
                 statements.add(new Statement(op, null, null, List.of(), List.of()));
-            } else if ("ACTION".equals(op)) {
+            } else if ("ACTION".equals(op) || "ACTION_RESULT".equals(op)) {
                 JsonObject single = new JsonObject();
                 JsonArray steps = new JsonArray();
                 steps.add(node.getAsJsonObject("step"));
@@ -128,9 +130,9 @@ public final class KurumiTaskPlanner {
 
     private static Condition parseCondition(JsonObject node) {
         String source = node.get("source").getAsString();
-        String id = node.get("item_id").getAsString();
+        String id = "result".equals(source) ? "" : node.get("item_id").getAsString();
         String operator = node.get("operator").getAsString();
-        int count = node.get("count").getAsInt();
+        int count = "result".equals(source) ? 1 : node.get("count").getAsInt();
         if (!List.of("inventory", "chest").contains(source)
                 || !List.of("LT", "LE", "EQ", "GE", "GT", "NE").contains(operator)
                 || !id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
