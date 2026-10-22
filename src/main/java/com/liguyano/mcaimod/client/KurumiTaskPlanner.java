@@ -13,7 +13,7 @@ import java.util.Optional;
  */
 public final class KurumiTaskPlanner {
     public record Step(String action, String itemId) {}
-    public record Plan(List<Step> steps, int quantity) {}
+    public record Plan(List<Step> steps, int quantity, int takeQuantity) {}
 
     public static Optional<Plan> parse(JsonObject object) {
         try {
@@ -28,12 +28,19 @@ public final class KurumiTaskPlanner {
                 String action = step.get("action").getAsString();
                 String item = step.get("item_id").getAsString();
                 if (!item.matches("minecraft:[a-z0-9_]{1,64}")) return Optional.empty();
-                if (!List.of("MINE", "PICKUP_ITEM_ALL", "CHEST_PUT_ITEM_ALL", "EQUIP_MAIN_HAND").contains(action))
+                if (!List.of("MINE", "PICKUP_ITEM_ALL", "CHEST_PUT_ITEM_ALL", "EQUIP_MAIN_HAND", "CHEST_TAKE", "CRAFT_ITEM").contains(action))
                     return Optional.empty();
                 steps.add(new Step(action, item));
             }
             int qty = object.has("quantity") ? object.get("quantity").getAsInt() : 32;
             if (qty < 1 || qty > 64) return Optional.empty();
+            if (steps.size() == 2 && steps.get(0).action().equals("CHEST_TAKE")
+                    && steps.get(1).action().equals("CRAFT_ITEM")) {
+                if (!object.has("take_quantity") || !object.has("quantity")) return Optional.empty();
+                int take = object.get("take_quantity").getAsInt();
+                if (take < 1 || take > 64) return Optional.empty();
+                return Optional.of(new Plan(List.copyOf(steps), qty, take));
+            }
             // The first supported multi-step workflow is equip(optional) -> mine -> pickup -> store.
             int offset = steps.get(0).action().equals("EQUIP_MAIN_HAND") ? 1 : 0;
             if (steps.size() != offset + 3) return Optional.empty();
@@ -47,13 +54,17 @@ public final class KurumiTaskPlanner {
                     "minecraft:birch_log", "minecraft:jungle_log", "minecraft:acacia_log",
                     "minecraft:dark_oak_log", "minecraft:mangrove_log", "minecraft:pale_oak_log")
                     .contains(block)) return Optional.empty();
-            return Optional.of(new Plan(List.copyOf(steps), qty));
+            return Optional.of(new Plan(List.copyOf(steps), qty, 0));
         } catch (RuntimeException ex) { return Optional.empty(); }
     }
 
     public static BaritoneBridge.Result execute(Plan plan) {
         if (KurumiLongTaskBridge.busy())
             return new BaritoneBridge.Result(false, "已有长任务执行中");
+        if (plan.steps().get(0).action().equals("CHEST_TAKE")) {
+            return KurumiChestCraftTask.start(plan.steps().get(0).itemId(), plan.takeQuantity(),
+                    plan.steps().get(1).itemId(), plan.quantity());
+        }
         int offset = plan.steps().get(0).action().equals("EQUIP_MAIN_HAND") ? 1 : 0;
         if (offset == 1) {
             BaritoneBridge.Result equip = KurumiEquipBridge.mainHand(plan.steps().get(0).itemId());
