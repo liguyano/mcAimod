@@ -120,6 +120,16 @@ public final class KurumiTaskPlanner {
                 if (radius < 4 || radius > 32) throw new IllegalArgumentException("farm radius");
                 statements.add(new Statement(op, new Step("FARM", "", radius, null, null, null, ""),
                         null, List.of(), List.of()));
+            } else if ("OBSERVE_TALK".equals(op)) {
+                String tool = node.get("tool").getAsString();
+                if (tool.length() > 180 || !(java.util.Set.of("get_player_status", "get_environment",
+                        "scan_nearby_entities", "scan_nearby_blocks", "scan_dropped_items",
+                        "get_inventory").contains(tool)
+                        || tool.matches("(get_distance:(block|entity|item):[a-z0-9_.-]+:[a-z0-9_./-]{1,128}|get_distance:player:[A-Za-z0-9_]{1,16})")
+                        || tool.matches("(find_nearest_block|check_inventory_count|get_crafting_recipe|check_nearby_chest|get_nearby_chest_result):[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")))
+                    throw new IllegalArgumentException("invalid observation");
+                statements.add(new Statement(op, new Step("OBSERVE_TALK", "", 1, null, null, null, tool),
+                        null, List.of(), List.of()));
             } else if ("TALK".equals(op)) {
                 String message = node.get("message").getAsString();
                 if (message.isBlank() || message.length() > 120
