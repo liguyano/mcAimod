@@ -11,6 +11,11 @@ public final class KurumiToolRequest {
             JsonObject object = JsonParser.parseString(raw.strip()).getAsJsonObject();
             if (!object.has("type") || !"tool".equals(object.get("type").getAsString())) return null;
             String tool = object.get("tool").getAsString();
+            if ("find_nearest_block".equals(tool)) {
+                String block = object.has("block_id") ? object.get("block_id").getAsString() : "";
+                return block.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
+                        ? "find_nearest_block:" + block : null;
+            }
             if ("get_crafting_recipe".equals(tool)) {
                 String item = object.has("item_id") ? object.get("item_id").getAsString() : "";
                 return item.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
