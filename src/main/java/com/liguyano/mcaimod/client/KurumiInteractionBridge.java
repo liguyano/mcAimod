@@ -9,6 +9,9 @@ import net.minecraft.world.inventory.AbstractFurnaceMenu;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.inventory.CraftingMenu;
 import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
@@ -51,15 +54,17 @@ public final class KurumiInteractionBridge {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.gameMode == null)
             return new BaritoneBridge.Result(false, "尚未进入游戏");
-        if (!itemId.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}") || quantity < 1 || quantity > 64)
+        if (itemId == null || !itemId.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}") || quantity < 1 || quantity > 64)
             return new BaritoneBridge.Result(false, "物品 ID 或数量无效");
-        if (!slot.equals("input") && !slot.equals("fuel"))
-            return new BaritoneBridge.Result(false, "熔炉槽位只能为 input 或 fuel");
+        if (!java.util.Set.of("input", "fuel", "auto").contains(slot))
+            return new BaritoneBridge.Result(false, "槽位只能为 input、fuel 或 auto");
         if (pending != null) return new BaritoneBridge.Result(false, "仍在等待上一次放入操作");
         if (mc.player.containerMenu instanceof AbstractFurnaceMenu menu)
-            return transfer(menu, itemId, quantity, slot);
-        if (mc.player.containerMenu instanceof ChestMenu)
-            return KurumiChestBridge.put(itemId, quantity);
+            return transfer(menu, itemId, quantity, "auto".equals(slot) ? "input" : slot);
+        if (mc.player.containerMenu instanceof CraftingMenu)
+            return new BaritoneBridge.Result(false, "工作台请使用 craft_item()，不能盲目填充合成格");
+        if (mc.player.containerMenu != mc.player.inventoryMenu)
+            return genericTransfer(itemId, quantity, true);
         if (mc.player.containerMenu != mc.player.inventoryMenu)
             return new BaritoneBridge.Result(false, "当前容器不是支持的熔炉或箱子");
         return new BaritoneBridge.Result(false, "请先用 interact() 打开附近熔炉或箱子");
@@ -76,9 +81,9 @@ public final class KurumiInteractionBridge {
         int output;
         if (mc.player.containerMenu instanceof AbstractFurnaceMenu) output = 2;
         else if (mc.player.containerMenu instanceof CraftingMenu) output = 0;
-        else if (mc.player.containerMenu instanceof ChestMenu)
-            return KurumiChestBridge.takeItem(itemId, maxCount);
-        else return new BaritoneBridge.Result(false, "请先打开工作台、熔炉或箱子");
+        else if (mc.player.containerMenu != mc.player.inventoryMenu)
+            return genericTransfer(itemId, maxCount, false);
+        else return new BaritoneBridge.Result(false, "请先打开容器");
         var menu = mc.player.containerMenu;
         var stack = menu.getSlot(output).getItem();
         if (stack.isEmpty() || !itemId.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()))
@@ -97,6 +102,51 @@ public final class KurumiInteractionBridge {
         mc.gameMode.handleContainerInput(menu.containerId, destination, 0, ContainerInput.PICKUP, mc.player);
         return new BaritoneBridge.Result(true, "已尝试取出 " + itemId + " × " + amount
                 + "（以服务器同步为准）");
+    }
+
+    /** Move an exact bounded quantity between the player inventory and a generic open menu. */
+    private static BaritoneBridge.Result genericTransfer(String itemId, int quantity, boolean putting) {
+        Minecraft mc = Minecraft.getInstance();
+        AbstractContainerMenu menu = mc.player.containerMenu;
+        if (!menu.getCarried().isEmpty())
+            return new BaritoneBridge.Result(false, "鼠标光标上已有物品，请先清空光标");
+        int source = -1;
+        int destination = -1;
+        for (int i = 0; i < menu.slots.size(); i++) {
+            Slot slot = menu.getSlot(i);
+            boolean playerSlot = slot.container == mc.player.getInventory();
+            if (playerSlot == putting && source < 0 && slot.hasItem()
+                    && itemId.equals(BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString())
+                    && slot.mayPickup(mc.player) && slot.getItem().getCount() >= quantity)
+                source = i;
+        }
+        if (source < 0)
+            return new BaritoneBridge.Result(false, putting
+                    ? "背包中没有单组数量足够的指定物品"
+                    : "容器中没有单组数量足够的指定物品");
+        ItemStack sourceStack = menu.getSlot(source).getItem();
+        for (int i = 0; i < menu.slots.size(); i++) {
+            Slot slot = menu.getSlot(i);
+            boolean playerSlot = slot.container == mc.player.getInventory();
+            if (playerSlot != !putting || !slot.mayPlace(sourceStack)) continue;
+            ItemStack existing = slot.getItem();
+            if (!existing.isEmpty() && !ItemStack.isSameItemSameComponents(existing, sourceStack)) continue;
+            int capacity = Math.min(sourceStack.getMaxStackSize(), slot.getMaxStackSize()) - existing.getCount();
+            if (capacity >= quantity) { destination = i; break; }
+        }
+        if (destination < 0)
+            return new BaritoneBridge.Result(false, "没有能够容纳指定数量的有效目标槽位");
+        // One source and one destination; return the remainder to its original slot.
+        mc.gameMode.handleContainerInput(menu.containerId, source, 0, ContainerInput.PICKUP, mc.player);
+        if (quantity == sourceStack.getCount()) {
+            mc.gameMode.handleContainerInput(menu.containerId, destination, 0, ContainerInput.PICKUP, mc.player);
+        } else {
+            for (int i = 0; i < quantity; i++)
+                mc.gameMode.handleContainerInput(menu.containerId, destination, 1, ContainerInput.PICKUP, mc.player);
+            mc.gameMode.handleContainerInput(menu.containerId, source, 0, ContainerInput.PICKUP, mc.player);
+        }
+        return new BaritoneBridge.Result(true, "已尝试" + (putting ? "放入 " : "取出 ")
+                + itemId + " × " + quantity + "（等待服务器背包同步确认）");
     }
 
     private static BaritoneBridge.Result transfer(AbstractFurnaceMenu menu, String itemId, int quantity, String slot) {
