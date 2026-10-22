@@ -28,13 +28,28 @@ public final class KurumiLocationMemory {
         String body = message.strip().replaceFirst("(?i)^.*?kurumi[，,：: ]*", "").strip();
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null || mc.getConnection() == null) return false;
-        // Explicit XYZ navigation is not a named waypoint lookup.
-        // Let the model generate goto(x,y,z) instead of replying "unknown location".
-        // A coordinate triple anywhere in a multi-step request is not a named place.
-        // Examples: "去 -85 63 -17 的箱子" and "砍树后去(100,64,200)存箱".
-        if (body.matches("(?s).*-?[0-9]+[ ,，()]+-?[0-9]+[ ,，]+-?[0-9]+.*")) {
+        // Direct handling is reserved for a single, standalone "去..." command.
+        // Everything else, especially compound tasks, is sent to the model.
+        if (!body.startsWith("去") || body.contains("然后") || body.contains("之后")
+                || body.contains("再去") || body.contains("并且") || body.contains("接着")
+                || body.contains("，") || body.contains(",") || body.contains("；")
+                || body.contains(";") || body.contains("。") || body.contains("\\n"))
             return false;
+        Matcher coordinates = Pattern.compile(
+                "去(?:坐标)?[ ]*(-?[0-9]+)[ ]+(-?[0-9]+)[ ]+(-?[0-9]+)").matcher(body);
+        if (coordinates.matches()) {
+            try {
+                int x = Integer.parseInt(coordinates.group(1));
+                int y = Integer.parseInt(coordinates.group(2));
+                int z = Integer.parseInt(coordinates.group(3));
+                reply(BaritoneBridge.gotoCoordinates(x, y, z).message());
+            } catch (NumberFormatException ex) {
+                reply("坐标超出允许范围");
+            }
+            return true;
         }
+        if (body.matches(".*-?[0-9]+[ ]+-?[0-9]+[ ]+-?[0-9]+.*"))
+            return false;
         Matcher save = SAVE.matcher(body), go = GO.matcher(body), where = WHERE.matcher(body);
         boolean list = body.contains("记住了哪些") || body.contains("地点列表") || body.contains("记忆的地点");
         boolean delete = body.startsWith("忘记") || body.startsWith("删除地点");
