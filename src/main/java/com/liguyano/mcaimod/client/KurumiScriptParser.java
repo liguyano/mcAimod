@@ -74,6 +74,9 @@ public final class KurumiScriptParser {
                 if (radius < 4 || radius > 32) throw new IllegalArgumentException("farm radius");
                 node.addProperty("op", farm.group(1) != null ? "FARM_RESULT" : "FARM");
                 node.addProperty("radius", radius);
+            } else if (code.equals("chain_on()") || code.equals("chain_off()")) {
+                node.addProperty("op", "CHAIN");
+                node.addProperty("enabled", code.equals("chain_on()"));
             } else if (SLEEP.matcher(code).matches()) {
                 node.addProperty("op", code.startsWith("result") ? "SLEEP_RESULT" : "SLEEP");
             } else if (TALK.matcher(code).matches()) {
