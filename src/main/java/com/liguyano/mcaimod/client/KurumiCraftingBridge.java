@@ -20,9 +20,9 @@ public final class KurumiCraftingBridge {
         if (mc.player.containerMenu != mc.player.inventoryMenu)
             return new BaritoneBridge.Result(false, "请先关闭其他容器界面");
         BlockPos nearest = null;
-        double best = 4.5 * 4.5;
+        double best = 6.0 * 6.0;
         BlockPos origin = mc.player.blockPosition();
-        for (BlockPos pos : BlockPos.betweenClosed(origin.offset(-4, -2, -4), origin.offset(4, 2, 4))) {
+        for (BlockPos pos : BlockPos.betweenClosed(origin.offset(-6, -3, -6), origin.offset(6, 3, 6))) {
             if (!mc.level.hasChunkAt(pos) ||
                     !(mc.level.getBlockState(pos).getBlock() instanceof CraftingTableBlock))
                 continue;
