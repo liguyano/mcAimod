@@ -41,7 +41,7 @@ public final class KurumiLocationMemory {
             String key = scope.replaceAll("[^a-zA-Z0-9_.:-]", "_");
             JsonObject locations = root.has(key) && root.get(key).isJsonObject()
                     ? root.getAsJsonObject(key) : new JsonObject();
-            String dimension = mc.level.dimension().location().toString();
+            String dimension = mc.level.dimension().toString();
             if (save.matches()) {
                 String name = clean(save.group(1));
                 Player owner = null;
