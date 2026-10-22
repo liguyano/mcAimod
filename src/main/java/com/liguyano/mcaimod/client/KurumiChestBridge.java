@@ -19,6 +19,7 @@ public final class KurumiChestBridge {
     private static Pending pending;
     private static final String ALL_ITEMS = "*";
     private static final String TAKE_ALL = "take:*";
+    private static final String TAKE_ITEM_PREFIX = "take:";
     private static final String ALL_OF_ITEM_PREFIX = "all:";
 
     public static void install() {
@@ -42,6 +43,13 @@ public final class KurumiChestBridge {
 
     public static BaritoneBridge.Result takeAll() { return interact(TAKE_ALL, 0); }
 
+    public static BaritoneBridge.Result takeItem(String itemId, int quantity) {
+        if (itemId == null || !itemId.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
+                || quantity < 1 || quantity > 64)
+            return new BaritoneBridge.Result(false, "取物品 ID 或数量不合法");
+        return interact(TAKE_ITEM_PREFIX + itemId, quantity);
+    }
+
     public static BaritoneBridge.Result putItemAll(String itemId) {
         if (itemId == null || !itemId.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
             return new BaritoneBridge.Result(false, "物品ID不合法");
@@ -54,7 +62,7 @@ public final class KurumiChestBridge {
             return new BaritoneBridge.Result(false, "当前不在游戏世界");
         if (pending != null)
             return new BaritoneBridge.Result(false, "上一项箱子操作尚未完成");
-        if (itemId != null && !ALL_ITEMS.equals(itemId) && !TAKE_ALL.equals(itemId)) {
+        if (itemId != null && !ALL_ITEMS.equals(itemId) && !TAKE_ALL.equals(itemId) && !itemId.startsWith(TAKE_ITEM_PREFIX)) {
             String matchId = itemId.startsWith(ALL_OF_ITEM_PREFIX) ? itemId.substring(ALL_OF_ITEM_PREFIX.length()) : itemId;
             int count = 0;
             for (int i = 0; i < 36; i++) {
@@ -117,6 +125,39 @@ public final class KurumiChestBridge {
         if (mc.player == null || mc.gameMode == null || !(mc.player.containerMenu instanceof ChestMenu menu))
             return new BaritoneBridge.Result(false, "箱子界面尚未打开");
         int chestSlots = menu.getRowCount() * 9;
+        if (itemId.startsWith(TAKE_ITEM_PREFIX) && !TAKE_ALL.equals(itemId)) {
+            String wanted = itemId.substring(TAKE_ITEM_PREFIX.length());
+            int remaining = quantity;
+            int moved = 0;
+            for (int slot = 0; slot < chestSlots && remaining > 0; slot++) {
+                var stack = menu.getSlot(slot).getItem();
+                if (stack.isEmpty() || !wanted.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString())) continue;
+                int before = stack.getCount();
+                if (before <= remaining) {
+                    mc.gameMode.handleContainerInput(menu.containerId, slot, 0, ContainerInput.QUICK_MOVE, mc.player);
+                    int delta = Math.max(0, before - menu.getSlot(slot).getItem().getCount());
+                    moved += delta;
+                    remaining -= delta;
+                } else {
+                    // Split a stack by taking it on the cursor and placing only the requested count
+                    // into an empty player inventory slot.
+                    int dst = -1;
+                    for (int i = chestSlots; i < chestSlots + 36; i++) {
+                        if (menu.getSlot(i).getItem().isEmpty()) { dst = i; break; }
+                    }
+                    if (dst < 0) break;
+                    mc.gameMode.handleContainerInput(menu.containerId, slot, 0, ContainerInput.PICKUP, mc.player);
+                    for (int i = 0; i < remaining; i++)
+                        mc.gameMode.handleContainerInput(menu.containerId, dst, 1, ContainerInput.PICKUP, mc.player);
+                    mc.gameMode.handleContainerInput(menu.containerId, slot, 0, ContainerInput.PICKUP, mc.player);
+                    moved += remaining;
+                    remaining = 0;
+                }
+            }
+            return moved == 0 ? new BaritoneBridge.Result(false, "箱子没有可取出的指定物品或背包已满")
+                    : new BaritoneBridge.Result(true, "已尝试取出 " + wanted + " × " + moved
+                    + "（等待服务器背包同步确认）");
+        }
         if (TAKE_ALL.equals(itemId)) {
             int stacks = 0;
             int remainingStacks = 0;
