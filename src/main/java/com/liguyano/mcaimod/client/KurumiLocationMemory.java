@@ -30,8 +30,8 @@ public final class KurumiLocationMemory {
         if (mc.player == null || mc.level == null || mc.getConnection() == null) return false;
         // Explicit XYZ navigation is not a named waypoint lookup.
         // Let the model generate goto(x,y,z) instead of replying "unknown location".
-        if (body.matches("(?s).*(?:坐标|座標|\\\\bgoto\\\\b).*")
-                && body.matches("(?s).*-?\\\\d+\\\\s*[,， ]+\\\\s*-?\\\\d+\\\\s*[,， ]+\\\\s*-?\\\\d+.*")) {
+        if ((body.contains("坐标") || body.contains("座標") || body.contains("goto"))
+                && body.matches("(?s).*-?[0-9]+[ ,，]+-?[0-9]+[ ,，]+-?[0-9]+.*")) {
             return false;
         }
         Matcher save = SAVE.matcher(body), go = GO.matcher(body), where = WHERE.matcher(body);
