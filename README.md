@@ -291,3 +291,18 @@ return "任务结束"
 ```
 
 为防止循环刷屏，单次程序最多发送 12 条公屏消息，间隔至少 2 秒，单条最多 120 字符；禁止斜杠命令和换行。达到消息上限时停止任务。不能保证服务器未禁言、聊天频道限制或其他插件过滤时仍能送达。
+
+
+### 伪代码自动种田 farm(radius)
+
+`EXECUTE_SCRIPT` 现在接受 `farm(16)` 或 `result = farm(16)`（参数范围 4–32）。执行器调用现有 Baritone `#farm` 命令；`result.success` 仅表示命令成功发送，**不表示种田完成或农作物已经收获**。当前参数用于验证，Baritone 的 `#farm` 未按该参数限制实际范围。该命令可能持续运行，需要使用已有停止操作终止；`return` 只结束伪代码，不自动停止 Baritone。
+
+```python
+talk("开始种田")
+result = farm(16)
+if result.success:
+    talk("已发出种田命令")
+else:
+    talk("种田命令发送失败")
+return "指令处理结束"
+```
