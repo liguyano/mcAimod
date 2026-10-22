@@ -145,8 +145,8 @@ public final class KurumiAutoCraftBridge {
             if (!Set.of("getRecipeManager", "getRecipeBook", "getRecipeAccess").contains(method.getName()))
                 continue;
             try {
-                Object found = inspectRecipeTree(method.invoke(connection), itemId, visited, 0);
-                if (found != null) return found;
+                Object recipeCandidate = inspectRecipeTree(method.invoke(connection), itemId, visited, 0);
+                if (recipeCandidate != null) return recipeCandidate;
             } catch (ReflectiveOperationException | RuntimeException ignored) { }
         }
         return null;
