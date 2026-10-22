@@ -112,6 +112,8 @@ public final class KurumiTaskPlanner {
                 List<Statement> otherwise = "IF".equals(op) && node.has("else")
                         ? parseStatements(node.getAsJsonArray("else"), depth + 1, budget) : List.of();
                 statements.add(new Statement(op, null, condition, body, otherwise));
+            } else if ("SLEEP".equals(op) || "SLEEP_RESULT".equals(op)) {
+                statements.add(new Statement(op, null, null, List.of(), List.of()));
             } else if ("FARM".equals(op) || "FARM_RESULT".equals(op)) {
                 int radius = node.get("radius").getAsInt();
                 if (radius < 4 || radius > 32) throw new IllegalArgumentException("farm radius");
@@ -129,6 +131,15 @@ public final class KurumiTaskPlanner {
             } else if ("BREAK".equals(op)) {
                 statements.add(new Statement(op, null, null, List.of(), List.of()));
             } else if ("ACTION".equals(op) || "ACTION_RESULT".equals(op)) {
+                JsonObject stepNode = node.getAsJsonObject("step");
+                String special = stepNode.get("action").getAsString();
+                if ("COME".equals(special) || "FOLLOW".equals(special)) {
+                    String target = stepNode.get("target").getAsString();
+                    if (!target.matches("[A-Za-z0-9_]{3,16}")) throw new IllegalArgumentException("invalid player");
+                    statements.add(new Statement(op, new Step(special, "", 1, null, null, null, target), null, List.of(), List.of()));
+                    if (node.has("line")) KurumiWebMonitor.registerLine(statements.get(statements.size() - 1), node.get("line").getAsInt());
+                    continue;
+                }
                 JsonObject single = new JsonObject();
                 JsonArray steps = new JsonArray();
                 steps.add(node.getAsJsonObject("step"));
