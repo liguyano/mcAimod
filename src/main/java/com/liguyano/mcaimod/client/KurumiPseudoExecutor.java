@@ -38,6 +38,7 @@ public final class KurumiPseudoExecutor {
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiPseudoExecutor::tick); }
     public static boolean busy() { return running; }
     public static void cancel() {
+        if (running) KurumiWebMonitor.state("已取消");
         running = false;
         awaitingAction = false;
         awaitingChest = false;
@@ -72,6 +73,7 @@ public final class KurumiPseudoExecutor {
         pendingCondition = null;
         pendingStatement = null;
         running = true;
+        KurumiWebMonitor.begin(program);
         return new BaritoneBridge.Result(true, "已开始执行受控伪代码任务");
     }
     private static boolean matches(int actual, KurumiTaskPlanner.Condition c) {
@@ -119,6 +121,7 @@ public final class KurumiPseudoExecutor {
             if (KurumiPlanExecutor.busy()) return;
             awaitingAction = false;
             lastResultSuccess = KurumiPlanExecutor.lastSucceeded();
+            KurumiWebMonitor.log("动作结束，验证结果：" + lastResultSuccess);
             if (!lastResultSuccess && !assignedResult) {
                 say("伪代码动作失败，已停止");
                 cancel();
@@ -133,11 +136,13 @@ public final class KurumiPseudoExecutor {
                 cancel();
                 return;
             }
+            KurumiWebMonitor.log("箱子数量检查：" + count);
             completeCondition(matches(count, pendingCondition));
             return;
         }
         if (frames.isEmpty()) {
             running = false;
+            KurumiWebMonitor.state("已完成");
             say("伪代码任务执行完成");
             return;
         }
@@ -147,10 +152,12 @@ public final class KurumiPseudoExecutor {
             return;
         }
         var stmt = frame.statements.get(frame.index);
+        KurumiWebMonitor.step(stmt, actions, frame.iterations, lastResultSuccess);
         switch (stmt.op()) {
             case "FARM", "FARM_RESULT" -> {
                 if (++actions > MAX_ACTIONS) { cancel(); return; }
                 var result = BaritoneBridge.farm(stmt.step().quantity());
+                KurumiWebMonitor.log("已请求启动 farm，命令接受：" + result.success());
                 lastResultSuccess = result.success();
                 assignedResult = "FARM_RESULT".equals(stmt.op());
                 frame.index++;
@@ -177,6 +184,7 @@ public final class KurumiPseudoExecutor {
                     return;
                 }
                 mc.getConnection().sendChat(message);
+                KurumiWebMonitor.log("talk: " + message);
                 publicMessages++;
                 lastPublicMessageAt = now;
                 frame.index++;
@@ -194,6 +202,7 @@ public final class KurumiPseudoExecutor {
                     cancel();
                     return;
                 }
+                KurumiWebMonitor.log("启动动作：" + stmt.step().action());
                 frame.index++;
                 assignedResult = "ACTION_RESULT".equals(stmt.op());
                 awaitingAction = true;
@@ -217,6 +226,7 @@ public final class KurumiPseudoExecutor {
             case "RETURN" -> {
                 running = false;
                 frames.clear();
+                KurumiWebMonitor.state("RETURN 结束");
                 say("伪代码执行 RETURN，任务结束");
             }
             case "BREAK" -> {
