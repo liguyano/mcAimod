@@ -117,8 +117,14 @@ public final class KurumiLongTaskBridge {
                 KurumiTaskRecovery.failed("采集并存箱 " + t.itemId(), "背包数量没有减少，附近箱子可能不可用", t.itemId());
                 return;
             }
-            say(remaining < t.depositCount() ? "长任务完成：已尝试将收集的原木存入箱子，背包剩余 " + remaining + " 个。"
-                    : "长任务未确认存箱成功：背包数量没有减少，请检查箱子和服务器同步。");
+            int gathered = Math.max(0, t.depositCount() - t.startCount());
+            if (gathered < t.goal()) {
+                say("存箱已确认，但收集量 " + gathered + " 未达到目标 " + t.goal() + "，准备重新规划。");
+                KurumiTaskRecovery.failed("采集并存箱 " + t.itemId(),
+                        "已存箱但采集数量不足，还缺 " + (t.goal() - gathered), t.itemId());
+                return;
+            }
+            say("长任务完成：已验证存箱，背包剩余 " + remaining + " 个 " + t.itemId());
         }
     }
     private static void advanceToDeposit() {
