@@ -15,7 +15,6 @@ public final class KurumiScriptParser {
     private static final Pattern COUNT_VAR = Pattern.compile("(check_chest|check_inventory)\\(\"([a-z0-9_.:-]+)\"\\)\\s*(<=|>=|==|!=|<|>)\\s*([a-z][a-z0-9_]{0,23})");
     private static final Pattern RESULT = Pattern.compile("result\\.success");
     private static final Pattern FARM = Pattern.compile("(?:(result)\\s*=\\s*)?farm\\((\\d{1,2})\\)");
-    private static final Pattern SLEEP = Pattern.compile("(?:(result)\\s*=\\s*)?sleep\\(\\)");
     private static final Pattern TALK = Pattern.compile("talk\\(\"([^\"\\r\\n]{1,120})\"\\)");
 
     private static final Pattern ZERO = Pattern.compile("(stop|tpa_request|tpa_accept|craft_open|chest_open|chest_put_all|chest_take_all|drop_all|pickup_all)\\(\\)");
@@ -173,8 +172,6 @@ public final class KurumiScriptParser {
                 }
                 node.addProperty("op", "ACTION");
                 node.add("step", step);
-            } else if (SLEEP.matcher(code).matches()) {
-                node.addProperty("op", code.startsWith("result") ? "SLEEP_RESULT" : "SLEEP");
             } else if (TALK.matcher(code).matches()) {
                 node.addProperty("op", "TALK");
                 node.addProperty("message", TALK.matcher(code).replaceFirst("$1"));
