@@ -9,7 +9,7 @@ import java.util.regex.Pattern;
 
 /** Restricted indentation-based Python-like syntax. Never executes arbitrary code. */
 public final class KurumiScriptParser {
-    private static final Pattern CALL = Pattern.compile("(?:(result)\\s*=\\s*)?([a-z_]+)\\(\"([a-z0-9_.:-]+)\"\\)");
+    private static final Pattern CALL = Pattern.compile("(?:(result)\\s*=\\s*)?([a-z_]+)\\(\"([A-Za-z0-9_.:-]+)\"\\)");
     private static final Pattern COUNT = Pattern.compile("(check_chest|check_inventory)\\(\"([a-z0-9_.:-]+)\"\\)\\s*(<=|>=|==|!=|<|>)\\s*(\\d+)");
     private static final Pattern RESULT = Pattern.compile("result\\.success");
     private static final Pattern FARM = Pattern.compile("(?:(result)\\s*=\\s*)?farm\\((\\d{1,2})\\)");
