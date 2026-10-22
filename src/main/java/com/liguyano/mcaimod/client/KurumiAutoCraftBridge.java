@@ -136,7 +136,20 @@ public final class KurumiAutoCraftBridge {
         Set<Object> visited = Collections.newSetFromMap(new IdentityHashMap<>());
         Object found = inspectRecipeTree(mc.player.getRecipeBook(), itemId, visited, 0);
         if (found != null) return found;
-        return inspectRecipeTree(mc.level.getRecipeManager(), itemId, visited, 0);
+        // ClientLevel in Minecraft 26.2 does not expose getRecipeManager().
+        // Query the client connection's synced recipe state reflectively.
+        Object connection = mc.getConnection();
+        if (connection == null) return null;
+        for (Method method : connection.getClass().getMethods()) {
+            if (method.getParameterCount() != 0) continue;
+            if (!Set.of("getRecipeManager", "getRecipeBook", "getRecipeAccess").contains(method.getName()))
+                continue;
+            try {
+                Object found = inspectRecipeTree(method.invoke(connection), itemId, visited, 0);
+                if (found != null) return found;
+            } catch (ReflectiveOperationException | RuntimeException ignored) { }
+        }
+        return null;
     }
 
     private static Object inspectRecipeTree(Object node, String itemId,
