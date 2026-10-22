@@ -218,7 +218,7 @@ public final class KurumiClientController {
                         if (formatRetries == 0) {
                             List<ChatMessage> retry = new ArrayList<>(conversation);
                             retry.add(new ChatMessage("assistant", reply == null ? "" : reply));
-                            retry.add(new ChatMessage("user", "上一条回复未通过格式或参数校验。请严格只返回一个有效 JSON 对象，禁止 Markdown 和代码块。普通聊天示例：{\\\"type\\\":\\\"chat\\\",\\\"reply\\\":\\\"你好！\\\"}。动作必须包含 type=action、reply 和 action，且参数遵循系统指令。如果无法可靠生成动作，返回 chat JSON 说明原因。"));
+                            retry.add(new ChatMessage("user", "上一条回复未通过格式或参数校验。请严格只返回一个有效 JSON 对象，禁止 Markdown 和代码块。普通聊天示例为包含 type=chat、reply=你好！两个字段的 JSON 对象。动作必须包含 type=action、reply 和 action，且参数遵循系统指令。如果无法可靠生成动作，返回 chat JSON 说明原因。"));
                             runAgent(profile, retry, sender, message, requestGeneration, toolCalls, 1);
                             return;
                         }
