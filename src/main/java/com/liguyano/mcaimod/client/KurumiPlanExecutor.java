@@ -1,16 +1,15 @@
 package com.liguyano.mcaimod.client;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
-/**
- * Executes a validated plan one step at a time, verifying observable postconditions.
- * A failed step stops the plan; no unverified action is treated as completed.
- */
+/** Sequential plan runner with chest preflight and server-menu postflight checks. */
 public final class KurumiPlanExecutor {
+    private enum Phase { START, PRECHECK, ACT, VERIFY, POSTCHECK }
     private record Run(KurumiTaskPlanner.Plan plan, int index, long started, long stepStarted,
-                       int initial, boolean dispatched, int attempts) {}
+                       int inventoryBefore, int chestBefore, Phase phase, int retries) {}
     private static Run active;
     private static int ticks;
     private static final long TOTAL_LIMIT = 300_000L;
@@ -21,6 +20,7 @@ public final class KurumiPlanExecutor {
     public static boolean busy() { return active != null; }
     public static void cancel() {
         active = null;
+        KurumiChestInspector.cancel();
         KurumiChestBridge.cancel();
         KurumiAutoCraftBridge.cancel();
         KurumiPickupBridge.cancel();
@@ -31,7 +31,7 @@ public final class KurumiPlanExecutor {
         return r == null ? "没有自由组合任务"
                 : "自由任务 " + (r.index() + 1) + "/" + r.plan().steps().size()
                 + "：" + r.plan().steps().get(r.index()).action()
-                + "，失败重试 " + r.attempts() + "/" + MAX_RETRIES;
+                + "（" + r.phase() + "），重试 " + r.retries() + "/" + MAX_RETRIES;
     }
     public static BaritoneBridge.Result start(KurumiTaskPlanner.Plan plan) {
         if (busy() || KurumiLongTaskBridge.busy() || KurumiChestCraftTask.busy())
@@ -39,13 +39,17 @@ public final class KurumiPlanExecutor {
         if (plan == null || plan.steps().isEmpty() || plan.steps().size() > 8)
             return new BaritoneBridge.Result(false, "任务计划无效");
         long now = System.currentTimeMillis();
-        active = new Run(plan, 0, now, now, 0, false, 0);
+        active = new Run(plan, 0, now, now, 0, -1, Phase.START, 0);
         ticks = 0;
-        return new BaritoneBridge.Result(true, "已接受 " + plan.steps().size() + " 步自由组合任务，将逐步执行并检查");
+        return new BaritoneBridge.Result(true, "已接受 " + plan.steps().size() + " 步计划，箱子操作会进行前后核验");
     }
     private static void say(String message) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.getConnection() != null) mc.getConnection().sendChat(message);
+    }
+    private static boolean isChest(String action) {
+        return action.equals("CHEST_TAKE") || action.equals("CHEST_PUT")
+                || action.equals("CHEST_PUT_ITEM_ALL");
     }
     private static boolean verified(KurumiTaskPlanner.Step s, int before) {
         int current = KurumiTaskChecks.inventoryCount(s.itemId());
@@ -53,13 +57,11 @@ public final class KurumiPlanExecutor {
             case "GOTO" -> KurumiTaskChecks.within(s.x(), s.y(), s.z(), 3);
             case "EQUIP_MAIN_HAND" -> {
                 Minecraft mc = Minecraft.getInstance();
-                yield mc.player != null && s.itemId().equals(
-                        net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(
-                                mc.player.getMainHandItem().getItem()).toString());
+                yield mc.player != null && s.itemId().equals(BuiltInRegistries.ITEM.getKey(
+                        mc.player.getMainHandItem().getItem()).toString());
             }
-            case "CHEST_TAKE", "CRAFT_ITEM", "PICKUP_ITEM_ALL" -> current > before;
+            case "CHEST_TAKE", "CRAFT_ITEM", "PICKUP_ITEM_ALL", "MINE" -> current > before;
             case "CHEST_PUT", "CHEST_PUT_ITEM_ALL" -> current < before;
-            case "MINE" -> current > before;
             default -> false;
         };
     }
@@ -76,20 +78,38 @@ public final class KurumiPlanExecutor {
             default -> new BaritoneBridge.Result(false, "不支持的步骤");
         };
     }
+    private static void set(Run r, Phase phase, int inventory, int chest) {
+        active = new Run(r.plan(), r.index(), r.started(), r.stepStarted(),
+                inventory, chest, phase, r.retries());
+    }
     private static void fail(Run r, String reason) {
-        if (r.attempts() >= MAX_RETRIES || System.currentTimeMillis() - r.started() > TOTAL_LIMIT) {
-            say("自由任务已停止：第 " + (r.index() + 1) + " 步失败，达到重试/时间上限：" + reason);
+        if (r.retries() >= MAX_RETRIES || System.currentTimeMillis() - r.started() > TOTAL_LIMIT) {
+            say("自由任务已停止：步骤 " + (r.index() + 1) + " 检查失败，达到重试或时间上限：" + reason);
             cancel();
             return;
         }
-        say("第 " + (r.index() + 1) + " 步检查失败：" + reason
-                + "，准备重试（" + (r.attempts() + 1) + "/" + MAX_RETRIES + "）");
+        say("步骤 " + (r.index() + 1) + " 检查失败：" + reason
+                + "；重新执行检查并重试（" + (r.retries() + 1) + "/" + MAX_RETRIES + "）");
+        KurumiChestInspector.cancel();
         KurumiChestBridge.cancel();
         KurumiAutoCraftBridge.cancel();
         KurumiPickupBridge.cancel();
         BaritoneBridge.stop();
         long now = System.currentTimeMillis();
-        active = new Run(r.plan(), r.index(), r.started(), now, 0, false, r.attempts() + 1);
+        active = new Run(r.plan(), r.index(), r.started(), now, 0, -1, Phase.START, r.retries() + 1);
+    }
+    private static void next(Run r) {
+        long elapsed = (System.currentTimeMillis() - r.stepStarted()) / 1000;
+        say("步骤 " + (r.index() + 1) + " 已检查通过，耗时 " + elapsed + " 秒");
+        KurumiTaskPlanner.Step s = r.plan().steps().get(r.index());
+        if (s.action().equals("MINE") || s.action().equals("GOTO")) BaritoneBridge.stop();
+        if (r.index() + 1 == r.plan().steps().size()) {
+            active = null;
+            say("自由组合任务全部通过检查，执行完成");
+        } else {
+            long now = System.currentTimeMillis();
+            active = new Run(r.plan(), r.index() + 1, r.started(), now, 0, -1, Phase.START, 0);
+        }
     }
     private static void tick(ClientTickEvent.Post event) {
         Run r = active;
@@ -99,31 +119,69 @@ public final class KurumiPlanExecutor {
         long now = System.currentTimeMillis();
         if (now - r.started() > TOTAL_LIMIT) { say("自由任务超过5分钟，已停止"); cancel(); return; }
         KurumiTaskPlanner.Step s = r.plan().steps().get(r.index());
-        if (!r.dispatched()) {
-            int before = KurumiTaskChecks.inventoryCount(s.itemId());
-            BaritoneBridge.Result result = dispatch(s);
-            if (!result.success()) { fail(r, result.message()); return; }
-            active = new Run(r.plan(), r.index(), r.started(), now, before, true, r.attempts());
-            say("开始步骤 " + (r.index() + 1) + "/" + r.plan().steps().size() + "：" + s.action());
-            return;
-        }
-        if (verified(s, r.initial())) {
-            // Wait for asynchronous container and crafting operations to settle before continuing.
-            if ((s.action().startsWith("CHEST_") && KurumiChestBridge.busy())
-                    || (s.action().equals("CRAFT_ITEM") && KurumiAutoCraftBridge.busy())
-                    || (s.action().equals("PICKUP_ITEM_ALL") && KurumiPickupBridge.busy())) return;
-            say("第 " + (r.index() + 1) + " 步检查成功，耗时 "
-                    + (now - r.stepStarted()) / 1000 + " 秒");
-            if (s.action().equals("MINE") || s.action().equals("GOTO")) BaritoneBridge.stop();
-            if (r.index() + 1 == r.plan().steps().size()) {
-                active = null;
-                say("自由组合任务已全部通过检查，执行完成");
-            } else {
-                active = new Run(r.plan(), r.index() + 1, r.started(), now, 0, false, 0);
+        if (now - r.stepStarted() > STEP_LIMIT) { fail(r, "75秒内没有通过检查"); return; }
+        switch (r.phase()) {
+            case START -> {
+                if (isChest(s.action())) {
+                    String result = KurumiChestInspector.check(s.itemId());
+                    if (result.contains("error")) { fail(r, "无法检查附近箱子：" + result); return; }
+                    set(r, Phase.PRECHECK, 0, -1);
+                    say("步骤 " + (r.index() + 1) + "：先检查附近箱子里的 " + s.itemId());
+                } else set(r, Phase.ACT, 0, -1);
             }
-            return;
+            case PRECHECK -> {
+                if (KurumiChestInspector.busy()) return;
+                int count = KurumiChestInspector.observedCount(s.itemId());
+                if (count < 0) { fail(r, "没有获取到服务器箱子物品数量"); return; }
+                if (s.action().equals("CHEST_TAKE") && count < s.quantity()) {
+                    fail(r, "箱子材料不足：需要 " + s.quantity() + "，实际 " + count);
+                    return;
+                }
+                if (!s.action().equals("CHEST_TAKE")
+                        && KurumiTaskChecks.inventoryCount(s.itemId()) <= 0) {
+                    fail(r, "背包中没有待存物品");
+                    return;
+                }
+                say("箱子检查通过：" + s.itemId() + " × " + count);
+                set(r, Phase.ACT, 0, count);
+            }
+            case ACT -> {
+                if (KurumiChestInspector.busy()) return;
+                int before = KurumiTaskChecks.inventoryCount(s.itemId());
+                BaritoneBridge.Result result = dispatch(s);
+                if (!result.success()) { fail(r, result.message()); return; }
+                set(r, Phase.VERIFY, before, r.chestBefore());
+                say("开始步骤 " + (r.index() + 1) + "/" + r.plan().steps().size() + "：" + s.action());
+            }
+            case VERIFY -> {
+                if (!verified(s, r.inventoryBefore())) return;
+                if ((isChest(s.action()) && KurumiChestBridge.busy())
+                        || (s.action().equals("CRAFT_ITEM") && KurumiAutoCraftBridge.busy())
+                        || (s.action().equals("PICKUP_ITEM_ALL") && KurumiPickupBridge.busy())) return;
+                if (isChest(s.action())) {
+                    String result = KurumiChestInspector.check(s.itemId());
+                    if (result.contains("error")) { fail(r, "存取后箱子检查失败：" + result); return; }
+                    set(r, Phase.POSTCHECK, r.inventoryBefore(), r.chestBefore());
+                } else next(r);
+            }
+            case POSTCHECK -> {
+                if (KurumiChestInspector.busy()) return;
+                int count = KurumiChestInspector.observedCount(s.itemId());
+                if (count < 0) { fail(r, "没有取得存取后的箱子数量"); return; }
+                int diff = count - r.chestBefore();
+                int inventoryDiff = KurumiTaskChecks.inventoryCount(s.itemId()) - r.inventoryBefore();
+                boolean success = s.action().equals("CHEST_TAKE")
+                        ? diff < 0 && inventoryDiff > 0
+                        : diff > 0 && inventoryDiff < 0;
+                if (!success) {
+                    fail(r, "箱子前后数量没有符合预期变化：之前 " + r.chestBefore()
+                            + "，现在 " + count + "，背包变化 " + inventoryDiff);
+                    return;
+                }
+                say("箱子核验成功：" + s.itemId() + "，数量 " + r.chestBefore() + " → " + count);
+                next(r);
+            }
         }
-        if (now - r.stepStarted() > STEP_LIMIT) fail(r, "75秒内没有观察到预期状态变化");
     }
     private KurumiPlanExecutor() {}
 }
