@@ -136,6 +136,19 @@ public final class KurumiTaskPlanner {
             } else if ("ACTION".equals(op) || "ACTION_RESULT".equals(op)) {
                 JsonObject stepNode = node.getAsJsonObject("step");
                 String special = stepNode.get("action").getAsString();
+                if ("MOVE".equals(special)) {
+                    String direction = stepNode.get("target").getAsString();
+                    int distance = stepNode.get("quantity").getAsInt();
+                    if (!java.util.Set.of("forward", "back", "left", "right").contains(direction)
+                            || distance < 1 || distance > 16)
+                        throw new IllegalArgumentException("invalid relative movement");
+                    statements.add(new Statement(op,
+                            new Step("MOVE", "", distance, null, null, null, direction),
+                            null, List.of(), List.of()));
+                    if (node.has("line")) KurumiWebMonitor.registerLine(
+                            statements.get(statements.size() - 1), node.get("line").getAsInt());
+                    continue;
+                }
                 // Script-only actions use their own validated parameters; the legacy
                 // EXECUTE_PLAN validator intentionally does not accept these actions.
                 if (java.util.Set.of("COLLECT_AND_STORE", "STOP", "TPA_REQUEST", "TPA_ACCEPT",
