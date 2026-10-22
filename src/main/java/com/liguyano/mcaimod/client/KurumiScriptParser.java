@@ -13,6 +13,7 @@ public final class KurumiScriptParser {
     private static final Pattern COUNT = Pattern.compile("(check_chest|check_inventory)\\(\"([a-z0-9_.:-]+)\"\\)\\s*(<=|>=|==|!=|<|>)\\s*(\\d+)");
     private static final Pattern RESULT = Pattern.compile("result\\.success");
     private static final Pattern FARM = Pattern.compile("(?:(result)\\s*=\\s*)?farm\\((\\d{1,2})\\)");
+    private static final Pattern SLEEP = Pattern.compile("(?:(result)\\s*=\\s*)?sleep\\(\\)");
     private static final Pattern TALK = Pattern.compile("talk\\(\"([^\"\\r\\n]{1,120})\"\\)");
     private static final Pattern RETURN = Pattern.compile("return\\s+\"[^\"\\r\\n]{0,100}\"");
     private record Line(int indent, String code, int number) {}
@@ -73,6 +74,8 @@ public final class KurumiScriptParser {
                 if (radius < 4 || radius > 32) throw new IllegalArgumentException("farm radius");
                 node.addProperty("op", farm.group(1) != null ? "FARM_RESULT" : "FARM");
                 node.addProperty("radius", radius);
+            } else if (SLEEP.matcher(code).matches()) {
+                node.addProperty("op", code.startsWith("result") ? "SLEEP_RESULT" : "SLEEP");
             } else if (TALK.matcher(code).matches()) {
                 node.addProperty("op", "TALK");
                 node.addProperty("message", TALK.matcher(code).replaceFirst("$1"));
@@ -91,13 +94,15 @@ public final class KurumiScriptParser {
                     case "equip_armor" -> "EQUIP_ARMOR";
                     case "equip_main_hand" -> "EQUIP_MAIN_HAND";
                     case "mine" -> "MINE";
+                    case "come" -> "COME";
+                    case "follow" -> "FOLLOW";
                     default -> throw new IllegalArgumentException("unsupported action");
                 };
                 node.addProperty("op", m.group(1) != null ? "ACTION_RESULT" : "ACTION");
                 JsonObject step = new JsonObject();
                 step.addProperty("action", action);
                 step.addProperty("ATTACK_MOB".equals(action) ? "entity_id"
-                        : "ATTACK_PLAYER".equals(action) ? "target" : "item_id", m.group(3));
+                        : "ATTACK_PLAYER".equals(action) || "COME".equals(action) || "FOLLOW".equals(action) ? "target" : "item_id", m.group(3));
                 node.add("step", step);
             }
             out.add(node);
