@@ -112,6 +112,33 @@ public final class KurumiLocationMemory {
         }
     }
 
+    /** Resolve a saved name in the current server and dimension and start navigation. */
+    public static BaritoneBridge.Result gotoNamed(String name) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null || mc.getConnection() == null)
+            return new BaritoneBridge.Result(false, "游戏世界尚未就绪");
+        String cleaned = clean(name);
+        if (cleaned.isEmpty() || cleaned.length() > 24)
+            return new BaritoneBridge.Result(false, "地点名称无效");
+        try {
+            String scope = mc.getCurrentServer() == null ? "singleplayer" : mc.getCurrentServer().ip;
+            String key = scope.replaceAll("[^a-zA-Z0-9_.:-]", "_");
+            Path path = FMLPaths.CONFIGDIR.get().resolve("mcaimod-locations.json");
+            if (!Files.exists(path)) return new BaritoneBridge.Result(false, "还没有记住地点：" + cleaned);
+            JsonObject root = JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject();
+            if (!root.has(key) || !root.get(key).isJsonObject()
+                    || !root.getAsJsonObject(key).has(cleaned))
+                return new BaritoneBridge.Result(false, "还没有记住地点：" + cleaned);
+            JsonObject point = root.getAsJsonObject(key).getAsJsonObject(cleaned);
+            if (!mc.level.dimension().toString().equals(point.get("dimension").getAsString()))
+                return new BaritoneBridge.Result(false, "地点位于其他维度，无法直接寻路：" + cleaned);
+            return BaritoneBridge.gotoCoordinates(point.get("x").getAsInt(),
+                    point.get("y").getAsInt(), point.get("z").getAsInt());
+        } catch (RuntimeException | java.io.IOException ex) {
+            return new BaritoneBridge.Result(false, "地点数据读取失败");
+        }
+    }
+
     private static String clean(String text) {
         return text.strip().replaceAll("[。！？!?，,]+$", "").strip();
     }
