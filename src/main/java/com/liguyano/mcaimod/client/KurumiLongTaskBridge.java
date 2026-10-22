@@ -69,8 +69,13 @@ public final class KurumiLongTaskBridge {
         if (mc.getConnection() != null) mc.getConnection().sendChat(text);
     }
     private static void fail(String reason) {
+        Task failed = active;
         cancel();
-        say("长任务已停止：" + reason);
+        if (failed != null) {
+            say("检查未通过：" + reason + "；阶段：" + failed.phase()
+                    + "；耗时：" + (System.currentTimeMillis() - failed.phaseTime()) / 1000 + "秒");
+            KurumiTaskRecovery.failed("采集并存箱 " + failed.itemId(), reason, failed.itemId());
+        }
     }
     private static void tick(ClientTickEvent.Post event) {
         Task t = active;
@@ -83,6 +88,8 @@ public final class KurumiLongTaskBridge {
         if (t.phase() == Phase.MINING) {
             if (current - t.startCount() < t.goal() && now - t.phaseTime() < MINE_LIMIT_MS) return;
             BaritoneBridge.stop();
+            say("采集阶段耗时 " + (now - t.phaseTime()) / 1000 + " 秒；检查背包新增 "
+                    + Math.max(0, current - t.startCount()) + " 个 " + t.itemId());
             active = new Task(t.itemId(), t.goal(), t.startCount(), t.startTime(), now, Phase.PICKING_UP, 0);
             say("采集阶段结束，开始拾取 " + t.itemId());
             BaritoneBridge.Result pickup = KurumiPickupBridge.pickupAll(t.itemId());
@@ -95,12 +102,21 @@ public final class KurumiLongTaskBridge {
             if (KurumiPickupBridge.busy() && now - t.phaseTime() < PICKUP_LIMIT_MS) return;
             KurumiPickupBridge.cancel();
             BaritoneBridge.stop();
+            say("拾取阶段耗时 " + (now - t.phaseTime()) / 1000 + " 秒；检查背包当前 "
+                    + count(t.itemId()) + " 个 " + t.itemId());
             advanceToDeposit();
         } else if (t.phase() == Phase.DEPOSITING) {
             if (KurumiChestBridge.busy() && now - t.phaseTime() < DEPOSIT_LIMIT_MS) return;
             if (KurumiChestBridge.busy()) { fail("箱子操作超时"); return; }
             int remaining = count(t.itemId());
             active = null;
+            say("存箱阶段耗时 " + (now - t.phaseTime()) / 1000 + " 秒；检查背包减少 "
+                    + Math.max(0, t.depositCount() - remaining) + " 个 " + t.itemId());
+            if (remaining >= t.depositCount()) {
+                say("存箱未通过验证，重新规划。");
+                KurumiTaskRecovery.failed("采集并存箱 " + t.itemId(), "背包数量没有减少，附近箱子可能不可用", t.itemId());
+                return;
+            }
             say(remaining < t.depositCount() ? "长任务完成：已尝试将收集的原木存入箱子，背包剩余 " + remaining + " 个。"
                     : "长任务未确认存箱成功：背包数量没有减少，请检查箱子和服务器同步。");
         }
