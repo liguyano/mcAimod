@@ -112,6 +112,11 @@ public final class KurumiTaskPlanner {
                 List<Statement> otherwise = "IF".equals(op) && node.has("else")
                         ? parseStatements(node.getAsJsonArray("else"), depth + 1, budget) : List.of();
                 statements.add(new Statement(op, null, condition, body, otherwise));
+            } else if ("FARM".equals(op) || "FARM_RESULT".equals(op)) {
+                int radius = node.get("radius").getAsInt();
+                if (radius < 4 || radius > 32) throw new IllegalArgumentException("farm radius");
+                statements.add(new Statement(op, new Step("FARM", "", radius, null, null, null, ""),
+                        null, List.of(), List.of()));
             } else if ("TALK".equals(op)) {
                 String message = node.get("message").getAsString();
                 if (message.isBlank() || message.length() > 120
