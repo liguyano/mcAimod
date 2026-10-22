@@ -28,13 +28,22 @@ public final class KurumiLocationMemory {
         String body = message.strip().replaceFirst("(?i)^.*?kurumi[，,：: ]*", "").strip();
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null || mc.getConnection() == null) return false;
-        // Direct handling is reserved for a single, standalone "去..." command.
-        // Everything else, especially compound tasks, is sent to the model.
-        if (!body.startsWith("去") || body.contains("然后") || body.contains("之后")
-                || body.contains("再去") || body.contains("并且") || body.contains("接着")
+        // Handle standalone location-memory commands deterministically instead of
+        // letting the model claim it saved a place without writing the file.
+        // Compound requests still go to the planner.
+        if (body.contains("然后") || body.contains("之后") || body.contains("再去")
+                || body.contains("并且") || body.contains("接着")
                 || body.contains("，") || body.contains(",") || body.contains("；")
                 || body.contains(";") || body.contains("。") || body.contains("\\n"))
             return false;
+        boolean locationIntent = body.startsWith("去") || body.startsWith("记住")
+                || body.startsWith("记下") || body.startsWith("标记")
+                || body.startsWith("忘记") || body.startsWith("删除地点")
+                || body.contains("在哪里") || body.contains("在哪儿")
+                || body.contains("在哪") || body.contains("的坐标")
+                || body.contains("记住了哪些") || body.contains("地点列表")
+                || body.contains("记忆的地点");
+        if (!locationIntent) return false;
         Matcher coordinates = Pattern.compile(
                 "去(?:坐标)?[ ]*(-?[0-9]+)[ ]+(-?[0-9]+)[ ]+(-?[0-9]+)").matcher(body);
         if (coordinates.matches()) {
