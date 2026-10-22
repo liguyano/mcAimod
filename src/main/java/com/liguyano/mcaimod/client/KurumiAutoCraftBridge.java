@@ -21,7 +21,7 @@ import java.util.Set;
  * Recipe placement is delegated to the vanilla game mode / server.
  */
 public final class KurumiAutoCraftBridge {
-    private record Job(String itemId, int requested, int initial, long started, int stage, Object recipeId) {}
+    private record Job(String itemId, int requested, int initial, long started, int stage, Object recipeId, long stageStarted) {}
     private static Job job;
     private static boolean lastSucceeded;
     public static boolean lastSucceeded() { return lastSucceeded; }
@@ -42,7 +42,7 @@ public final class KurumiAutoCraftBridge {
         int initial = count(itemId);
         BaritoneBridge.Result opened = KurumiCraftingBridge.open();
         if (!opened.success()) return opened;
-        job = new Job(itemId, quantity, initial, System.currentTimeMillis(), 0, null);
+        job = new Job(itemId, quantity, initial, System.currentTimeMillis(), 0, null, System.currentTimeMillis());
         return new BaritoneBridge.Result(true, "正在等待工作台打开，随后查询配方并尝试合成");
     }
 
@@ -71,7 +71,7 @@ public final class KurumiAutoCraftBridge {
         if (current == null) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.gameMode == null) { lastSucceeded = false; job = null; return; }
-        if (System.currentTimeMillis() - current.started() > 15000) {
+        if (System.currentTimeMillis() - current.started() > 45000) {
             job = null;
             report("合成等待超时，已停止；请检查材料或工作台");
             return;
@@ -98,20 +98,67 @@ public final class KurumiAutoCraftBridge {
                 return;
             }
             job = new Job(current.itemId(), current.requested(), current.initial(),
-                    current.started(), 1, recipeId);
+                    current.started(), 1, recipeId, System.currentTimeMillis());
             return;
         }
         ItemStack result = menu.getSlot(0).getItem();
-        if (current.stage() == 1 && !result.isEmpty() && current.itemId().equals(BuiltInRegistries.ITEM.getKey(result.getItem()).toString())) {
-            mc.gameMode.handleContainerInput(menu.containerId, 0, 0, ContainerInput.QUICK_MOVE, mc.player);
-            job = new Job(current.itemId(), current.requested(), current.initial(),
-                    current.started(), 2, current.recipeId());
-        } else if (current.stage() == 2 && done > 0) {
-            lastSucceeded = done >= current.requested();
-            job = null;
-            mc.player.closeContainer();
-            report("已获得 " + done + " 个 " + current.itemId()
-                    + "；如未达到目标数量，请再次下达合成指令");
+        if (current.stage() == 1) {
+            if (!result.isEmpty() && current.itemId().equals(
+                    BuiltInRegistries.ITEM.getKey(result.getItem()).toString())) {
+                mc.gameMode.handleContainerInput(menu.containerId, 0, 0, ContainerInput.QUICK_MOVE, mc.player);
+                job = new Job(current.itemId(), current.requested(), current.initial(),
+                        current.started(), 2, current.recipeId(), System.currentTimeMillis());
+            } else if (System.currentTimeMillis() - current.stageStarted() > 4000) {
+                job = null;
+                report("服务器未生成目标合成结果；请检查配方解锁状态及材料");
+            }
+            return;
+        }
+        if (current.stage() == 2) {
+            // Wait for server inventory sync rather than treating a click as success.
+            if (done > 0) {
+                if (done >= current.requested()) {
+                    lastSucceeded = true;
+                    job = null;
+                    mc.player.closeContainer();
+                    report("合成完成，已获得 " + done + " 个 " + current.itemId());
+                } else {
+                    // Re-query the current recipe and request the next batch.
+                    // Never fabricate ingredients or directly edit inventory slots.
+                    job = new Job(current.itemId(), current.requested(), current.initial(),
+                            current.started(), 3, current.recipeId(), System.currentTimeMillis());
+                }
+            } else if (System.currentTimeMillis() - current.stageStarted() > 4000) {
+                job = null;
+                report("领取合成结果后背包数量没有变化，停止操作");
+            }
+            return;
+        }
+        if (current.stage() == 3) {
+            if (!result.isEmpty() && current.itemId().equals(
+                    BuiltInRegistries.ITEM.getKey(result.getItem()).toString())) {
+                mc.gameMode.handleContainerInput(menu.containerId, 0, 0, ContainerInput.QUICK_MOVE, mc.player);
+                job = new Job(current.itemId(), current.requested(), current.initial(),
+                        current.started(), 4, current.recipeId(), System.currentTimeMillis());
+            } else if (System.currentTimeMillis() - current.stageStarted() > 400) {
+                if (!placeRecipe(menu, current.recipeId())) {
+                    job = null;
+                    report("无法再次放置配方，已停止");
+                } else job = new Job(current.itemId(), current.requested(), current.initial(),
+                        current.started(), 1, current.recipeId(), System.currentTimeMillis());
+            }
+            return;
+        }
+        if (current.stage() == 4) {
+            if (done >= current.requested()) {
+                lastSucceeded = true;
+                job = null;
+                mc.player.closeContainer();
+                report("合成完成，已获得 " + done + " 个 " + current.itemId());
+            } else if (System.currentTimeMillis() - current.stageStarted() > 400) {
+                job = new Job(current.itemId(), current.requested(), current.initial(),
+                        current.started(), 3, current.recipeId(), System.currentTimeMillis());
+            }
         }
     }
 
