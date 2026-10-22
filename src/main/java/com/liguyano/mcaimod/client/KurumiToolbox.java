@@ -15,6 +15,32 @@ public final class KurumiToolbox {
     public static String observe(String tool) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return "{\"error\":\"not_in_world\"}";
+        if (tool != null && tool.startsWith("find_nearest_block:")) {
+            String blockId = tool.substring("find_nearest_block:".length());
+            JsonObject result = new JsonObject();
+            result.addProperty("block_id", blockId);
+            BlockPos origin = mc.player.blockPosition();
+            BlockPos nearest = null;
+            double best = Double.POSITIVE_INFINITY;
+            for (BlockPos pos : BlockPos.betweenClosed(
+                    origin.offset(-24, -8, -24), origin.offset(24, 8, 24))) {
+                if (!mc.level.hasChunkAt(pos)) continue;
+                String id = BuiltInRegistries.BLOCK.getKey(
+                        mc.level.getBlockState(pos).getBlock()).toString();
+                if (!blockId.equals(id)) continue;
+                double distance = pos.distSqr(origin);
+                if (distance < best) { best = distance; nearest = pos.immutable(); }
+            }
+            result.addProperty("found", nearest != null);
+            if (nearest != null) {
+                result.addProperty("x", nearest.getX());
+                result.addProperty("y", nearest.getY());
+                result.addProperty("z", nearest.getZ());
+                result.addProperty("distance", Math.sqrt(best));
+                result.addProperty("dimension", mc.level.dimension().toString());
+            }
+            return result.toString();
+        }
         if (tool != null && tool.startsWith("check_nearby_chest:"))
             return KurumiChestInspector.check(tool.substring("check_nearby_chest:".length()));
         if (tool != null && tool.startsWith("get_nearby_chest_result:"))
