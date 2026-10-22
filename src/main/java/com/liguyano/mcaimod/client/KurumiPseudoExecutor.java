@@ -222,6 +222,39 @@ public final class KurumiPseudoExecutor {
                 frame.index++;
             }
             case "ACTION", "ACTION_RESULT" -> {
+                if (java.util.Set.of("STOP", "TPA_REQUEST", "TPA_ACCEPT", "TPA_REQUEST_TO",
+                        "CRAFT_OPEN", "CHEST_OPEN", "CHEST_PUT_ALL", "CHEST_TAKE_ALL", "DROP_ALL",
+                        "DROP_ITEM_ALL", "DROP", "PICKUP", "PICKUP_ALL", "CRAFT_ITEM",
+                        "CHEST_TAKE", "CHEST_PUT", "COLLECT_AND_STORE").contains(stmt.step().action())) {
+                    if (++actions > MAX_ACTIONS) { cancel(); return; }
+                    var step = stmt.step();
+                    BaritoneBridge.Result result = switch (step.action()) {
+                        case "STOP" -> BaritoneBridge.stop();
+                        case "TPA_REQUEST" -> KurumiTpaBridge.request();
+                        case "TPA_ACCEPT" -> KurumiTpaBridge.accept();
+                        case "TPA_REQUEST_TO" -> KurumiTpaBridge.requestTo(step.target());
+                        case "CRAFT_OPEN" -> KurumiCraftingBridge.open();
+                        case "CHEST_OPEN" -> KurumiChestBridge.open();
+                        case "CHEST_PUT_ALL" -> KurumiChestBridge.putAll();
+                        case "CHEST_TAKE_ALL" -> KurumiChestBridge.takeAll();
+                        case "DROP_ALL" -> KurumiDropBridge.dropAll();
+                        case "DROP_ITEM_ALL" -> KurumiDropBridge.dropItemAll(step.itemId());
+                        case "DROP" -> KurumiDropBridge.drop(step.itemId(), step.quantity());
+                        case "PICKUP" -> KurumiPickupBridge.pickup(step.itemId(), step.quantity());
+                        case "PICKUP_ALL" -> KurumiPickupBridge.pickupAll(null);
+                        case "CRAFT_ITEM" -> KurumiAutoCraftBridge.craft(step.itemId(), step.quantity());
+                        case "CHEST_TAKE" -> KurumiChestBridge.takeItem(step.itemId(), step.quantity());
+                        case "CHEST_PUT" -> KurumiChestBridge.put(step.itemId(), step.quantity());
+                        case "COLLECT_AND_STORE" -> KurumiLongTaskBridge.collectAndStore(step.itemId(), step.quantity());
+                        default -> new BaritoneBridge.Result(false, "不支持的指令");
+                    };
+                    lastResultSuccess = result.success();
+                    assignedResult = "ACTION_RESULT".equals(stmt.op());
+                    KurumiWebMonitor.log(step.action() + ": " + result.message());
+                    frame.index++;
+                    if (!result.success() && !assignedResult) cancel();
+                    return;
+                }
                 if ("CHAIN_ON".equals(stmt.step().action()) || "CHAIN_OFF".equals(stmt.step().action())) {
                     if (++actions > MAX_ACTIONS) { cancel(); return; }
                     var result = KurumiChainBridge.setEnabled("CHAIN_ON".equals(stmt.step().action()));
