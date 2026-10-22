@@ -8,7 +8,7 @@ import java.util.Optional;
  * This parser NEVER executes commands or touches game state.
  */
 public final class KurumiActionValidator {
-    public enum Type { FARM, STOP, SLEEP, TPA_REQUEST, TPA_ACCEPT, CHAIN_ON, CHAIN_OFF, CRAFT_OPEN, CRAFT_ITEM, CHEST_OPEN, CHEST_TAKE_ALL, DROP_ALL, CHEST_PUT_ALL, DROP_ITEM_ALL, CHEST_PUT_ITEM_ALL, OPEN_DOOR, PRESS_BUTTON, PICKUP, PICKUP_ALL, PICKUP_ITEM_ALL, DROP, CHEST_TAKE, CHEST_PUT }
+    public enum Type { FARM, STOP, SLEEP, TPA_REQUEST, TPA_ACCEPT, CHAIN_ON, CHAIN_OFF, CRAFT_OPEN, CRAFT_ITEM, EQUIP_MAIN_HAND, CHEST_OPEN, CHEST_TAKE_ALL, DROP_ALL, CHEST_PUT_ALL, DROP_ITEM_ALL, CHEST_PUT_ITEM_ALL, OPEN_DOOR, PRESS_BUTTON, PICKUP, PICKUP_ALL, PICKUP_ITEM_ALL, DROP, CHEST_TAKE, CHEST_PUT }
 
     public record Action(Type type, String itemId, int quantity, int radius) {}
 
@@ -25,8 +25,11 @@ public final class KurumiActionValidator {
             case PICKUP, DROP, CHEST_TAKE, CHEST_PUT, CRAFT_ITEM -> true;
             default -> false;
         };
+        boolean equip = type == Type.EQUIP_MAIN_HAND;
         boolean allOfItem = type == Type.DROP_ITEM_ALL || type == Type.CHEST_PUT_ITEM_ALL || type == Type.PICKUP_ITEM_ALL;
-        if (allOfItem) {
+        if (equip) {
+            if (quantity != 0 || itemId == null || !itemId.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")) return Optional.empty();
+        } else if (allOfItem) {
             if (quantity != 0 || itemId == null || !itemId.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")) return Optional.empty();
         } else if (itemAction) {
             if (quantity < 1 || quantity > 64 || itemId == null ||
@@ -36,7 +39,7 @@ public final class KurumiActionValidator {
         }
         if (type == Type.FARM && (radius < 4 || radius > 32)) return Optional.empty();
         if (type != Type.FARM && radius != 0) return Optional.empty();
-        return Optional.of(new Action(type, itemAction || allOfItem ? itemId : "", quantity, radius));
+        return Optional.of(new Action(type, itemAction || allOfItem || equip ? itemId : "", quantity, radius));
     }
 
     private KurumiActionValidator() {}
