@@ -197,6 +197,11 @@ public final class KurumiPlanExecutor {
                 }
             }
             case START -> {
+                if (s.action().equals("PICKUP_ITEM_ALL") && !KurumiPickupBridge.hasNearby(s.itemId())) {
+                    KurumiWebMonitor.log("可选拾取：附近没有 " + s.itemId() + "，跳过并继续计划");
+                    next(r);
+                    return;
+                }
                 if (isChest(s.action())) {
                     String result = KurumiChestInspector.check(s.itemId());
                     if (result.contains("error")) { fail(r, "无法检查附近箱子：" + result); return; }
@@ -230,6 +235,13 @@ public final class KurumiPlanExecutor {
             }
             case VERIFY -> {
                 if (s.action().startsWith("ATTACK_") && now - r.stepStarted() < 700) return;
+                if (s.action().equals("PICKUP_ITEM_ALL")
+                        && !KurumiPickupBridge.busy()
+                        && !KurumiPickupBridge.hasNearby(s.itemId())) {
+                    KurumiWebMonitor.log("可选拾取已结束：没有剩余可见目标，继续后续步骤");
+                    next(r);
+                    return;
+                }
                 if (!verified(s, r.inventoryBefore())) return;
                 if ((isChest(s.action()) && KurumiChestBridge.busy())
                         || (s.action().equals("CRAFT_ITEM") && KurumiAutoCraftBridge.busy())
