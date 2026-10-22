@@ -267,3 +267,27 @@ return "任务结束"
 ```
 
 脚本支持 `while`、`if`、`else`、`break`、`return`、`result = action(...)`、`result.success`、`not result.success`、`check_chest(...)`、`check_inventory(...)`。动作函数白名单：`attack_mob`、`attack_player`、`pickup_item_all`、`chest_put_item_all`、`equip_armor`、`equip_main_hand`、`mine`。不支持任意变量、运算、导入模块或执行系统代码。动作成功表示原执行器验证通过；攻击目前仅代表攻击尝试结束，不能证明目标死亡。每级缩进必须为 4 个空格；保留循环次数、总时间与动作数上限。
+
+
+### 在任务中发送公屏聊天：`talk()`
+
+`EXECUTE_SCRIPT` 支持在任意步骤插入 `talk("文本")`。该指令使用玩家连接的普通聊天发送接口，不是只显示给自己看的本地提示；消息是否对所有玩家可见取决于服务器聊天设置。示例：
+
+```python
+talk("我开始收集腐肉啦！")
+while check_chest("minecraft:rotten_flesh") < 64:
+    result = attack_mob("minecraft:zombie")
+    if result.success:
+        talk("攻击动作已完成，准备捡取掉落物")
+        result = pickup_item_all("minecraft:rotten_flesh")
+        if result.success:
+            chest_put_item_all("minecraft:rotten_flesh")
+        else:
+            break
+    else:
+        break
+talk("本次收集任务结束")
+return "任务结束"
+```
+
+为防止循环刷屏，单次程序最多发送 12 条公屏消息，间隔至少 2 秒，单条最多 120 字符；禁止斜杠命令和换行。达到消息上限时停止任务。不能保证服务器未禁言、聊天频道限制或其他插件过滤时仍能送达。
