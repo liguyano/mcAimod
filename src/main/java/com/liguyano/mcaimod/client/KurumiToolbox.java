@@ -15,6 +15,21 @@ public final class KurumiToolbox {
     public static String observe(String tool) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return "{\"error\":\"not_in_world\"}";
+        if (tool != null && tool.startsWith("check_inventory_count:")) {
+            String id = tool.substring("check_inventory_count:".length());
+            JsonObject check = new JsonObject();
+            check.addProperty("item_id", id);
+            check.addProperty("count", KurumiTaskChecks.inventoryCount(id));
+            return check.toString();
+        }
+        if (tool != null && tool.startsWith("check_position:")) {
+            String[] parts = tool.substring("check_position:".length()).split(":");
+            try {
+                int x = Integer.parseInt(parts[0]), y = Integer.parseInt(parts[1]);
+                int z = Integer.parseInt(parts[2]), radius = Integer.parseInt(parts[3]);
+                return KurumiTaskChecks.observe("", x, y, z, radius);
+            } catch (RuntimeException ex) { return "{\"error\":\"invalid_coordinates\"}"; }
+        }
         if (tool != null && tool.startsWith("get_crafting_recipe:"))
             return KurumiAutoCraftBridge.lookup(tool.substring("get_crafting_recipe:".length()));
         JsonObject out = new JsonObject();
