@@ -223,15 +223,6 @@ public final class KurumiPseudoExecutor {
         var stmt = frame.statements.get(frame.index);
         KurumiWebMonitor.step(stmt, actions, frame.iterations, lastResultSuccess);
         switch (stmt.op()) {
-            case "SLEEP", "SLEEP_RESULT" -> {
-                if (++actions > MAX_ACTIONS) { cancel(); return; }
-                var result = KurumiSleepBridge.sleep();
-                lastResultSuccess = result.success();
-                assignedResult = "SLEEP_RESULT".equals(stmt.op());
-                KurumiWebMonitor.log("sleep() 请求：" + result.message());
-                frame.index++;
-                if (!result.success() && !assignedResult) cancel();
-            }
             case "FARM", "FARM_RESULT" -> {
                 if (++actions > MAX_ACTIONS) { cancel(); return; }
                 var result = BaritoneBridge.farm(stmt.step().quantity());
