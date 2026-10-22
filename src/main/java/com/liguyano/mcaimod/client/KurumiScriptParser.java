@@ -91,7 +91,7 @@ public final class KurumiScriptParser {
         JsonObject node = new JsonObject();
         if (RESULT.matcher(expression).matches() || expression.equals("not result.success")) {
             node.addProperty("source", "result");
-            node.addProperty("operator", expression.startsWith("not ") ? "EQ" : "GE");
+            node.addProperty("operator", expression.startsWith("not ") ? "LT" : "GE");
             return node;
         }
         Matcher m = COUNT.matcher(expression);
