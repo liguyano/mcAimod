@@ -20,18 +20,44 @@ public final class BaritoneBridge {
         }
     }
 
+    private static Boolean previousAllowBreak;
+
+    /** Scope no-breaking navigation until another explicit action or stop. */
+    private static Result setBreakPolicy(boolean navigation) {
+        try {
+            Class<?> api = Class.forName("baritone.api.BaritoneAPI");
+            Object settings = api.getMethod("getSettings").invoke(null);
+            Object setting = settings.getClass().getField("allowBreak").get(settings);
+            java.lang.reflect.Field value = setting.getClass().getField("value");
+            if (navigation) {
+                if (previousAllowBreak == null) previousAllowBreak = (Boolean) value.get(setting);
+                value.set(setting, false);
+            } else if (previousAllowBreak != null) {
+                value.set(setting, previousAllowBreak);
+                previousAllowBreak = null;
+            }
+            return new Result(true, navigation ? "已禁止寻路破坏方块" : "已恢复原先的破坏方块设置");
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException ex) {
+            return new Result(false, "无法设置 Baritone 禁止破坏方块；为安全起见未开始寻路");
+        }
+    }
+
     public static Result farm(int radius) {
         if (radius < 4 || radius > 32) {
             return new Result(false, "农作半径必须在 4–32 格之间");
         }
         // Baritone's #farm command uses its own optional arguments. Start with
         // the standard command rather than assuming an unsupported radius syntax.
+        Result policy = setBreakPolicy(false);
+        if (!policy.success()) return policy;
         return executeLocal("farm", "已向 Baritone 发送 #farm");
     }
 
     public static Result gotoCoordinates(int x, int y, int z) {
+        Result policy = setBreakPolicy(true);
+        if (!policy.success()) return policy;
         return executeLocal("goto " + x + " " + y + " " + z,
-                "已向 Baritone 发送前往坐标 " + x + " " + y + " " + z);
+                "已向 Baritone 发送无破坏寻路到坐标 " + x + " " + y + " " + z);
     }
 
     /** One-shot approach: navigate to the player's current position, without enabling follow. */
@@ -59,6 +85,8 @@ public final class BaritoneBridge {
     public static Result followPlayer(String name) {
         if (name == null || !name.matches("[A-Za-z0-9_]{3,16}"))
             return new Result(false, "玩家名称不合法");
+        Result policy = setBreakPolicy(true);
+        if (!policy.success()) return policy;
         try {
             Object baritone = primaryBaritone();
             if (baritone == null) return unavailable();
@@ -84,11 +112,15 @@ public final class BaritoneBridge {
     public static Result mineBlock(String blockId) {
         if (blockId == null || !blockId.matches("minecraft:[a-z0-9_]{1,64}"))
             return new Result(false, "无效的方块名称");
+        Result policy = setBreakPolicy(false);
+        if (!policy.success()) return policy;
         return executeLocal("mine " + blockId, "已向 Baritone 发送采集 " + blockId);
     }
 
     public static Result stop() {
-        return executeLocal("stop", "已向 Baritone 发送 #stop");
+        Result stopped = executeLocal("stop", "已向 Baritone 发送 #stop");
+        Result restored = setBreakPolicy(false);
+        return !restored.success() ? restored : stopped;
     }
 
     /**
