@@ -19,6 +19,7 @@ public final class KurumiScriptParser {
     private static final Pattern ZERO = Pattern.compile("(stop|tpa_request|tpa_accept|craft_open|chest_open|chest_put_all|chest_take_all|drop_all|pickup_all)\\(\\)");
     private static final Pattern ONE = Pattern.compile("(tpa_request_to|drop_item_all|pickup_item_all|chest_put_item_all|equip_main_hand|equip_armor)\\(\"([A-Za-z0-9_.:-]+)\"\\)");
     private static final Pattern TWO = Pattern.compile("(drop|pickup|chest_take|chest_put|craft_item|collect_and_store)\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})\\)");
+    private static final Pattern GOTO_NAMED = Pattern.compile("goto\\\\(\\\"([^\\\"\\\\r\\\\n]{1,24})\\\"\\\\)");
     private static final Pattern GOTO = Pattern.compile("goto\\((-?\\d{1,8}),\\s*(-?\\d{1,4}),\\s*(-?\\d{1,8})\\)");
     private static final Pattern RETURN = Pattern.compile("return\\s+\"[^\"\\r\\n]{0,100}\"");
     private record Line(int indent, String code, int number) {}
@@ -82,6 +83,14 @@ public final class KurumiScriptParser {
             } else if (code.equals("chain_on()") || code.equals("chain_off()")) {
                 node.addProperty("op", "CHAIN");
                 node.addProperty("enabled", code.equals("chain_on()"));
+            } else if (GOTO_NAMED.matcher(code).matches()) {
+                Matcher named = GOTO_NAMED.matcher(code);
+                named.matches();
+                JsonObject step = new JsonObject();
+                step.addProperty("action", "GOTO_NAMED");
+                step.addProperty("target", named.group(1));
+                node.addProperty("op", "ACTION");
+                node.add("step", step);
             } else if (ZERO.matcher(code).matches() || ONE.matcher(code).matches()
                     || TWO.matcher(code).matches() || GOTO.matcher(code).matches()) {
                 JsonObject step = new JsonObject();
