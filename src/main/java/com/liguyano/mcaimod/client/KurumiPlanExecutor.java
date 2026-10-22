@@ -57,6 +57,7 @@ public final class KurumiPlanExecutor {
         return switch (s.action()) {
             case "ATTACK_MOB", "ATTACK_PLAYER" -> !KurumiCombatBridge.busy();
             case "GOTO" -> KurumiTaskChecks.within(s.x(), s.y(), s.z(), 3);
+            case "EQUIP_ARMOR" -> KurumiEquipBridge.wearing(s.itemId());
             case "EQUIP_MAIN_HAND" -> {
                 Minecraft mc = Minecraft.getInstance();
                 yield mc.player != null && s.itemId().equals(BuiltInRegistries.ITEM.getKey(
@@ -73,6 +74,7 @@ public final class KurumiPlanExecutor {
             case "ATTACK_PLAYER" -> KurumiCombatBridge.attackPlayer(s.target());
             case "GOTO" -> BaritoneBridge.gotoCoordinates(s.x(), s.y(), s.z());
             case "EQUIP_MAIN_HAND" -> KurumiEquipBridge.mainHand(s.itemId());
+            case "EQUIP_ARMOR" -> KurumiEquipBridge.armor(s.itemId());
             case "CHEST_TAKE" -> KurumiChestBridge.takeItem(s.itemId(), s.quantity());
             case "CHEST_PUT" -> KurumiChestBridge.put(s.itemId(), s.quantity());
             case "CHEST_PUT_ITEM_ALL" -> KurumiChestBridge.putItemAll(s.itemId());
