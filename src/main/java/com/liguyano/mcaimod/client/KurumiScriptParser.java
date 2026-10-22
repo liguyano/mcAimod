@@ -15,6 +15,11 @@ public final class KurumiScriptParser {
     private static final Pattern FARM = Pattern.compile("(?:(result)\\s*=\\s*)?farm\\((\\d{1,2})\\)");
     private static final Pattern SLEEP = Pattern.compile("(?:(result)\\s*=\\s*)?sleep\\(\\)");
     private static final Pattern TALK = Pattern.compile("talk\\(\"([^\"\\r\\n]{1,120})\"\\)");
+
+    private static final Pattern ZERO = Pattern.compile("(stop|tpa_request|tpa_accept|craft_open|chest_open|chest_put_all|chest_take_all|drop_all|pickup_all)\\(\\)");
+    private static final Pattern ONE = Pattern.compile("(tpa_request_to|drop_item_all|pickup_item_all|chest_put_item_all|equip_main_hand|equip_armor)\\(\"([A-Za-z0-9_.:-]+)\"\\)");
+    private static final Pattern TWO = Pattern.compile("(drop|pickup|chest_take|chest_put|craft_item|collect_and_store)\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})\\)");
+    private static final Pattern GOTO = Pattern.compile("goto\\((-?\\d{1,8}),\\s*(-?\\d{1,4}),\\s*(-?\\d{1,8})\\)");
     private static final Pattern RETURN = Pattern.compile("return\\s+\"[^\"\\r\\n]{0,100}\"");
     private record Line(int indent, String code, int number) {}
     private static final class Cursor { int at; }
@@ -77,6 +82,30 @@ public final class KurumiScriptParser {
             } else if (code.equals("chain_on()") || code.equals("chain_off()")) {
                 node.addProperty("op", "CHAIN");
                 node.addProperty("enabled", code.equals("chain_on()"));
+            } else if (ZERO.matcher(code).matches() || ONE.matcher(code).matches()
+                    || TWO.matcher(code).matches() || GOTO.matcher(code).matches()) {
+                JsonObject step = new JsonObject();
+                if (ZERO.matcher(code).matches()) {
+                    Matcher m = ZERO.matcher(code); m.matches();
+                    step.addProperty("action", m.group(1).toUpperCase(java.util.Locale.ROOT));
+                } else if (ONE.matcher(code).matches()) {
+                    Matcher m = ONE.matcher(code); m.matches();
+                    step.addProperty("action", m.group(1).toUpperCase(java.util.Locale.ROOT));
+                    step.addProperty(m.group(1).equals("tpa_request_to") ? "target" : "item_id", m.group(2));
+                } else if (TWO.matcher(code).matches()) {
+                    Matcher m = TWO.matcher(code); m.matches();
+                    step.addProperty("action", m.group(1).toUpperCase(java.util.Locale.ROOT));
+                    step.addProperty("item_id", m.group(2));
+                    step.addProperty("quantity", Integer.parseInt(m.group(3)));
+                } else {
+                    Matcher m = GOTO.matcher(code); m.matches();
+                    step.addProperty("action", "GOTO");
+                    step.addProperty("x", Integer.parseInt(m.group(1)));
+                    step.addProperty("y", Integer.parseInt(m.group(2)));
+                    step.addProperty("z", Integer.parseInt(m.group(3)));
+                }
+                node.addProperty("op", "ACTION");
+                node.add("step", step);
             } else if (SLEEP.matcher(code).matches()) {
                 node.addProperty("op", code.startsWith("result") ? "SLEEP_RESULT" : "SLEEP");
             } else if (TALK.matcher(code).matches()) {
