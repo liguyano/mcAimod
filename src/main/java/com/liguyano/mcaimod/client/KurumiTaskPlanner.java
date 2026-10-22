@@ -112,6 +112,9 @@ public final class KurumiTaskPlanner {
                 List<Statement> otherwise = "IF".equals(op) && node.has("else")
                         ? parseStatements(node.getAsJsonArray("else"), depth + 1, budget) : List.of();
                 statements.add(new Statement(op, null, condition, body, otherwise));
+            } else if ("CHAIN".equals(op)) {
+                String action = node.get("enabled").getAsBoolean() ? "CHAIN_ON" : "CHAIN_OFF";
+                statements.add(new Statement("ACTION", new Step(action, "", 1, null, null, null, ""), null, List.of(), List.of()));
             } else if ("SLEEP".equals(op) || "SLEEP_RESULT".equals(op)) {
                 statements.add(new Statement(op, null, null, List.of(), List.of()));
             } else if ("FARM".equals(op) || "FARM_RESULT".equals(op)) {
