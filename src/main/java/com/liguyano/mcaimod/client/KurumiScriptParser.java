@@ -187,6 +187,16 @@ public final class KurumiScriptParser {
                 }
                 node.addProperty("op", "ACTION");
                 node.add("step", step);
+            } else if (OBSERVE_POSITION.matcher(code).matches()) {
+                Matcher m = OBSERVE_POSITION.matcher(code);
+                m.matches();
+                int x = Integer.parseInt(m.group(1)), y = Integer.parseInt(m.group(2));
+                int z = Integer.parseInt(m.group(3)), radius = Integer.parseInt(m.group(4));
+                if (y < -64 || y > 320 || radius < 1 || radius > 32
+                        || Math.abs((long)x) > 30000000 || Math.abs((long)z) > 30000000)
+                    throw new IllegalArgumentException("invalid position");
+                node.addProperty("op", "OBSERVE_TALK");
+                node.addProperty("tool", "check_position:" + x + ":" + y + ":" + z + ":" + radius);
             } else if (OBSERVE.matcher(code).matches()) {
                 Matcher m = OBSERVE.matcher(code);
                 m.matches();
