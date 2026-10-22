@@ -163,7 +163,7 @@ public final class KurumiTaskPlanner {
                                 node.get("line").getAsInt());
                     continue;
                 }
-                if ("INTERACT".equals(special) || "PUT_ITEM".equals(special)) {
+                if ("INTERACT".equals(special) || "PUT_ITEM".equals(special) || "TAKE_ITEM".equals(special)) {
                     String item = stepNode.get("item_id").getAsString();
                     int quantity = stepNode.has("quantity") ? stepNode.get("quantity").getAsInt() : 1;
                     String slot = stepNode.has("target") ? stepNode.get("target").getAsString() : "input";
