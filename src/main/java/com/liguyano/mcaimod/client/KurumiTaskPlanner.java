@@ -163,6 +163,22 @@ public final class KurumiTaskPlanner {
                                 node.get("line").getAsInt());
                     continue;
                 }
+                if ("INTERACT".equals(special) || "PUT_ITEM".equals(special)) {
+                    String item = stepNode.get("item_id").getAsString();
+                    int quantity = stepNode.has("quantity") ? stepNode.get("quantity").getAsInt() : 1;
+                    String slot = stepNode.has("target") ? stepNode.get("target").getAsString() : "input";
+                    if (!item.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
+                            || quantity < 1 || quantity > 64
+                            || "PUT_ITEM".equals(special)
+                            && !java.util.Set.of("input", "fuel").contains(slot))
+                        throw new IllegalArgumentException("invalid interaction");
+                    statements.add(new Statement(op, new Step(special, item, quantity,
+                            null, null, null, slot), null, List.of(), List.of()));
+                    if (node.has("line"))
+                        KurumiWebMonitor.registerLine(statements.get(statements.size() - 1),
+                                node.get("line").getAsInt());
+                    continue;
+                }
                 if ("GOTO_NAMED".equals(special)) {
                     String name = stepNode.get("target").getAsString().strip();
                     if (name.isEmpty() || name.length() > 24)
