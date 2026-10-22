@@ -21,6 +21,7 @@ public final class KurumiAutoCraftBridge {
     private static Job job;
 
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiAutoCraftBridge::tick); }
+    public static boolean busy() { return job != null; }
     public static void cancel() { job = null; }
 
     public static BaritoneBridge.Result craft(String itemId, int quantity) {
