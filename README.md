@@ -160,6 +160,7 @@ Kurumi 与上面的服务端 `/ai` 问答功能不同，是客户端游戏内助
 {
   "type": "action",
   "action": "EXECUTE_PLAN",
+  "reply": "准备循环攻击、拾取并存放战利品",
   "loop_count": 3,
   "steps": [
     {"action": "ATTACK_MOB", "entity_id": "minecraft:zombie"},
