@@ -148,6 +148,18 @@ public final class KurumiPseudoExecutor {
         }
         var stmt = frame.statements.get(frame.index);
         switch (stmt.op()) {
+            case "FARM", "FARM_RESULT" -> {
+                if (++actions > MAX_ACTIONS) { cancel(); return; }
+                var result = BaritoneBridge.farm(stmt.step().quantity());
+                lastResultSuccess = result.success();
+                assignedResult = "FARM_RESULT".equals(stmt.op());
+                frame.index++;
+                if (!result.success() && !assignedResult) {
+                    say("无法启动种田：" + result.message());
+                    cancel();
+                }
+                // farm is an ongoing Baritone command; success means accepted, not harvested.
+            }
             case "TALK" -> {
                 // Send ordinary player chat to the server, not a local notice or command.
                 // Rate-limit scripted public messages to avoid flooding multiplayer chat.
