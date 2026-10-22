@@ -6,7 +6,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.item.AxeItem;
 import net.minecraft.world.inventory.ContainerInput;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
@@ -46,7 +45,7 @@ public final class KurumiCombatBridge {
             ItemStack stack = inventory.getItem(slot);
             if (stack.isEmpty()) continue;
             double score;
-            if (stack.getItem() instanceof SwordItem) score = 100;
+            if (BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath().endsWith("_sword")) score = 100;
             else if (stack.getItem() instanceof AxeItem) score = 50;
             else continue;
             String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
