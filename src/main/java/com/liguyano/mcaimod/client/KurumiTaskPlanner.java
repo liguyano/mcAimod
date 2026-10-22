@@ -9,11 +9,12 @@ import java.util.Optional;
 
 /** Validates a bounded, freely ordered sequence of supported game actions. */
 public final class KurumiTaskPlanner {
-    public record Step(String action, String itemId, int quantity, Integer x, Integer y, Integer z) {}
+    public record Step(String action, String itemId, int quantity, Integer x, Integer y, Integer z, String target) {}
     public record Plan(List<Step> steps, int quantity, int takeQuantity) {}
     private static final List<String> SUPPORTED = List.of(
             "EQUIP_MAIN_HAND", "GOTO", "CHEST_TAKE", "CHEST_PUT",
-            "CHEST_PUT_ITEM_ALL", "CRAFT_ITEM", "PICKUP_ITEM_ALL", "MINE");
+            "CHEST_PUT_ITEM_ALL", "CRAFT_ITEM", "PICKUP_ITEM_ALL", "MINE",
+            "ATTACK_MOB", "ATTACK_PLAYER");
 
     public static Optional<Plan> parse(JsonObject object) {
         try {
@@ -35,13 +36,21 @@ public final class KurumiTaskPlanner {
                         : action.equals("CHEST_TAKE") ? takeQuantity : defaultQuantity;
                 if (qty < 1 || qty > 64) return Optional.empty();
                 Integer x = null, y = null, z = null;
+                String target = step.has("target") ? step.get("target").getAsString() : "";
+                if (action.equals("ATTACK_PLAYER")) {
+                    if (!target.matches("[A-Za-z0-9_]{3,16}") || "SekaiSaionji".equals(target)) return Optional.empty();
+                } else if (action.equals("ATTACK_MOB")) {
+                    if (!step.has("entity_id")) return Optional.empty();
+                    target = step.get("entity_id").getAsString();
+                    if (!target.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")) return Optional.empty();
+                }
                 if (action.equals("GOTO")) {
                     x = step.get("x").getAsInt();
                     y = step.get("y").getAsInt();
                     z = step.get("z").getAsInt();
                     if (y < -64 || y > 320 || Math.abs((long)x) > 30000000
                             || Math.abs((long)z) > 30000000) return Optional.empty();
-                } else {
+                } else if (!action.startsWith("ATTACK_")) {
                     if (!item.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")) return Optional.empty();
                     if (action.equals("MINE") && !List.of("minecraft:oak_log", "minecraft:spruce_log",
                             "minecraft:birch_log", "minecraft:jungle_log", "minecraft:acacia_log",
@@ -49,7 +58,7 @@ public final class KurumiTaskPlanner {
                             "minecraft:pale_oak_log", "minecraft:crimson_stem", "minecraft:warped_stem")
                             .contains(item)) return Optional.empty();
                 }
-                steps.add(new Step(action, item, qty, x, y, z));
+                steps.add(new Step(action, item, qty, x, y, z, target));
             }
             return Optional.of(new Plan(List.copyOf(steps), defaultQuantity, takeQuantity));
         } catch (RuntimeException e) { return Optional.empty(); }
