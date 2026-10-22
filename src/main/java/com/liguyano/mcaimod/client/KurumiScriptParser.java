@@ -12,6 +12,7 @@ public final class KurumiScriptParser {
     private static final Pattern CALL = Pattern.compile("(?:(result)\\s*=\\s*)?([a-z_]+)\\(\"([a-z0-9_.:-]+)\"\\)");
     private static final Pattern COUNT = Pattern.compile("(check_chest|check_inventory)\\(\"([a-z0-9_.:-]+)\"\\)\\s*(<=|>=|==|!=|<|>)\\s*(\\d+)");
     private static final Pattern RESULT = Pattern.compile("result\\.success");
+    private static final Pattern FARM = Pattern.compile("(?:(result)\\s*=\\s*)?farm\\((\\d{1,2})\\)");
     private static final Pattern TALK = Pattern.compile("talk\\(\"([^\"\\r\\n]{1,120})\"\\)");
     private static final Pattern RETURN = Pattern.compile("return\\s+\"[^\"\\r\\n]{0,100}\"");
     private record Line(int indent, String code) {}
@@ -60,6 +61,13 @@ public final class KurumiScriptParser {
                         throw new IllegalArgumentException("empty else");
                     node.add("else", block(lines, cursor, indent + 1, depth + 1));
                 }
+            } else if (FARM.matcher(code).matches()) {
+                Matcher farm = FARM.matcher(code);
+                farm.matches();
+                int radius = Integer.parseInt(farm.group(2));
+                if (radius < 4 || radius > 32) throw new IllegalArgumentException("farm radius");
+                node.addProperty("op", farm.group(1) != null ? "FARM_RESULT" : "FARM");
+                node.addProperty("radius", radius);
             } else if (TALK.matcher(code).matches()) {
                 node.addProperty("op", "TALK");
                 node.addProperty("message", TALK.matcher(code).replaceFirst("$1"));
