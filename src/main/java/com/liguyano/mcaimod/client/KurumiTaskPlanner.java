@@ -166,11 +166,11 @@ public final class KurumiTaskPlanner {
                 if ("INTERACT".equals(special) || "PUT_ITEM".equals(special) || "TAKE_ITEM".equals(special)) {
                     String item = stepNode.get("item_id").getAsString();
                     int quantity = stepNode.has("quantity") ? stepNode.get("quantity").getAsInt() : 1;
-                    String slot = stepNode.has("target") ? stepNode.get("target").getAsString() : "input";
+                    String slot = stepNode.has("target") ? stepNode.get("target").getAsString() : "auto";
                     if (!item.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
                             || quantity < 1 || quantity > 64
                             || "PUT_ITEM".equals(special)
-                            && !java.util.Set.of("input", "fuel").contains(slot))
+                            && !java.util.Set.of("input", "fuel", "auto").contains(slot))
                         throw new IllegalArgumentException("invalid interaction");
                     statements.add(new Statement(op, new Step(special, item, quantity,
                             null, null, null, slot), null, List.of(), List.of()));
