@@ -132,8 +132,7 @@ public final class KurumiPseudoExecutor {
             return;
         }
         if (awaitingMenu) {
-            if (mc.player.containerMenu instanceof net.minecraft.world.inventory.AbstractFurnaceMenu
-                    || mc.player.containerMenu instanceof net.minecraft.world.inventory.ChestMenu) {
+            if (mc.player.containerMenu != mc.player.inventoryMenu) {
                 awaitingMenu = false;
                 KurumiWebMonitor.log("容器界面已打开，可以继续放入物品");
             } else if (System.currentTimeMillis() - menuStarted > 5000L) {
@@ -309,9 +308,8 @@ public final class KurumiPseudoExecutor {
                     frame.index++;
                     if (!result.success() && !assignedResult) { cancel(); return; }
                     if (result.success() && "INTERACT".equals(step.action())
-                            && java.util.Set.of("minecraft:furnace", "minecraft:blast_furnace",
-                                    "minecraft:smoker", "minecraft:chest", "minecraft:trapped_chest",
-                                    "minecraft:crafting_table")
+                            && !java.util.Set.of("minecraft:lever", "minecraft:stone_button",
+                                    "minecraft:oak_button", "minecraft:oak_door", "minecraft:iron_door")
                                     .contains(step.itemId())) {
                         awaitingMenu = true;
                         menuStarted = System.currentTimeMillis();
