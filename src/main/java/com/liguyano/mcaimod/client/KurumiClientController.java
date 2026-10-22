@@ -231,20 +231,6 @@ public final class KurumiClientController {
                         return;
                     }
                     KurumiWebMonitor.log("AI 原始回复：" + (reply == null ? "(null)" : reply.substring(0, Math.min(reply.length(), 4000))));
-                    String tool = KurumiToolRequest.parse(reply);
-                    if (tool != null) {
-                        if (toolCalls >= MAX_TOOL_CALLS) {
-                            finishRequest();
-                            publicFailure("工具调用达到次数上限，本次任务已停止。");
-                            return;
-                        }
-                        List<ChatMessage> next = new ArrayList<>(conversation);
-                        next.add(new ChatMessage("assistant", reply));
-                        next.add(new ChatMessage("user", "工具 " + tool + " 的真实返回：" + KurumiToolbox.observe(tool)
-                                + "。请据此继续判断，最后返回 chat 或 action JSON。"));
-                        runAgent(profile, next, sender, message, requestGeneration, toolCalls + 1, formatRetries);
-                        return;
-                    }
                     Optional<KurumiDecisionParser.Decision> parsed = KurumiDecisionParser.parse(reply);
                     if (parsed.isEmpty()) {
                         KurumiWebMonitor.log("模型回复解析失败（第 " + (formatRetries + 1) + " 次）");
