@@ -163,6 +163,17 @@ public final class KurumiTaskPlanner {
                                 node.get("line").getAsInt());
                     continue;
                 }
+                if ("GOTO_NAMED".equals(special)) {
+                    String name = stepNode.get("target").getAsString().strip();
+                    if (name.isEmpty() || name.length() > 24)
+                        throw new IllegalArgumentException("invalid location name");
+                    statements.add(new Statement(op, new Step(special, "", 1, null, null, null, name),
+                            null, List.of(), List.of()));
+                    if (node.has("line"))
+                        KurumiWebMonitor.registerLine(statements.get(statements.size() - 1),
+                                node.get("line").getAsInt());
+                    continue;
+                }
                 if ("COME".equals(special) || "FOLLOW".equals(special)) {
                     String target = stepNode.get("target").getAsString();
                     if (!target.matches("[A-Za-z0-9_]{3,16}")) throw new IllegalArgumentException("invalid player");
