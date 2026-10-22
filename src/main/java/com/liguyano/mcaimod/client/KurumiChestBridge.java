@@ -25,6 +25,8 @@ public final class KurumiChestBridge {
         NeoForge.EVENT_BUS.addListener(KurumiChestBridge::onTick);
     }
 
+    public static boolean busy() { return pending != null; }
+
     public static void cancel() { pending = null; }
 
     public static BaritoneBridge.Result open() { return interact(null, 0); }
