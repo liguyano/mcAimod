@@ -15,8 +15,8 @@ public final class KurumiLongTaskBridge {
                         Phase phase, int depositCount) {}
     private static Task active;
     private static int ticks;
-    private static final long MAX_DURATION_MS = 180_000;
-    private static final long MINE_LIMIT_MS = 90_000;
+    private static final long MAX_DURATION_MS = 300_000;
+    private static final long MINE_LIMIT_MS = 210_000;
     private static final long PICKUP_LIMIT_MS = 45_000;
     private static final long DEPOSIT_LIMIT_MS = 15_000;
 
@@ -78,7 +78,7 @@ public final class KurumiLongTaskBridge {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null || mc.getConnection() == null) { cancel(); return; }
         long now = System.currentTimeMillis();
-        if (now - t.startTime() > MAX_DURATION_MS) { fail("超过3分钟上限"); return; }
+        if (now - t.startTime() > MAX_DURATION_MS) { fail("超过5分钟上限"); return; }
         int current = count(t.itemId());
         if (t.phase() == Phase.MINING) {
             if (current - t.startCount() < t.goal() && now - t.phaseTime() < MINE_LIMIT_MS) return;
