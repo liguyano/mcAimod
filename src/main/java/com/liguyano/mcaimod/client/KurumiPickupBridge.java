@@ -41,6 +41,11 @@ public final class KurumiPickupBridge {
         return new BaritoneBridge.Result(true, "开始连续拾取附近掉落物，直到范围内没有目标或超时");
     }
 
+    public static boolean hasNearby(String itemId) {
+        Minecraft mc = Minecraft.getInstance();
+        return mc.player != null && mc.level != null && !nearby(mc, itemId).isEmpty();
+    }
+
     private static java.util.List<ItemEntity> nearby(Minecraft mc, String filter) {
         return mc.level.getEntities(mc.player, mc.player.getBoundingBox().inflate(48),
                 entity -> entity instanceof ItemEntity).stream()
