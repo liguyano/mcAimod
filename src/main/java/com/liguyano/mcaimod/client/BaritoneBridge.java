@@ -60,6 +60,34 @@ public final class BaritoneBridge {
                 "已向 Baritone 发送无破坏寻路到坐标 " + x + " " + y + " " + z);
     }
 
+    /** Relative movement uses the player's actual yaw, not fixed world axes. */
+    public static Result moveRelative(String direction, int blocks) {
+        if (!java.util.Set.of("forward", "back", "left", "right").contains(direction)
+                || blocks < 1 || blocks > 16)
+            return new Result(false, "相对移动只支持前后左右，距离1至16格");
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null)
+            return new Result(false, "当前不在游戏世界");
+        double yaw = Math.toRadians(mc.player.getYRot());
+        double forwardX = -Math.sin(yaw);
+        double forwardZ = Math.cos(yaw);
+        double dx = switch (direction) {
+            case "back" -> -forwardX;
+            case "left" -> forwardZ;
+            case "right" -> -forwardZ;
+            default -> forwardX;
+        };
+        double dz = switch (direction) {
+            case "back" -> -forwardZ;
+            case "left" -> -forwardX;
+            case "right" -> forwardX;
+            default -> forwardZ;
+        };
+        int x = (int) Math.round(mc.player.getX() + dx * blocks);
+        int z = (int) Math.round(mc.player.getZ() + dz * blocks);
+        return gotoCoordinates(x, mc.player.getBlockY(), z);
+    }
+
     /** One-shot approach: navigate to the player's current position, without enabling follow. */
     public static Result comeToPlayer(String name) {
         if (name == null || !name.matches("[A-Za-z0-9_]{3,16}"))
