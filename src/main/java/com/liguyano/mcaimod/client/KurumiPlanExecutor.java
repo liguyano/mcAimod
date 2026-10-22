@@ -9,7 +9,7 @@ import net.neoforged.neoforge.common.NeoForge;
 public final class KurumiPlanExecutor {
     private enum Phase { START, PRECHECK, ACT, VERIFY, POSTCHECK }
     private record Run(KurumiTaskPlanner.Plan plan, int index, long started, long stepStarted,
-                       int inventoryBefore, int chestBefore, Phase phase, int retries) {}
+                       int inventoryBefore, int chestBefore, Phase phase, int retries, int round) {}
     private static Run active;
     private static int ticks;
     private static final long TOTAL_LIMIT = 300_000L;
@@ -32,17 +32,17 @@ public final class KurumiPlanExecutor {
         return r == null ? "没有自由组合任务"
                 : "自由任务 " + (r.index() + 1) + "/" + r.plan().steps().size()
                 + "：" + r.plan().steps().get(r.index()).action()
-                + "（" + r.phase() + "），重试 " + r.retries() + "/" + MAX_RETRIES;
+                + "（" + r.phase() + "），循环 " + r.round() + "/" + r.plan().loopCount() + "，重试 " + r.retries() + "/" + MAX_RETRIES;
     }
     public static BaritoneBridge.Result start(KurumiTaskPlanner.Plan plan) {
         if (busy() || KurumiLongTaskBridge.busy() || KurumiChestCraftTask.busy())
             return new BaritoneBridge.Result(false, "已有长任务正在执行");
-        if (plan == null || plan.steps().isEmpty() || plan.steps().size() > 8)
+        if (plan == null || plan.steps().isEmpty() || plan.steps().size() > 8 || plan.loopCount() < 1 || plan.loopCount() > 20)
             return new BaritoneBridge.Result(false, "任务计划无效");
         long now = System.currentTimeMillis();
-        active = new Run(plan, 0, now, now, 0, -1, Phase.START, 0);
+        active = new Run(plan, 0, now, now, 0, -1, Phase.START, 0, 1);
         ticks = 0;
-        return new BaritoneBridge.Result(true, "已接受 " + plan.steps().size() + " 步计划，箱子操作会进行前后核验");
+        return new BaritoneBridge.Result(true, "已接受 " + plan.steps().size() + " 步计划，循环 " + plan.loopCount() + " 轮，箱子操作会进行前后核验");
     }
     private static void say(String message) {
         Minecraft mc = Minecraft.getInstance();
@@ -86,7 +86,7 @@ public final class KurumiPlanExecutor {
     }
     private static void set(Run r, Phase phase, int inventory, int chest) {
         active = new Run(r.plan(), r.index(), r.started(), r.stepStarted(),
-                inventory, chest, phase, r.retries());
+                inventory, chest, phase, r.retries(), r.round());
     }
     private static void fail(Run r, String reason) {
         if (r.retries() >= MAX_RETRIES || System.currentTimeMillis() - r.started() > TOTAL_LIMIT) {
@@ -102,7 +102,7 @@ public final class KurumiPlanExecutor {
         KurumiPickupBridge.cancel();
         BaritoneBridge.stop();
         long now = System.currentTimeMillis();
-        active = new Run(r.plan(), r.index(), r.started(), now, 0, -1, Phase.START, r.retries() + 1);
+        active = new Run(r.plan(), r.index(), r.started(), now, 0, -1, Phase.START, r.retries() + 1, r.round());
     }
     private static String sAction(Run r) { return r.plan().steps().get(r.index()).action(); }
     private static void next(Run r) {
@@ -111,12 +111,20 @@ public final class KurumiPlanExecutor {
                 ? " 攻击尝试已结束（不代表目标被击败）" : " 已检查通过") + "，耗时 " + elapsed + " 秒");
         KurumiTaskPlanner.Step s = r.plan().steps().get(r.index());
         if (s.action().equals("MINE") || s.action().equals("GOTO")) BaritoneBridge.stop();
+        long now = System.currentTimeMillis();
         if (r.index() + 1 == r.plan().steps().size()) {
-            active = null;
-            say("自由组合任务全部通过检查，执行完成");
+            if (r.round() >= r.plan().loopCount()) {
+                active = null;
+                say("自由组合任务完成 " + r.round() + "/" + r.plan().loopCount() + " 轮");
+            } else if (now - r.started() >= TOTAL_LIMIT) {
+                say("循环任务达到总时限，已停止");
+                cancel();
+            } else {
+                say("第 " + r.round() + " 轮结束，开始第 " + (r.round() + 1) + " 轮");
+                active = new Run(r.plan(), 0, r.started(), now, 0, -1, Phase.START, 0, r.round() + 1);
+            }
         } else {
-            long now = System.currentTimeMillis();
-            active = new Run(r.plan(), r.index() + 1, r.started(), now, 0, -1, Phase.START, 0);
+            active = new Run(r.plan(), r.index() + 1, r.started(), now, 0, -1, Phase.START, 0, r.round());
         }
     }
     private static void tick(ClientTickEvent.Post event) {
