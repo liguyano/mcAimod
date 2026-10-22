@@ -12,7 +12,7 @@ public final class KurumiTaskPlanner {
     public record Step(String action, String itemId, int quantity, Integer x, Integer y, Integer z, String target) {}
     public record Plan(List<Step> steps, int quantity, int takeQuantity) {}
     private static final List<String> SUPPORTED = List.of(
-            "EQUIP_MAIN_HAND", "GOTO", "CHEST_TAKE", "CHEST_PUT",
+            "EQUIP_MAIN_HAND", "EQUIP_ARMOR", "GOTO", "CHEST_TAKE", "CHEST_PUT",
             "CHEST_PUT_ITEM_ALL", "CRAFT_ITEM", "PICKUP_ITEM_ALL", "MINE",
             "ATTACK_MOB", "ATTACK_PLAYER");
 
