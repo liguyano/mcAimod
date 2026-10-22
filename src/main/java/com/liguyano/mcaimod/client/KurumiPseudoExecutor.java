@@ -277,6 +277,19 @@ public final class KurumiPseudoExecutor {
                     }
                     return;
                 }
+                if ("INTERACT".equals(stmt.step().action()) || "PUT_ITEM".equals(stmt.step().action())) {
+                    if (++actions > MAX_ACTIONS) { cancel(); return; }
+                    var step = stmt.step();
+                    var result = "INTERACT".equals(step.action())
+                            ? KurumiInteractionBridge.interact(step.itemId())
+                            : KurumiInteractionBridge.putItem(step.itemId(), step.quantity(), step.target());
+                    lastResultSuccess = result.success();
+                    assignedResult = "ACTION_RESULT".equals(stmt.op());
+                    KurumiWebMonitor.log(step.action() + ": " + result.message());
+                    frame.index++;
+                    if (!result.success() && !assignedResult) cancel();
+                    return;
+                }
                 if ("GOTO_NAMED".equals(stmt.step().action())) {
                     if (++actions > MAX_ACTIONS) { cancel(); return; }
                     var result = KurumiLocationMemory.gotoNamed(stmt.step().target());
