@@ -61,6 +61,8 @@ public final class KurumiInteractionBridge {
         if (pending != null) return new BaritoneBridge.Result(false, "仍在等待上一次放入操作");
         if (mc.player.containerMenu instanceof AbstractFurnaceMenu menu)
             return transfer(menu, itemId, quantity, "auto".equals(slot) ? "input" : slot);
+        if (!"auto".equals(slot))
+            return new BaritoneBridge.Result(false, "普通容器不支持熔炉专用的 input/fuel 槽位参数");
         if (mc.player.containerMenu instanceof CraftingMenu)
             return new BaritoneBridge.Result(false, "工作台请使用 craft_item()，不能盲目填充合成格");
         if (mc.player.containerMenu != mc.player.inventoryMenu)
@@ -125,6 +127,7 @@ public final class KurumiInteractionBridge {
                     ? "背包中没有单组数量足够的指定物品"
                     : "容器中没有单组数量足够的指定物品");
         ItemStack sourceStack = menu.getSlot(source).getItem();
+        int sourceCount = sourceStack.getCount();
         for (int i = 0; i < menu.slots.size(); i++) {
             Slot slot = menu.getSlot(i);
             boolean playerSlot = slot.container == mc.player.getInventory();
@@ -138,7 +141,7 @@ public final class KurumiInteractionBridge {
             return new BaritoneBridge.Result(false, "没有能够容纳指定数量的有效目标槽位");
         // One source and one destination; return the remainder to its original slot.
         mc.gameMode.handleContainerInput(menu.containerId, source, 0, ContainerInput.PICKUP, mc.player);
-        if (quantity == sourceStack.getCount()) {
+        if (quantity == sourceCount) {
             mc.gameMode.handleContainerInput(menu.containerId, destination, 0, ContainerInput.PICKUP, mc.player);
         } else {
             for (int i = 0; i < quantity; i++)
