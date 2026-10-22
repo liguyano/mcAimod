@@ -130,7 +130,7 @@ public final class KurumiPseudoExecutor {
         if (awaitingExternal) {
             if (KurumiLongTaskBridge.busy() || KurumiAutoCraftBridge.busy()
                     || KurumiChestBridge.busy() || KurumiPickupBridge.busy()) {
-                if (System.currentTimeMillis() - externalStarted > 90000L) {
+                if (System.currentTimeMillis() - externalStarted > (KurumiLongTaskBridge.busy() ? 300000L : 90000L)) {
                     KurumiWebMonitor.log("异步操作等待超时，停止脚本");
                     cancel();
                 }
