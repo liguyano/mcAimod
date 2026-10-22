@@ -7,11 +7,13 @@ import net.neoforged.neoforge.common.NeoForge;
 
 /** Sequential plan runner with chest preflight and server-menu postflight checks. */
 public final class KurumiPlanExecutor {
-    private enum Phase { START, PRECHECK, ACT, VERIFY, POSTCHECK }
+    private enum Phase { START, PRECHECK, ACT, VERIFY, POSTCHECK, CHECK_BREAK }
     private record Run(KurumiTaskPlanner.Plan plan, int index, long started, long stepStarted,
                        int inventoryBefore, int chestBefore, Phase phase, int retries, int round) {}
     private static Run active;
     private static int ticks;
+    private static int breakIndex;
+    private static boolean breakPending;
     private static final long TOTAL_LIMIT = 300_000L;
     private static final long STEP_LIMIT = 75_000L;
     private static final int MAX_RETRIES = 3;
@@ -20,6 +22,8 @@ public final class KurumiPlanExecutor {
     public static boolean busy() { return active != null; }
     public static void cancel() {
         active = null;
+        breakIndex = 0;
+        breakPending = false;
         KurumiCombatBridge.cancel();
         KurumiChestInspector.cancel();
         KurumiChestBridge.cancel();
@@ -40,8 +44,10 @@ public final class KurumiPlanExecutor {
         if (plan == null || plan.steps().isEmpty() || plan.steps().size() > 8 || plan.loopCount() < 1 || plan.loopCount() > 20)
             return new BaritoneBridge.Result(false, "任务计划无效");
         long now = System.currentTimeMillis();
-        active = new Run(plan, 0, now, now, 0, -1, Phase.START, 0, 1);
+        active = new Run(plan, 0, now, now, 0, -1, plan.breakConditions().isEmpty() ? Phase.START : Phase.CHECK_BREAK, 0, 1);
         ticks = 0;
+        breakIndex = 0;
+        breakPending = false;
         return new BaritoneBridge.Result(true, "已接受 " + plan.steps().size() + " 步计划，循环 " + plan.loopCount() + " 轮，箱子操作会进行前后核验");
     }
     private static void say(String message) {
@@ -102,6 +108,8 @@ public final class KurumiPlanExecutor {
         KurumiPickupBridge.cancel();
         BaritoneBridge.stop();
         long now = System.currentTimeMillis();
+        breakPending = false;
+        breakIndex = 0;
         active = new Run(r.plan(), r.index(), r.started(), now, 0, -1, Phase.START, r.retries() + 1, r.round());
     }
     private static String sAction(Run r) { return r.plan().steps().get(r.index()).action(); }
@@ -112,6 +120,9 @@ public final class KurumiPlanExecutor {
         KurumiTaskPlanner.Step s = r.plan().steps().get(r.index());
         if (s.action().equals("MINE") || s.action().equals("GOTO")) BaritoneBridge.stop();
         long now = System.currentTimeMillis();
+        boolean check = !r.plan().breakConditions().isEmpty();
+        breakIndex = 0;
+        breakPending = false;
         if (r.index() + 1 == r.plan().steps().size()) {
             if (r.round() >= r.plan().loopCount()) {
                 active = null;
@@ -121,10 +132,10 @@ public final class KurumiPlanExecutor {
                 cancel();
             } else {
                 say("第 " + r.round() + " 轮结束，开始第 " + (r.round() + 1) + " 轮");
-                active = new Run(r.plan(), 0, r.started(), now, 0, -1, Phase.START, 0, r.round() + 1);
+                active = new Run(r.plan(), 0, r.started(), now, 0, -1, check ? Phase.CHECK_BREAK : Phase.START, 0, r.round() + 1);
             }
         } else {
-            active = new Run(r.plan(), r.index() + 1, r.started(), now, 0, -1, Phase.START, 0, r.round());
+            active = new Run(r.plan(), r.index() + 1, r.started(), now, 0, -1, check ? Phase.CHECK_BREAK : Phase.START, 0, r.round());
         }
     }
     private static void tick(ClientTickEvent.Post event) {
@@ -137,6 +148,49 @@ public final class KurumiPlanExecutor {
         KurumiTaskPlanner.Step s = r.plan().steps().get(r.index());
         if (now - r.stepStarted() > STEP_LIMIT) { fail(r, "75秒内没有通过检查"); return; }
         switch (r.phase()) {
+            case CHECK_BREAK -> {
+                var conditions = r.plan().breakConditions();
+                if (breakIndex >= conditions.size()) {
+                    breakIndex = 0;
+                    breakPending = false;
+                    set(r, Phase.START, 0, -1);
+                    return;
+                }
+                var condition = conditions.get(breakIndex);
+                if ("inventory".equals(condition.source())) {
+                    int count = KurumiTaskChecks.inventoryCount(condition.itemId());
+                    if (count >= condition.count()) {
+                        say("循环停止：背包 " + condition.itemId() + " 已达到 " + count
+                                + "/" + condition.count());
+                        cancel();
+                        return;
+                    }
+                    breakIndex++;
+                } else if (!breakPending) {
+                    String result = KurumiChestInspector.check(condition.itemId());
+                    if (result.contains("error")) {
+                        say("循环停止：无法检查箱子退出条件：" + result);
+                        cancel();
+                        return;
+                    }
+                    breakPending = true;
+                } else if (!KurumiChestInspector.busy()) {
+                    int count = KurumiChestInspector.observedCount(condition.itemId());
+                    if (count < 0) {
+                        say("循环停止：箱子数量检查失败，无法安全继续");
+                        cancel();
+                        return;
+                    }
+                    if (count >= condition.count()) {
+                        say("循环停止：箱子 " + condition.itemId() + " 已达到 " + count
+                                + "/" + condition.count());
+                        cancel();
+                        return;
+                    }
+                    breakPending = false;
+                    breakIndex++;
+                }
+            }
             case START -> {
                 if (isChest(s.action())) {
                     String result = KurumiChestInspector.check(s.itemId());
