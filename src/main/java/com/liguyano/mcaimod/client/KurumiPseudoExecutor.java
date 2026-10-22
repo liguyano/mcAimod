@@ -29,6 +29,8 @@ public final class KurumiPseudoExecutor {
     private static boolean awaitingChest;
     private static boolean awaitingCome;
     private static boolean awaitingExternal;
+    private static boolean awaitingMenu;
+    private static long menuStarted;
     private static long externalStarted;
     private static int comeX, comeY, comeZ;
     private static long comeStarted;
@@ -49,6 +51,7 @@ public final class KurumiPseudoExecutor {
         awaitingChest = false;
         awaitingCome = false;
         awaitingExternal = false;
+        awaitingMenu = false;
         frames.clear();
         KurumiChestInspector.cancel();
         KurumiPlanExecutor.cancel();
@@ -79,6 +82,7 @@ public final class KurumiPseudoExecutor {
         awaitingChest = false;
         awaitingCome = false;
         awaitingExternal = false;
+        awaitingMenu = false;
         pendingCondition = null;
         pendingStatement = null;
         running = true;
@@ -127,6 +131,19 @@ public final class KurumiPseudoExecutor {
             cancel();
             return;
         }
+        if (awaitingMenu) {
+            if (mc.player.containerMenu instanceof net.minecraft.world.inventory.AbstractFurnaceMenu
+                    || mc.player.containerMenu instanceof net.minecraft.world.inventory.ChestMenu) {
+                awaitingMenu = false;
+                KurumiWebMonitor.log("容器界面已打开，可以继续放入物品");
+            } else if (System.currentTimeMillis() - menuStarted > 5000L) {
+                awaitingMenu = false;
+                KurumiWebMonitor.log("等待容器界面超时");
+                lastResultSuccess = false;
+                if (!assignedResult) cancel();
+            }
+            return;
+        }
         if (awaitingExternal) {
             if (KurumiLongTaskBridge.busy() || KurumiAutoCraftBridge.busy()
                     || KurumiChestBridge.busy() || KurumiPickupBridge.busy()) {
@@ -137,6 +154,7 @@ public final class KurumiPseudoExecutor {
                 return;
             }
             awaitingExternal = false;
+        awaitingMenu = false;
             KurumiWebMonitor.log("异步操作已结束；结果可能仍需服务器确认");
             return;
         }
@@ -287,7 +305,14 @@ public final class KurumiPseudoExecutor {
                     assignedResult = "ACTION_RESULT".equals(stmt.op());
                     KurumiWebMonitor.log(step.action() + ": " + result.message());
                     frame.index++;
-                    if (!result.success() && !assignedResult) cancel();
+                    if (!result.success() && !assignedResult) { cancel(); return; }
+                    if (result.success() && "INTERACT".equals(step.action())
+                            && java.util.Set.of("minecraft:furnace", "minecraft:blast_furnace",
+                                    "minecraft:smoker", "minecraft:chest", "minecraft:trapped_chest")
+                                    .contains(step.itemId())) {
+                        awaitingMenu = true;
+                        menuStarted = System.currentTimeMillis();
+                    }
                     return;
                 }
                 if ("GOTO_NAMED".equals(stmt.step().action())) {
