@@ -225,9 +225,11 @@ public final class KurumiTaskPlanner {
         String id = "result".equals(source) ? "" : node.get("item_id").getAsString();
         String operator = node.get("operator").getAsString();
         int count = "result".equals(source) ? 1 : node.get("count").getAsInt();
-        if (!List.of("inventory", "chest", "result").contains(source)
+        if (!List.of("inventory", "chest", "result", "distance").contains(source)
                 || !List.of("LT", "LE", "EQ", "GE", "GT", "NE").contains(operator)
-                || (!"result".equals(source) && !id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+                || (!"result".equals(source) && !"distance".equals(source)
+                    && !id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+                || ("distance".equals(source) && !id.matches("(block|entity|item):[a-z0-9_.-]+:[a-z0-9_./-]{1,128}|player:[A-Za-z0-9_]{1,16}"))
                 || count < 0 || count > 2304) throw new IllegalArgumentException("condition");
         return new Condition(source, id, operator, count);
     }
