@@ -13,6 +13,11 @@ public final class KurumiTaskPlanner {
     public record BreakCondition(String source, String itemId, int count) {}
     public record Plan(List<Step> steps, int quantity, int takeQuantity, int loopCount,
                        List<BreakCondition> breakConditions) {}
+    /** A restricted pseudocode AST; it is data, never evaluated as Java/Python code. */
+    public record Condition(String source, String itemId, String operator, int count) {}
+    public record Statement(String op, Step step, Condition condition, List<Statement> body,
+                            List<Statement> otherwise) {}
+    public record Program(List<Statement> statements) {}
     private static final List<String> SUPPORTED = List.of(
             "EQUIP_MAIN_HAND", "EQUIP_ARMOR", "GOTO", "CHEST_TAKE", "CHEST_PUT",
             "CHEST_PUT_ITEM_ALL", "CRAFT_ITEM", "PICKUP_ITEM_ALL", "MINE",
@@ -83,6 +88,54 @@ public final class KurumiTaskPlanner {
             }
             return Optional.of(new Plan(List.copyOf(steps), defaultQuantity, takeQuantity, loopCount, List.copyOf(conditions)));
         } catch (RuntimeException e) { return Optional.empty(); }
+    }
+
+    public static Optional<Program> parseProgram(JsonObject object) {
+        try {
+            if (!object.has("program") || !object.get("program").isJsonArray()) return Optional.empty();
+            int[] budget = {0};
+            List<Statement> statements = parseStatements(object.getAsJsonArray("program"), 0, budget);
+            return statements.isEmpty() ? Optional.empty() : Optional.of(new Program(statements));
+        } catch (RuntimeException ex) { return Optional.empty(); }
+    }
+
+    private static List<Statement> parseStatements(JsonArray array, int depth, int[] budget) {
+        if (depth > 3 || array.size() > 16) throw new IllegalArgumentException("nesting");
+        List<Statement> statements = new ArrayList<>();
+        for (JsonElement el : array) {
+            if (++budget[0] > 48 || !el.isJsonObject()) throw new IllegalArgumentException("budget");
+            JsonObject node = el.getAsJsonObject();
+            String op = node.get("op").getAsString();
+            if ("IF".equals(op) || "WHILE".equals(op)) {
+                Condition condition = parseCondition(node.getAsJsonObject("condition"));
+                List<Statement> body = parseStatements(node.getAsJsonArray("body"), depth + 1, budget);
+                List<Statement> otherwise = "IF".equals(op) && node.has("else")
+                        ? parseStatements(node.getAsJsonArray("else"), depth + 1, budget) : List.of();
+                statements.add(new Statement(op, null, condition, body, otherwise));
+            } else if ("BREAK".equals(op)) {
+                statements.add(new Statement(op, null, null, List.of(), List.of()));
+            } else if ("ACTION".equals(op)) {
+                JsonObject single = new JsonObject();
+                JsonArray steps = new JsonArray();
+                steps.add(node.getAsJsonObject("step"));
+                single.add("steps", steps);
+                Plan parsed = parse(single).orElseThrow();
+                statements.add(new Statement(op, parsed.steps().get(0), null, List.of(), List.of()));
+            } else throw new IllegalArgumentException("unsupported op");
+        }
+        return List.copyOf(statements);
+    }
+
+    private static Condition parseCondition(JsonObject node) {
+        String source = node.get("source").getAsString();
+        String id = node.get("item_id").getAsString();
+        String operator = node.get("operator").getAsString();
+        int count = node.get("count").getAsInt();
+        if (!List.of("inventory", "chest").contains(source)
+                || !List.of("LT", "LE", "EQ", "GE", "GT", "NE").contains(operator)
+                || !id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
+                || count < 0 || count > 2304) throw new IllegalArgumentException("condition");
+        return new Condition(source, id, operator, count);
     }
 
     public static BaritoneBridge.Result execute(Plan plan) {
