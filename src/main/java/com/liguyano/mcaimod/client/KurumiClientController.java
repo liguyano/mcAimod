@@ -181,6 +181,11 @@ public final class KurumiClientController {
 
     private static void runAgent(ModelProfile profile, List<ChatMessage> conversation, UUID sender,
                                  String message, long requestGeneration, int toolCalls) {
+        runAgent(profile, conversation, sender, message, requestGeneration, toolCalls, 0);
+    }
+
+    private static void runAgent(ModelProfile profile, List<ChatMessage> conversation, UUID sender,
+                                 String message, long requestGeneration, int toolCalls, int formatRetries) {
         Minecraft minecraft = Minecraft.getInstance();
         PROVIDER.chat(profile, conversation)
                 .whenComplete((reply, error) -> minecraft.execute(() -> {
@@ -192,6 +197,7 @@ public final class KurumiClientController {
                         publicFailure("模型请求失败，请检查网络或模型配置。");
                         return;
                     }
+                    KurumiWebMonitor.log("AI 原始回复：" + (reply == null ? "(null)" : reply.substring(0, Math.min(reply.length(), 4000))));
                     String tool = KurumiToolRequest.parse(reply);
                     if (tool != null) {
                         if (toolCalls >= MAX_TOOL_CALLS) {
@@ -203,15 +209,24 @@ public final class KurumiClientController {
                         next.add(new ChatMessage("assistant", reply));
                         next.add(new ChatMessage("user", "工具 " + tool + " 的真实返回：" + KurumiToolbox.observe(tool)
                                 + "。请据此继续判断，最后返回 chat 或 action JSON。"));
-                        runAgent(profile, next, sender, message, requestGeneration, toolCalls + 1);
+                        runAgent(profile, next, sender, message, requestGeneration, toolCalls + 1, formatRetries);
+                        return;
+                    }
+                    Optional<KurumiDecisionParser.Decision> parsed = KurumiDecisionParser.parse(reply);
+                    if (parsed.isEmpty()) {
+                        KurumiWebMonitor.log("模型回复解析失败（第 " + (formatRetries + 1) + " 次）");
+                        if (formatRetries == 0) {
+                            List<ChatMessage> retry = new ArrayList<>(conversation);
+                            retry.add(new ChatMessage("assistant", reply == null ? "" : reply));
+                            retry.add(new ChatMessage("user", "上一条回复未通过格式或参数校验。请严格只返回一个有效 JSON 对象，禁止 Markdown 和代码块。普通聊天示例：{\\\"type\\\":\\\"chat\\\",\\\"reply\\\":\\\"你好！\\\"}。动作必须包含 type=action、reply 和 action，且参数遵循系统指令。如果无法可靠生成动作，返回 chat JSON 说明原因。"));
+                            runAgent(profile, retry, sender, message, requestGeneration, toolCalls, 1);
+                            return;
+                        }
+                        finishRequest();
+                        publicFailure("没有理解这次操作请求，模型返回格式无效；原始回复已记录到本机 Web 面板。");
                         return;
                     }
                     finishRequest();
-                    Optional<KurumiDecisionParser.Decision> parsed = KurumiDecisionParser.parse(reply);
-                    if (parsed.isEmpty()) {
-                        publicFailure("没有理解这次操作请求，模型返回格式无效。");
-                        return;
-                    }
                     KurumiDecisionParser.Decision decision = parsed.get();
                     if (decision.action().isPresent() || !decision.target().isEmpty() || decision.x() != null || !decision.blockId().isEmpty() || decision.plan().isPresent() || decision.program().isPresent()) {
                         KurumiActionValidator.Action action = decision.action().orElse(null);
