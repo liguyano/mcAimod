@@ -8,6 +8,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.item.AxeItem;
+import net.minecraft.world.inventory.ContainerInput;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import java.util.UUID;
@@ -18,6 +19,8 @@ public final class KurumiCombatBridge {
     private static long started;
     private static long lastHit;
     private static int previousSlot = -1;
+    private static int swappedInventorySlot = -1;
+    private static int swappedHotbarSlot = -1;
     private static final double RANGE_SQUARED = 3.0 * 3.0;
 
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiCombatBridge::tick); }
@@ -27,16 +30,19 @@ public final class KurumiCombatBridge {
         if (previousSlot >= 0 && mc.player != null)
             mc.player.getInventory().setSelectedSlot(previousSlot);
         previousSlot = -1;
+        // Do not automatically swap items back: preserve the player's server-synced inventory.
+        swappedInventorySlot = -1;
+        swappedHotbarSlot = -1;
     }
 
-    /** Prefer the strongest available hotbar sword, then axe; do not rearrange inventory. */
+    /** Choose a sword or axe from the whole 36-slot inventory and equip it in the hotbar. */
     private static void selectWeapon() {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null) return;
+        if (mc.player == null || mc.gameMode == null) return;
         var inventory = mc.player.getInventory();
         int bestSlot = -1;
         double bestScore = -1;
-        for (int slot = 0; slot < 9; slot++) {
+        for (int slot = 0; slot < 36; slot++) {
             ItemStack stack = inventory.getItem(slot);
             if (stack.isEmpty()) continue;
             double score;
@@ -52,8 +58,18 @@ public final class KurumiCombatBridge {
             else if (id.contains("wooden")) score += 1;
             if (score > bestScore) { bestScore = score; bestSlot = slot; }
         }
-        if (bestSlot >= 0 && bestSlot != inventory.getSelectedSlot()) {
-            previousSlot = inventory.getSelectedSlot();
+        if (bestSlot < 0) return;
+        previousSlot = inventory.getSelectedSlot();
+        if (bestSlot >= 9) {
+            if (mc.player.containerMenu != mc.player.inventoryMenu) return;
+            // Player inventory slots 9..35 map directly to menu slots 9..35.
+            // SWAP's button is the destination hotbar index (0..8).
+            int destination = inventory.getSelectedSlot();
+            mc.gameMode.handleContainerInput(mc.player.inventoryMenu.containerId,
+                    bestSlot, destination, ContainerInput.SWAP, mc.player);
+            swappedInventorySlot = bestSlot;
+            swappedHotbarSlot = destination;
+        } else {
             inventory.setSelectedSlot(bestSlot);
         }
     }
