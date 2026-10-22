@@ -32,7 +32,7 @@ public final class KurumiLocationMemory {
         // Let the model generate goto(x,y,z) instead of replying "unknown location".
         // A coordinate triple anywhere in a multi-step request is not a named place.
         // Examples: "去 -85 63 -17 的箱子" and "砍树后去(100,64,200)存箱".
-        if (body.matches("(?s).*-?[0-9]+[ ,，\\\\(]+-?[0-9]+[ ,，]+-?[0-9]+.*")) {
+        if (body.matches("(?s).*-?[0-9]+[ ,，()]+-?[0-9]+[ ,，]+-?[0-9]+.*")) {
             return false;
         }
         Matcher save = SAVE.matcher(body), go = GO.matcher(body), where = WHERE.matcher(body);
