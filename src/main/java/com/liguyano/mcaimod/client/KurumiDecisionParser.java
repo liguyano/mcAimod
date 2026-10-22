@@ -26,6 +26,7 @@ public final class KurumiDecisionParser {
                 return KurumiScriptParser.parse(object.get("script").getAsString()).map(program ->
                         new Decision(reply, Optional.empty(), "", null, null, null, "", Optional.empty(), Optional.of(program)));
             }
+            return Optional.empty();
         } catch (RuntimeException error) {
             return Optional.empty();
         }
