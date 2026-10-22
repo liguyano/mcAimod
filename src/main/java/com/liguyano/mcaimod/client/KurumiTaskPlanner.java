@@ -10,7 +10,9 @@ import java.util.Optional;
 /** Validates a bounded, freely ordered sequence of supported game actions. */
 public final class KurumiTaskPlanner {
     public record Step(String action, String itemId, int quantity, Integer x, Integer y, Integer z, String target) {}
-    public record Plan(List<Step> steps, int quantity, int takeQuantity, int loopCount) {}
+    public record BreakCondition(String source, String itemId, int count) {}
+    public record Plan(List<Step> steps, int quantity, int takeQuantity, int loopCount,
+                       List<BreakCondition> breakConditions) {}
     private static final List<String> SUPPORTED = List.of(
             "EQUIP_MAIN_HAND", "EQUIP_ARMOR", "GOTO", "CHEST_TAKE", "CHEST_PUT",
             "CHEST_PUT_ITEM_ALL", "CRAFT_ITEM", "PICKUP_ITEM_ALL", "MINE",
@@ -27,6 +29,23 @@ public final class KurumiTaskPlanner {
                 return Optional.empty();
             int loopCount = object.has("loop_count") ? object.get("loop_count").getAsInt() : 1;
             if (loopCount < 1 || loopCount > 20) return Optional.empty();
+            List<BreakCondition> conditions = new ArrayList<>();
+            if (object.has("break_conditions")) {
+                if (!object.get("break_conditions").isJsonArray()) return Optional.empty();
+                JsonArray checks = object.getAsJsonArray("break_conditions");
+                if (checks.size() > 4) return Optional.empty();
+                for (JsonElement element : checks) {
+                    if (!element.isJsonObject()) return Optional.empty();
+                    JsonObject check = element.getAsJsonObject();
+                    String source = check.get("source").getAsString();
+                    String id = check.get("item_id").getAsString();
+                    int count = check.get("count").getAsInt();
+                    if (!List.of("inventory", "chest").contains(source)
+                            || !id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
+                            || count < 1 || count > 2304) return Optional.empty();
+                    conditions.add(new BreakCondition(source, id, count));
+                }
+            }
             List<Step> steps = new ArrayList<>();
             for (JsonElement element : raw) {
                 if (!element.isJsonObject()) return Optional.empty();
@@ -62,7 +81,7 @@ public final class KurumiTaskPlanner {
                 }
                 steps.add(new Step(action, item, qty, x, y, z, target));
             }
-            return Optional.of(new Plan(List.copyOf(steps), defaultQuantity, takeQuantity, loopCount));
+            return Optional.of(new Plan(List.copyOf(steps), defaultQuantity, takeQuantity, loopCount, List.copyOf(conditions)));
         } catch (RuntimeException e) { return Optional.empty(); }
     }
 
