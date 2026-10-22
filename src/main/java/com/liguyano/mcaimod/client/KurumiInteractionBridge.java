@@ -72,7 +72,15 @@ public final class KurumiInteractionBridge {
         for (int i = 3; i < menu.slots.size() && remaining > 0; i++) {
             var stack = menu.getSlot(i).getItem();
             if (stack.isEmpty() || !itemId.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString())) continue;
-            int amount = Math.min(stack.getCount(), remaining);
+            if (!menu.getSlot(dst).mayPlace(stack))
+                return new BaritoneBridge.Result(false, "目标槽位不接受 " + itemId);
+            var existing = menu.getSlot(dst).getItem();
+            if (!existing.isEmpty() && !net.minecraft.world.item.ItemStack.isSameItemSameComponents(existing, stack))
+                return new BaritoneBridge.Result(false, "目标槽位已有不同物品");
+            int capacity = Math.min(stack.getMaxStackSize(), menu.getSlot(dst).getMaxStackSize())
+                    - existing.getCount();
+            if (capacity <= 0) return new BaritoneBridge.Result(false, "目标槽位已满");
+            int amount = Math.min(Math.min(stack.getCount(), remaining), capacity);
             // Move onto the cursor, deposit a bounded number into the selected slot,
             // then return any leftover items to the original inventory slot.
             mc.gameMode.handleContainerInput(menu.containerId, i, 0, ContainerInput.PICKUP, mc.player);
