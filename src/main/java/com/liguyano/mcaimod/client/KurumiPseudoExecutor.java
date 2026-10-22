@@ -236,6 +236,28 @@ public final class KurumiPseudoExecutor {
                 }
                 // farm is an ongoing Baritone command; success means accepted, not harvested.
             }
+            case "OBSERVE_TALK" -> {
+                long now = System.currentTimeMillis();
+                if (publicMessages >= 12) {
+                    say("查询消息次数达到上限，任务已停止");
+                    cancel();
+                    return;
+                }
+                if (now - lastPublicMessageAt < 2000) return;
+                String observation = KurumiToolbox.observe(stmt.step().target());
+                String message = observation;
+                if (message.length() > 120)
+                    message = message.substring(0, 108) + "...(已截断)";
+                if (message.isBlank() || message.startsWith("/")) {
+                    cancel();
+                    return;
+                }
+                mc.getConnection().sendChat(message);
+                KurumiWebMonitor.log("talk(observe): " + observation);
+                publicMessages++;
+                lastPublicMessageAt = now;
+                frame.index++;
+            }
             case "TALK" -> {
                 // Send ordinary player chat to the server, not a local notice or command.
                 // Rate-limit scripted public messages to avoid flooding multiplayer chat.
