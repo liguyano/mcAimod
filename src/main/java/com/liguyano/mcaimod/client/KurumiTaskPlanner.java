@@ -115,8 +115,6 @@ public final class KurumiTaskPlanner {
             } else if ("CHAIN".equals(op)) {
                 String action = node.get("enabled").getAsBoolean() ? "CHAIN_ON" : "CHAIN_OFF";
                 statements.add(new Statement("ACTION", new Step(action, "", 1, null, null, null, ""), null, List.of(), List.of()));
-            } else if ("SLEEP".equals(op) || "SLEEP_RESULT".equals(op)) {
-                statements.add(new Statement(op, null, null, List.of(), List.of()));
             } else if ("FARM".equals(op) || "FARM_RESULT".equals(op)) {
                 int radius = node.get("radius").getAsInt();
                 if (radius < 4 || radius > 32) throw new IllegalArgumentException("farm radius");
