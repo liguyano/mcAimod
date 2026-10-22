@@ -29,6 +29,7 @@ public final class KurumiPseudoExecutor {
     private static boolean awaitingChest;
     private static boolean awaitingCome;
     private static boolean awaitingExternal;
+    private static boolean awaitingCraft;
     private static boolean awaitingMenu;
     private static long menuStarted;
     private static long externalStarted;
@@ -51,6 +52,7 @@ public final class KurumiPseudoExecutor {
         awaitingChest = false;
         awaitingCome = false;
         awaitingExternal = false;
+        awaitingCraft = false;
         awaitingMenu = false;
         frames.clear();
         KurumiChestInspector.cancel();
@@ -82,6 +84,7 @@ public final class KurumiPseudoExecutor {
         awaitingChest = false;
         awaitingCome = false;
         awaitingExternal = false;
+        awaitingCraft = false;
         awaitingMenu = false;
         pendingCondition = null;
         pendingStatement = null;
@@ -153,8 +156,17 @@ public final class KurumiPseudoExecutor {
                 return;
             }
             awaitingExternal = false;
-        awaitingMenu = false;
-            KurumiWebMonitor.log("异步操作已结束；结果可能仍需服务器确认");
+            if (awaitingCraft) {
+                awaitingCraft = false;
+                lastResultSuccess = KurumiAutoCraftBridge.lastSucceeded();
+                KurumiWebMonitor.log("合成完成验证：" + lastResultSuccess);
+                if (!lastResultSuccess && !assignedResult) {
+                    say("合成失败，停止后续取物步骤");
+                    cancel();
+                }
+            } else {
+                KurumiWebMonitor.log("异步操作已结束；结果可能仍需服务器确认");
+            }
             return;
         }
         if (awaitingCome) {
@@ -287,6 +299,11 @@ public final class KurumiPseudoExecutor {
                     KurumiWebMonitor.log(step.action() + ": " + result.message());
                     frame.index++;
                     if (!result.success() && !assignedResult) { cancel(); return; }
+                    if (result.success() && "CRAFT_ITEM".equals(step.action())) awaitingCraft = true;
+                    if (result.success() && "CRAFT_OPEN".equals(step.action())) {
+                        awaitingMenu = true;
+                        menuStarted = System.currentTimeMillis();
+                    }
                     if (result.success() && (KurumiLongTaskBridge.busy() || KurumiAutoCraftBridge.busy()
                             || KurumiChestBridge.busy() || KurumiPickupBridge.busy())) {
                         awaitingExternal = true;
