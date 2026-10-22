@@ -90,14 +90,15 @@ public final class KurumiAutoCraftBridge {
             return;
         }
         ItemStack result = menu.getSlot(0).getItem();
-        if (!result.isEmpty() && current.itemId().equals(BuiltInRegistries.ITEM.getKey(result.getItem()).toString())) {
+        if (current.stage() == 1 && !result.isEmpty() && current.itemId().equals(BuiltInRegistries.ITEM.getKey(result.getItem()).toString())) {
             mc.gameMode.handleContainerInput(menu.containerId, 0, 0, ContainerInput.QUICK_MOVE, mc.player);
             job = new Job(current.itemId(), current.requested(), current.initial(),
                     current.started(), 2, current.recipeId());
-        } else if (current.stage() == 2) {
-            int newDone = count(current.itemId()) - current.initial();
-            if (newDone > done) return;
-            // If the server has not produced the output yet, wait for timeout.
+        } else if (current.stage() == 2 && done > 0) {
+            job = null;
+            mc.player.closeContainer();
+            report("已获得 " + done + " 个 " + current.itemId()
+                    + "；如未达到目标数量，请再次下达合成指令");
         }
     }
 
