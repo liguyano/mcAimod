@@ -152,7 +152,24 @@ Kurumi 与上面的服务端 `/ai` 问答功能不同，是客户端游戏内助
 | `ATTACK_MOB` | 攻击 3 格内指定 `entity_id` 生物，最多 10 秒 |
 | `ATTACK_PLAYER` | 仅主人可指定 `target` 玩家名，不能攻击主人，最多 10 秒 |
 
-攻击步骤等待本次有界攻击结束后继续，不代表已经击败目标；攻击过程不自动追击。计划总时限 **5 分钟**，单步最多 **75 秒**，失败最多重试 **3 次**。目前自由计划失败后会重新检查并重试当前步骤，**并非任意失败都会触发大模型重新规划**。另有固定的 `COLLECT_AND_STORE` 长任务及其独立恢复逻辑。
+攻击步骤等待本次有界攻击结束后继续，不代表已经击败目标；攻击过程不自动追击。可在计划顶层设置 `loop_count`（**1–20**，默认 1），让整组步骤顺序重复执行指定轮数。例如 `ATTACK_MOB → PICKUP_ITEM_ALL → CHEST_PUT_ITEM_ALL` 可循环尝试。循环仍受全局 **5 分钟** 限制；单步失败会按原规则重试，超过限制即停止，不会自动跳过缺少物品的步骤，也不保证每轮都有可攻击生物或可拾取掉落物。使用 `/kurumi stop` 可随时停止。
+
+示例计划：
+
+```json
+{
+  "type": "action",
+  "action": "EXECUTE_PLAN",
+  "loop_count": 3,
+  "steps": [
+    {"action": "ATTACK_MOB", "entity_id": "minecraft:zombie"},
+    {"action": "PICKUP_ITEM_ALL", "item_id": "minecraft:rotten_flesh"},
+    {"action": "CHEST_PUT_ITEM_ALL", "item_id": "minecraft:rotten_flesh"}
+  ]
+}
+```
+
+计划总时限 **5 分钟**，单步最多 **75 秒**，失败最多重试 **3 次**。目前自由计划失败后会重新检查并重试当前步骤，**并非任意失败都会触发大模型重新规划**。另有固定的 `COLLECT_AND_STORE` 长任务及其独立恢复逻辑。
 
 ### 箱子内容检查
 
