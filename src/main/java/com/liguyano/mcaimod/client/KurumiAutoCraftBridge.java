@@ -11,6 +11,10 @@ import net.neoforged.neoforge.common.NeoForge;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.IdentityHashMap;
+import java.util.Collections;
+import java.util.Set;
 
 /**
  * Client recipe-book assisted crafting. Never invents recipes or blindly places inventory items.
@@ -117,61 +121,84 @@ public final class KurumiAutoCraftBridge {
         return false;
     }
 
+    /**
+     * Inspect both the client recipe book and the synced recipe manager.
+     * Modern Minecraft versions use RecipeHolder/RecipeDisplay wrappers, not
+     * necessarily the old getCollections/getResultItem zero-arg API.
+     * The server still validates ingredients when a recipe is placed.
+     */
     private static Object findRecipe(String itemId) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null) return null;
-        try {
-            Object book = mc.player.getRecipeBook();
-            // Different Minecraft versions expose recipe-book entries through different
-            // collection methods. Only entries with a matching real result are accepted.
-            for (Method method : book.getClass().getMethods()) {
-                if (method.getParameterCount() != 0 ||
-                        !(method.getName().equals("getCollections") || method.getName().equals("getAllRecipes")))
-                    continue;
-                Object result = method.invoke(book);
-                if (result instanceof Iterable<?> entries)
-                    for (Object entry : entries) {
-                        Object id = inspectEntry(entry, itemId);
-                        if (id != null) return id;
-                    }
+        if (mc.player == null || mc.level == null) return null;
+        Set<Object> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        Object found = inspectRecipeTree(mc.player.getRecipeBook(), itemId, visited, 0);
+        if (found != null) return found;
+        return inspectRecipeTree(mc.level.getRecipeManager(), itemId, visited, 0);
+    }
+
+    private static Object inspectRecipeTree(Object node, String itemId,
+                                            Set<Object> visited, int depth) {
+        if (node == null || depth > 5 || visited.size() > 4096) return null;
+        if (node instanceof Iterable<?> iterable) {
+            for (Object child : iterable) {
+                Object found = inspectRecipeTree(child, itemId, visited, depth + 1);
+                if (found != null) return found;
             }
-        } catch (ReflectiveOperationException | RuntimeException ignored) { }
+            return null;
+        }
+        if (node instanceof Map<?, ?> map)
+            return inspectRecipeTree(map.values(), itemId, visited, depth + 1);
+        if (!visited.add(node)) return null;
+        Object id = null;
+        Object recipe = null;
+        for (Method method : node.getClass().getMethods()) {
+            if (method.getParameterCount() != 0) continue;
+            String name = method.getName();
+            try {
+                if (name.equals("id") || name.equals("getId")) id = method.invoke(node);
+                else if (name.equals("value") || name.equals("getRecipe")) recipe = method.invoke(node);
+            } catch (ReflectiveOperationException | RuntimeException ignored) { }
+        }
+        if (recipe != null && id != null && resultMatches(recipe, itemId))
+            return id;
+        if (id != null && resultMatches(node, itemId)) return id;
+        if (recipe != null) {
+            Object found = inspectRecipeTree(recipe, itemId, visited, depth + 1);
+            if (found != null) return found;
+        }
+        for (Method method : node.getClass().getMethods()) {
+            if (method.getParameterCount() != 0) continue;
+            String name = method.getName();
+            if (!Set.of("getCollections", "getAllRecipes", "getRecipes",
+                    "recipes", "getRecipesFor", "getOrderedRecipes", "getRecipeList",
+                    "getDisplays", "getEntries", "getRecipeMap").contains(name))
+                continue;
+            try {
+                Object found = inspectRecipeTree(method.invoke(node), itemId, visited, depth + 1);
+                if (found != null) return found;
+            } catch (ReflectiveOperationException | RuntimeException ignored) { }
+        }
         return null;
     }
 
-    private static Object inspectEntry(Object entry, String itemId) {
-        if (entry == null) return null;
-        List<Object> candidates = new ArrayList<>();
-        candidates.add(entry);
-        for (Method method : entry.getClass().getMethods()) {
-            if (method.getParameterCount() != 0 ||
-                    !(method.getName().equals("getRecipes") || method.getName().equals("recipes")))
+    private static boolean resultMatches(Object recipe, String itemId) {
+        Minecraft mc = Minecraft.getInstance();
+        for (Method method : recipe.getClass().getMethods()) {
+            if (!Set.of("result", "getResultItem", "getResult").contains(method.getName()))
                 continue;
             try {
-                Object nested = method.invoke(entry);
-                if (nested instanceof Iterable<?> iterable)
-                    for (Object recipe : iterable) candidates.add(recipe);
+                Object value;
+                if (method.getParameterCount() == 0) value = method.invoke(recipe);
+                else if (method.getParameterCount() == 1 && mc.level != null
+                        && method.getParameterTypes()[0].isInstance(mc.level.registryAccess()))
+                    value = method.invoke(recipe, mc.level.registryAccess());
+                else continue;
+                if (value instanceof ItemStack stack && !stack.isEmpty()
+                        && itemId.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()))
+                    return true;
             } catch (ReflectiveOperationException | RuntimeException ignored) { }
         }
-        for (Object candidate : candidates) {
-            Object id = null;
-            boolean match = false;
-            for (Method method : candidate.getClass().getMethods()) {
-                if (method.getParameterCount() != 0) continue;
-                try {
-                    if (method.getName().equals("id") || method.getName().equals("getId"))
-                        id = method.invoke(candidate);
-                    if (method.getName().equals("result") || method.getName().equals("getResultItem")) {
-                        Object value = method.invoke(candidate);
-                        if (value instanceof ItemStack stack && !stack.isEmpty()
-                                && itemId.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()))
-                            match = true;
-                    }
-                } catch (ReflectiveOperationException | RuntimeException ignored) { }
-            }
-            if (match && id != null) return id;
-        }
-        return null;
+        return false;
     }
 
     private static void report(String message) {
