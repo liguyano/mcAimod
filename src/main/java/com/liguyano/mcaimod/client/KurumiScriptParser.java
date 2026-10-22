@@ -21,7 +21,7 @@ public final class KurumiScriptParser {
     private static final Pattern TWO = Pattern.compile("(drop|pickup|chest_take|chest_put|craft_item|collect_and_store)\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})\\)");
     private static final Pattern INTERACT = Pattern.compile("interact\\(\"([a-z0-9_.:-]+)\"\\)");
     private static final Pattern TAKE_ITEM = Pattern.compile("take_item\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})\\)");
-    private static final Pattern PUT_ITEM = Pattern.compile("put_item\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})(?:,\\s*\"(input|fuel)\")?\\)");
+    private static final Pattern PUT_ITEM = Pattern.compile("put_item\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})(?:,\\s*\"(input|fuel|auto)\")?\\)");
     private static final Pattern GOTO_NAMED = Pattern.compile("goto\\(\"([^\"]{1,24})\"\\)");
     private static final Pattern GOTO = Pattern.compile("goto\\((-?\\d{1,8}),\\s*(-?\\d{1,4}),\\s*(-?\\d{1,8})\\)");
     private static final Pattern RETURN = Pattern.compile("return\\s+\"[^\"\\r\\n]{0,100}\"");
@@ -102,7 +102,7 @@ public final class KurumiScriptParser {
                     step.addProperty("action", "PUT_ITEM");
                     step.addProperty("item_id", m.group(1));
                     step.addProperty("quantity", Integer.parseInt(m.group(2)));
-                    step.addProperty("target", m.group(3) == null ? "input" : m.group(3));
+                    step.addProperty("target", m.group(3) == null ? "auto" : m.group(3));
                 }
                 node.addProperty("op", "ACTION");
                 node.add("step", step);
