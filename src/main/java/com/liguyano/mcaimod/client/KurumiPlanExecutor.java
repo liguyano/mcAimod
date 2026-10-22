@@ -12,6 +12,7 @@ public final class KurumiPlanExecutor {
                        int inventoryBefore, int chestBefore, Phase phase, int retries, int round) {}
     private static Run active;
     private static int ticks;
+    private static boolean lastSucceeded;
     private static int breakIndex;
     private static boolean breakPending;
     private static final long TOTAL_LIMIT = 300_000L;
@@ -20,8 +21,10 @@ public final class KurumiPlanExecutor {
 
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiPlanExecutor::tick); }
     public static boolean busy() { return active != null; }
+    public static boolean lastSucceeded() { return lastSucceeded; }
     public static void cancel() {
         active = null;
+        lastSucceeded = false;
         breakIndex = 0;
         breakPending = false;
         KurumiCombatBridge.cancel();
@@ -44,6 +47,7 @@ public final class KurumiPlanExecutor {
         if (plan == null || plan.steps().isEmpty() || plan.steps().size() > 8 || plan.loopCount() < 1 || plan.loopCount() > 20)
             return new BaritoneBridge.Result(false, "任务计划无效");
         long now = System.currentTimeMillis();
+        lastSucceeded = false;
         active = new Run(plan, 0, now, now, 0, -1, plan.breakConditions().isEmpty() ? Phase.START : Phase.CHECK_BREAK, 0, 1);
         ticks = 0;
         breakIndex = 0;
@@ -126,6 +130,7 @@ public final class KurumiPlanExecutor {
         if (r.index() + 1 == r.plan().steps().size()) {
             if (r.round() >= r.plan().loopCount()) {
                 active = null;
+                lastSucceeded = true;
                 say("自由组合任务完成 " + r.round() + "/" + r.plan().loopCount() + " 轮");
             } else if (now - r.started() >= TOTAL_LIMIT) {
                 say("循环任务达到总时限，已停止");
