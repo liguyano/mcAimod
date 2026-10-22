@@ -3,7 +3,7 @@ package com.liguyano.mcaimod.client;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.inventory.ContainerInput;
-import net.minecraft.world.item.ArmorItem;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.entity.EquipmentSlot;
 
 /** Equip any explicitly requested inventory item in the main hand via a vanilla inventory swap. */
@@ -53,9 +53,10 @@ public final class KurumiEquipBridge {
             var stack = inv.getItem(i);
             if (stack.isEmpty() || !itemId.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()))
                 continue;
-            if (!(stack.getItem() instanceof ArmorItem armor))
-                return new BaritoneBridge.Result(false, "指定物品不是可穿戴盔甲");
-            armorSlot = armor.getEquipmentSlot();
+            var equippable = stack.get(DataComponents.EQUIPPABLE);
+            if (equippable == null)
+                return new BaritoneBridge.Result(false, "指定物品不是可穿戴装备");
+            armorSlot = equippable.slot();
             if (armorSlot != EquipmentSlot.HEAD && armorSlot != EquipmentSlot.CHEST
                     && armorSlot != EquipmentSlot.LEGS && armorSlot != EquipmentSlot.FEET)
                 return new BaritoneBridge.Result(false, "指定物品不属于四个盔甲槽位");
