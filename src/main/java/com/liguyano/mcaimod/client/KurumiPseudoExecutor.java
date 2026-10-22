@@ -411,6 +411,35 @@ public final class KurumiPseudoExecutor {
                 pendingCondition = stmt.condition();
                 if ("result".equals(pendingCondition.source())) {
                     completeCondition(matches(lastResultSuccess ? 1 : 0, pendingCondition));
+                } else if ("distance".equals(pendingCondition.source())) {
+                    try {
+                        String observation = KurumiToolbox.observe(
+                                "get_distance:" + pendingCondition.itemId());
+                        var data = com.google.gson.JsonParser.parseString(observation).getAsJsonObject();
+                        if (!data.has("found") || !data.get("found").getAsBoolean()
+                                || !data.has("distance")) {
+                            KurumiWebMonitor.log("距离条件检查失败或目标不在搜索范围：" + observation);
+                            say("未找到目标，无法判断距离条件，脚本已停止");
+                            cancel();
+                            return;
+                        }
+                        double distance = data.get("distance").getAsDouble();
+                        boolean satisfied = switch (pendingCondition.operator()) {
+                            case "LT" -> distance < pendingCondition.count();
+                            case "LE" -> distance <= pendingCondition.count();
+                            case "EQ" -> distance == pendingCondition.count();
+                            case "GE" -> distance >= pendingCondition.count();
+                            case "GT" -> distance > pendingCondition.count();
+                            case "NE" -> distance != pendingCondition.count();
+                            default -> false;
+                        };
+                        KurumiWebMonitor.log("距离检查：" + pendingCondition.itemId()
+                                + " = " + distance + " 格");
+                        completeCondition(satisfied);
+                    } catch (RuntimeException ex) {
+                        KurumiWebMonitor.log("距离检查出错：" + ex.getMessage());
+                        cancel();
+                    }
                 } else if ("inventory".equals(pendingCondition.source())) {
                     completeCondition(matches(KurumiTaskChecks.inventoryCount(pendingCondition.itemId()),
                             pendingCondition));
