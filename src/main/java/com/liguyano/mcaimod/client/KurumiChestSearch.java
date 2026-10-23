@@ -45,8 +45,10 @@ public final class KurumiChestSearch {
     public static boolean lastSucceeded() { return lastSucceeded; }
     public static String status() { return lastResult; }
     public static void cancel() {
-        if (busy) BaritoneBridge.stop();
-        closeMenu();
+        if (busy) {
+            BaritoneBridge.stop();
+            closeMenu();
+        }
         busy=false; current=null; pending=List.of(); phase=null;
         lastSucceeded=false;
     }
