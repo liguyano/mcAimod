@@ -33,7 +33,8 @@ public final class KurumiPseudoExecutor {
     private static boolean awaitingMenu;
     private static long menuStarted;
     private static long externalStarted;
-    private static int comeX, comeY, comeZ;
+    private static String comeTarget;
+    private static boolean comeFollowing;
     private static long comeStarted;
     private static KurumiTaskPlanner.Condition pendingCondition;
     private static KurumiTaskPlanner.Statement pendingStatement;
@@ -46,6 +47,9 @@ public final class KurumiPseudoExecutor {
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiPseudoExecutor::tick); }
     public static boolean busy() { return running; }
     public static void cancel() {
+        if (comeFollowing) BaritoneBridge.stop();
+        comeFollowing = false;
+        comeTarget = null;
         if (running) KurumiWebMonitor.state("已取消");
         running = false;
         awaitingAction = false;
@@ -170,19 +174,23 @@ public final class KurumiPseudoExecutor {
             return;
         }
         if (awaitingCome) {
-            double dx = mc.player.getX() - (comeX + 0.5);
-            double dy = mc.player.getY() - comeY;
-            double dz = mc.player.getZ() - (comeZ + 0.5);
-            if (dx * dx + dy * dy + dz * dz <= 9.0) {
+            var target = mc.level == null ? java.util.Optional.<net.minecraft.world.entity.player.Player>empty()
+                    : mc.level.players().stream()
+                    .filter(p -> comeTarget != null && comeTarget.equalsIgnoreCase(p.getName().getString()))
+                    .findFirst();
+            if (target.isPresent() && mc.player.distanceToSqr(target.get()) <= 9.0) {
+                BaritoneBridge.stop();
+                comeFollowing = false;
                 awaitingCome = false;
                 lastResultSuccess = true;
-                KurumiWebMonitor.log("come() check_position: 已抵达目标坐标附近");
+                KurumiWebMonitor.log("come(): 已靠近 " + comeTarget + "，自动取消 follow");
             } else if (System.currentTimeMillis() - comeStarted > 90000L) {
+                BaritoneBridge.stop();
+                comeFollowing = false;
                 awaitingCome = false;
                 lastResultSuccess = false;
-                BaritoneBridge.stop();
-                KurumiWebMonitor.log("come() check_position: 等待90秒超时");
-                if (!assignedResult) { say("未抵达目标，已停止后续动作"); cancel(); }
+                KurumiWebMonitor.log("come(): 跟随90秒未能抵达，已停止");
+                if (!assignedResult) { say("未能靠近目标玩家，已停止后续动作"); cancel(); }
             }
             return;
         }
@@ -385,29 +393,19 @@ public final class KurumiPseudoExecutor {
                 }
                 if ("COME".equals(stmt.step().action()) || "FOLLOW".equals(stmt.step().action())) {
                     if (++actions > MAX_ACTIONS) { cancel(); return; }
-                    var result = "COME".equals(stmt.step().action())
-                            ? BaritoneBridge.comeToPlayer(stmt.step().target())
-                            : BaritoneBridge.followPlayer(stmt.step().target());
+                    boolean oneShotCome = "COME".equals(stmt.step().action());
+                    var result = BaritoneBridge.followPlayer(stmt.step().target());
                     lastResultSuccess = result.success();
                     assignedResult = "ACTION_RESULT".equals(stmt.op());
                     KurumiWebMonitor.log(stmt.step().action() + " 命令：" + result.message());
                     frame.index++;
                     if (!result.success() && !assignedResult) { cancel(); return; }
-                    if (result.success() && "COME".equals(stmt.step().action())) {
-                        var target = mc.level.players().stream()
-                                .filter(p -> stmt.step().target().equalsIgnoreCase(p.getName().getString()))
-                                .findFirst();
-                        if (target.isEmpty()) {
-                            lastResultSuccess = false;
-                            if (!assignedResult) cancel();
-                            return;
-                        }
-                        comeX = target.get().getBlockX();
-                        comeY = target.get().getBlockY();
-                        comeZ = target.get().getBlockZ();
+                    if (result.success() && oneShotCome) {
+                        comeTarget = stmt.step().target();
                         comeStarted = System.currentTimeMillis();
+                        comeFollowing = true;
                         awaitingCome = true;
-                        KurumiWebMonitor.log("come() check_position: 等待到达 " + comeX + "," + comeY + "," + comeZ);
+                        KurumiWebMonitor.log("come(): follow " + comeTarget + "，靠近3格后自动停止");
                     }
                     return;
                 }
