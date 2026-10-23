@@ -211,7 +211,10 @@ public final class KurumiClientController {
                         + "危险的全部丢弃/全部取放及玩家攻击仅在主人明确要求时执行；不要攻击主人。"
                         + "farm 参数4至32只表示命令请求，启动成功不代表收获完成。"));
                 conversation.add(new ChatMessage("system",
-                        "只读观察一律写成 talk(工具调用)：get_player_status()、get_environment()、"
+                        "只读观察可以用变量保存，例如 status = get_player_status()、"
+                        + "target = find_nearest_block(\\\"minecraft:furnace\\\")、"
+                        + "slot = inspect_slot(0)；需要公开输出时再用 talk(status) 或 talk(target)。"
+                        + "也支持直接 talk(工具调用)：get_player_status()、get_environment()、"
                         + "get_inventory()、scan_nearby_entities()、scan_nearby_blocks()、scan_dropped_items()、"
                         + "get_distance(\\\"block\\\",\\\"minecraft:furnace\\\")、"
                         + "find_nearest_block(\\\"minecraft:furnace\\\")、"
