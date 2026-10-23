@@ -60,7 +60,7 @@ public final class KurumiWebActions {
                 chain_on()
                 mine("minecraft:oak_log")
                 chain_off()
-                常用动作：sleep(2)、talk("你好")、equip_main_hand("minecraft:iron_axe")、
+                战斗：attack("minecraft:skeleton") 攻击指定生物；attack("玩家名") 攻击指定玩家（须符合玩家攻击权限）；也支持 attack_mob("minecraft:skeleton") 和 attack_player("玩家名")。\n                常用动作：sleep(2)、talk("你好")、equip_main_hand("minecraft:iron_axe")、
                 破坏指定方块：break_block("minecraft:stone") 破坏4.5格内最近的石头；
                 break_block(100,64,200) 按坐标破坏，或 break_block(target.x,target.y,target.z)，
                 也可 break_block("minecraft:stone",100,64,200) 验证方块类型。

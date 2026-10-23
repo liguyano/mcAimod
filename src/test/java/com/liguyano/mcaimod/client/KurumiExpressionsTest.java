@@ -107,6 +107,12 @@ class KurumiExpressionsTest {
         assertTrue(KurumiScriptParser.parse("break_block()").isPresent()); // runtime rejects invalid arity
     }
 
+    @Test void attackAliasParsesAsMobOrPlayer() {
+        assertTrue(KurumiScriptParser.parse("attack(\"minecraft:skeleton\")").isPresent());
+        assertTrue(KurumiScriptParser.parse("attack(\"OtherPlayer\")").isPresent());
+        assertTrue(KurumiScriptParser.parse("attack()").isEmpty());
+    }
+
     @Test void numericAndStringArgs() {
         Map<String, JsonElement> vars=Map.of();
         var args=KurumiExpressions.arguments("\"minecraft:oak_log\", 4",vars);

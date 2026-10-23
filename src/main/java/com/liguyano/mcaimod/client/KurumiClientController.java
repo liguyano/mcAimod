@@ -256,7 +256,7 @@ public final class KurumiClientController {
                         + "先 equip_main_hand(\\\"minecraft:oak_planks\\\")，如有背包交换，等待同步后再放。"
                         + "仅支持主手持有的 BlockItem、目标可替换且下方顶面结实、距离约4.5格；"
                         + "不可覆盖已有方块。place_block 是在世界里摆放，与 put_item 往容器存放不同。"
-                        + "其他动作：attack_mob、attack_player、tpa_request、tpa_request_to、tpa_accept。"
+                        + "其他动作：attack(\\\"minecraft:zombie\\\") 与 attack_mob 同义，attack(\\\"玩家名\\\") 与 attack_player 同义；attack_mob、attack_player、tpa_request、tpa_request_to、tpa_accept。"
                         + "危险的全部丢弃/全部取放及玩家攻击仅在主人明确要求时执行；不要攻击主人。"
                         + "farm 参数4至32只表示命令请求，启动成功不代表收获完成。"));
                 conversation.add(new ChatMessage("system",
