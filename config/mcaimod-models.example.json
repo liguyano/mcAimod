@@ -13,12 +13,12 @@
     },
     {
       "name": "aliyun",
-      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      "model_id": "qwen3.8-max",
+      "base_url": "https://cn-beijing.maas.qianwenaiapi.com/api/v1",
+      "model_id": "qwen3.8-max-0902",
       "api_key": "",
-      "api_key_env": "",
+      "api_key_env": "DASHSCOPE_API_KEY",
       "request_timeout": 120,
-      "max_output_tokens": 1024,
+      "max_output_tokens": 4096,
       "enabled": false
     },
     {
