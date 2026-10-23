@@ -120,6 +120,11 @@ public final class KurumiTaskPlanner {
                 if (radius < 4 || radius > 32) throw new IllegalArgumentException("farm radius");
                 statements.add(new Statement(op, new Step("FARM", "", radius, null, null, null, ""),
                         null, List.of(), List.of()));
+            } else if ("SLEEP".equals(op)) {
+                int seconds = node.get("seconds").getAsInt();
+                if (seconds < 1 || seconds > 120) throw new IllegalArgumentException("sleep seconds");
+                statements.add(new Statement(op, new Step("SLEEP", "", seconds, null, null, null, ""),
+                        null, List.of(), List.of()));
             } else if ("OBSERVE_TALK".equals(op)) {
                 String tool = node.get("tool").getAsString();
                 if (tool.length() > 180 || !(java.util.Set.of("get_player_status", "get_environment",
