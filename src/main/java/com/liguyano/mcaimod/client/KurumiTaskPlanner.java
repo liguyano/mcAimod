@@ -139,7 +139,7 @@ public final class KurumiTaskPlanner {
                 String method = node.get("method").getAsString();
                 String args = node.get("expression").getAsString();
                 if (!java.util.Set.of("goto", "talk", "sleep", "move", "interact",
-                        "equip_main_hand", "place_block", "break_block").contains(method) || args.length() > 500)
+                        "equip_main_hand", "place_block", "break_block", "search_chests", "take_from_memory").contains(method) || args.length() > 500)
                     throw new IllegalArgumentException("invalid dynamic call");
                 statements.add(new Statement(op, new Step(method, args, 1,
                         null, null, null, ""), null, List.of(), List.of()));
