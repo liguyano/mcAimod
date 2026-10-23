@@ -20,6 +20,33 @@ public final class KurumiExpressions {
         if (parser.at != input.length()) throw new IllegalArgumentException("表达式包含不支持的内容");
         return value;
     }
+    /** Split expression arguments without treating commas inside strings or nested calls as separators. */
+    public static java.util.List<JsonElement> arguments(String source, Map<String, JsonElement> vars) {
+        java.util.List<JsonElement> values = new java.util.ArrayList<>();
+        if (source.isBlank()) return values;
+        int depth = 0, start = 0;
+        boolean quoted = false;
+        for (int i = 0; i <= source.length(); i++) {
+            if (i == source.length() || (source.charAt(i) == ',' && depth == 0 && !quoted)) {
+                if (values.size() >= 6 || start == i) throw new IllegalArgumentException("参数数量或格式错误");
+                values.add(evaluate(source.substring(start, i), vars));
+                start = i + 1;
+                continue;
+            }
+            char c = source.charAt(i);
+            if (c == '"') quoted = !quoted;
+            else if (!quoted && c == '(') depth++;
+            else if (!quoted && c == ')') depth--;
+            if (depth < 0 || depth > 6) throw new IllegalArgumentException("表达式括号不匹配");
+        }
+        if (quoted || depth != 0) throw new IllegalArgumentException("表达式括号或引号不匹配");
+        return values;
+    }
+    public static String text(JsonElement element) {
+        if (element == null || element.isJsonNull()) return "null";
+        if (element.isJsonPrimitive()) return element.getAsString();
+        return element.toString();
+    }
     public static boolean truth(JsonElement element) {
         if (element == null || element.isJsonNull()) return false;
         if (!element.isJsonPrimitive()) return true;
@@ -137,10 +164,12 @@ public final class KurumiExpressions {
             while(at<input.length() && (Character.isDigit(input.charAt(at)) || input.charAt(at)=='.')) at++;
             return fields(numeric(Double.parseDouble(input.substring(start,at))));
         }
+        if (keyword("True")) return new JsonPrimitive(true);
+        if (keyword("False")) return new JsonPrimitive(false);
         String name=identifier();
         if (name.isEmpty()) throw new IllegalArgumentException("非法表达式");
-        if ("true".equals(name) || "True".equals(name)) return new JsonPrimitive(true);
-        if ("false".equals(name) || "False".equals(name)) return new JsonPrimitive(false);
+        if ("true".equals(name)) return new JsonPrimitive(true);
+        if ("false".equals(name)) return new JsonPrimitive(false);
         if (take("(")) {
             java.util.List<JsonElement> args=new java.util.ArrayList<>();
             if (!take(")")) {
