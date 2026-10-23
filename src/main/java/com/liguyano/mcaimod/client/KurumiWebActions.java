@@ -60,7 +60,19 @@ public final class KurumiWebActions {
                 chain_on()
                 mine("minecraft:oak_log")
                 chain_off()
-                战斗：attack("minecraft:skeleton") 攻击指定生物；attack("玩家名") 攻击指定玩家（须符合玩家攻击权限）；也支持 attack_mob("minecraft:skeleton") 和 attack_player("玩家名")。\n                常用动作：sleep(2)、talk("你好")、equip_main_hand("minecraft:iron_axe")、
+                战斗：attack("minecraft:skeleton") 攻击指定生物；attack("玩家名") 攻击指定玩家（须符合玩家攻击权限）；也支持 attack_mob("minecraft:skeleton") 和 attack_player("玩家名")。\n                箱子搜索：search_chests("minecraft:diamond") 遍历附近已加载的24格范围内最多24个普通箱子；
+                不会自动取物。完成后 report = get_chest_search_result()，talk(report) 查看报告。
+                已检查的箱子记为 chest_1、chest_2 等，每次搜索会更新对应记忆。
+                通用方块记忆：saved = remember_block("矿场箱子",x,y,z)，
+                point = get_remembered_block("矿场箱子")，可用 point.x、point.y、point.z。
+                列出所有类型的方块记忆：memory = list_remembered_blocks()，返回 count 和 blocks。
+                逐项读取：entry = get_remembered_block_at(0)，从编号0开始；
+                可以用 while i < memory.count、get_remembered_block_at(i) 和 i = i + 1 遍历。
+                所有方块类型共用此列表，并非只存箱子；保存的坐标需要在使用时重新验证。
+                从记忆位置取物：take_from_memory("chest_1","minecraft:diamond",4)，
+                只打开记忆中的指定箱子，核对服务端菜单后取物，绝不改选附近其他箱子。
+                搜索和取物可分成两次任务完成，不能虚构箱子内容及取物数量。
+                常用动作：sleep(2)、talk("你好")、equip_main_hand("minecraft:iron_axe")、
                 破坏指定方块：break_block("minecraft:stone") 破坏4.5格内最近的石头；
                 break_block(100,64,200) 按坐标破坏，或 break_block(target.x,target.y,target.z)，
                 也可 break_block("minecraft:stone",100,64,200) 验证方块类型。

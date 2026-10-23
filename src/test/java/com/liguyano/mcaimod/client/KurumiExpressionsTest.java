@@ -113,6 +113,33 @@ class KurumiExpressionsTest {
         assertTrue(KurumiScriptParser.parse("attack()").isEmpty());
     }
 
+    @Test void chestMemoryScriptSyntax() {
+        assertTrue(KurumiScriptParser.parse("""
+                search_chests("minecraft:diamond")
+                report = get_chest_search_result()
+                talk(report)
+                """).isPresent());
+        assertTrue(KurumiScriptParser.parse("""
+                saved = remember_block("矿场箱子",100,64,200)
+                point = get_remembered_block("矿场箱子")
+                if point.found:
+                    goto(point.x,point.y,point.z)
+                take_from_memory("矿场箱子","minecraft:diamond",4)
+                """).isPresent());
+    }
+
+    @Test void genericBlockMemoryListIsIterable() {
+        assertTrue(KurumiScriptParser.parse("""
+                memory = list_remembered_blocks()
+                i = 0
+                while i < memory.count:
+                    block = get_remembered_block_at(i)
+                    if block.found:
+                        talk(block.name)
+                    i = i + 1
+                """).isPresent());
+    }
+
     @Test void numericAndStringArgs() {
         Map<String, JsonElement> vars=Map.of();
         var args=KurumiExpressions.arguments("\"minecraft:oak_log\", 4",vars);

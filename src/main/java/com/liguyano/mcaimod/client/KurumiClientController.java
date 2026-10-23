@@ -61,6 +61,7 @@ public final class KurumiClientController {
         KurumiPseudoExecutor.install();
         KurumiWebMonitor.install();
         KurumiChestInspector.install();
+        KurumiChestSearch.install();
     }
 
     private static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
@@ -81,6 +82,7 @@ public final class KurumiClientController {
         KurumiChestCraftTask.cancel();
         KurumiPseudoExecutor.cancel();
         KurumiChestInspector.cancel();
+        KurumiChestSearch.cancel();
         KurumiTaskRecovery.cancel();
     }
 
@@ -257,6 +259,19 @@ public final class KurumiClientController {
                         + "仅支持主手持有的 BlockItem、目标可替换且下方顶面结实、距离约4.5格；"
                         + "不可覆盖已有方块。place_block 是在世界里摆放，与 put_item 往容器存放不同。"
                         + "其他动作：attack(\\\"minecraft:zombie\\\") 与 attack_mob 同义，attack(\\\"玩家名\\\") 与 attack_player 同义；attack_mob、attack_player、tpa_request、tpa_request_to、tpa_accept。"
+                        + "箱子搜索：search_chests(\\\"minecraft:diamond\\\") 会在附近已加载24格范围内依次寻路打开最多24个普通箱子，"
+                        + "搜索不会取物；脚本等待完成后 report = get_chest_search_result() 返回报告。"
+                        + "已检查箱子自动记为 chest_1、chest_2 等，每次搜索可能更新这些名称。"
+                        + "方块记忆：saved = remember_block(\\\"矿场箱子\\\",x,y,z)，"
+                        + "point = get_remembered_block(\\\"矿场箱子\\\")，通过 point.x、point.y、point.z 读取。"
+                        + "记忆按服务器及维度保存；使用前核实区块已加载且实际方块符合预期。"
+                        + "通用列表：memory = list_remembered_blocks() 返回 count 和 blocks；"
+                        + "也可用 entry = get_remembered_block_at(0) 读取第0条方块记忆。"
+                        + "全部方块类型共用一个列表，AI 可用 i = 0、while i < memory.count、"
+                        + "get_remembered_block_at(i)、i = i + 1 遍历；记忆不等于方块仍然存在。"
+                        + "取物：take_from_memory(\\\"chest_1\\\",\\\"minecraft:diamond\\\",4)，"
+                        + "会回到记忆的指定箱子并读取服务器同步菜单，不会误取最近的其他箱子。"
+                        + "搜索和取出是独立操作，不要假定已找到物品。"
                         + "危险的全部丢弃/全部取放及玩家攻击仅在主人明确要求时执行；不要攻击主人。"
                         + "farm 参数4至32只表示命令请求，启动成功不代表收获完成。"));
                 conversation.add(new ChatMessage("system",
