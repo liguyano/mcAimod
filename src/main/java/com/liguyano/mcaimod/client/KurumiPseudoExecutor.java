@@ -44,6 +44,7 @@ public final class KurumiPseudoExecutor {
     private static long lastPublicMessageAt;
     private static boolean lastResultSuccess;
     private static boolean assignedResult;
+    private static final java.util.Map<String, com.google.gson.JsonObject> dictionaries = new java.util.HashMap<>();
 
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiPseudoExecutor::tick); }
     public static boolean busy() { return running; }
@@ -61,6 +62,7 @@ public final class KurumiPseudoExecutor {
         awaitingCraft = false;
         awaitingMenu = false;
         frames.clear();
+        dictionaries.clear();
         KurumiChestInspector.cancel();
         KurumiPlanExecutor.cancel();
     }
@@ -86,6 +88,7 @@ public final class KurumiPseudoExecutor {
         lastPublicMessageAt = 0;
         lastResultSuccess = false;
         assignedResult = false;
+        dictionaries.clear();
         awaitingAction = false;
         awaitingChest = false;
         awaitingCome = false;
@@ -240,6 +243,85 @@ public final class KurumiPseudoExecutor {
         var stmt = frame.statements.get(frame.index);
         KurumiWebMonitor.step(stmt, actions, frame.iterations, lastResultSuccess);
         switch (stmt.op()) {
+            case "DICT_FIND" -> {
+                String observation = KurumiToolbox.observe("find_nearest_block:" + stmt.step().itemId());
+                try {
+                    var data = com.google.gson.JsonParser.parseString(observation).getAsJsonObject();
+                    dictionaries.put(stmt.step().target(), data.deepCopy());
+                    KurumiWebMonitor.log("字典 " + stmt.step().target() + " = " + observation);
+                    lastResultSuccess = data.has("found") && data.get("found").getAsBoolean();
+                    frame.index++;
+                } catch (RuntimeException ex) {
+                    KurumiWebMonitor.log("字典查询失败：" + observation);
+                    cancel();
+                }
+            }
+            case "DICT_TALK" -> {
+                if (publicMessages >= 12) { cancel(); return; }
+                if (System.currentTimeMillis() - lastPublicMessageAt < 2000) return;
+                var dict = dictionaries.get(stmt.step().target());
+                if (dict == null) {
+                    KurumiWebMonitor.log("尚未给字典赋值：" + stmt.step().target());
+                    cancel();
+                    return;
+                }
+                String message = dict.toString();
+                if (message.length() > 120) message = message.substring(0, 108) + "...(已截断)";
+                if (message.startsWith("/")) { cancel(); return; }
+                say(message);
+                KurumiWebMonitor.log("talk(" + stmt.step().target() + "): " + dict);
+                publicMessages++;
+                lastPublicMessageAt = System.currentTimeMillis();
+                frame.index++;
+            }
+            case "DICT_GOTO" -> {
+                var dict = dictionaries.get(stmt.step().target());
+                if (dict == null || !dict.has("found") || !dict.get("found").getAsBoolean()) {
+                    KurumiWebMonitor.log("目标不存在或字典未赋值：" + stmt.step().target());
+                    say("没有找到目标，无法前往");
+                    cancel();
+                    return;
+                }
+                if (++actions > MAX_ACTIONS) { cancel(); return; }
+                net.minecraft.core.BlockPos block;
+                try {
+                    block = new net.minecraft.core.BlockPos(dict.get("x").getAsInt(),
+                            dict.get("y").getAsInt(), dict.get("z").getAsInt());
+                } catch (RuntimeException ex) {
+                    KurumiWebMonitor.log("字典坐标无效：" + dict);
+                    cancel();
+                    return;
+                }
+                var mc = Minecraft.getInstance();
+                if (mc.player == null || mc.level == null) { cancel(); return; }
+                net.minecraft.core.BlockPos destination = null;
+                double best = Double.POSITIVE_INFINITY;
+                // Choose a nearby standing block so we do not path into the solid target.
+                for (net.minecraft.core.Direction direction : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+                    var pos = block.relative(direction);
+                    if (!mc.level.hasChunkAt(pos) || !mc.level.hasChunkAt(pos.above())
+                            || !mc.level.hasChunkAt(pos.below())) continue;
+                    if (!mc.level.getBlockState(pos).getCollisionShape(mc.level, pos).isEmpty()
+                            || !mc.level.getBlockState(pos.above()).getCollisionShape(mc.level, pos.above()).isEmpty()
+                            || mc.level.getBlockState(pos.below()).getCollisionShape(mc.level, pos.below()).isEmpty())
+                        continue;
+                    double distance = pos.distSqr(mc.player.blockPosition());
+                    if (distance < best) { best = distance; destination = pos; }
+                }
+                if (destination == null) {
+                    KurumiWebMonitor.log("目标旁没有可以站立的位置：" + block);
+                    cancel();
+                    return;
+                }
+                var move = new KurumiTaskPlanner.Step("GOTO", "", 1,
+                        destination.getX(), destination.getY(), destination.getZ(), "");
+                var plan = new KurumiTaskPlanner.Plan(List.of(move), 1, 1, 1, List.of());
+                var result = KurumiPlanExecutor.start(plan);
+                KurumiWebMonitor.log("goto(" + stmt.step().target() + "): " + result.message());
+                if (!result.success()) { cancel(); return; }
+                frame.index++;
+                awaitingAction = true;
+            }
             case "SLEEP" -> {
                 sleepUntil = System.currentTimeMillis() + stmt.step().quantity() * 1000L;
                 frame.index++;
