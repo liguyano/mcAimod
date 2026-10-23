@@ -14,7 +14,7 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
 
-/** Read-only localhost dashboard. HTTP threads never touch Minecraft game objects. */
+/** LAN-accessible dashboard; game actions are dispatched onto the Minecraft client thread. */
 public final class KurumiWebMonitor {
     private static final Map<KurumiTaskPlanner.Statement, Integer> LINES = new IdentityHashMap<>();
     private static final Map<KurumiTaskPlanner.Program, String> SOURCES = new IdentityHashMap<>();
@@ -167,23 +167,16 @@ public final class KurumiWebMonitor {
             exchange.close();
             return;
         }
-        // A hostile web page must not be able to send game commands to localhost.
-        String host = exchange.getRequestHeaders().getFirst("Host");
-        String origin = exchange.getRequestHeaders().getFirst("Origin");
+        // The page may be opened through any LAN IP or host name. Do not restrict
+        // Host/Origin/Sec-Fetch-Site to localhost, but keep the explicit page header
+        // so unrelated sites cannot send browser requests to run game actions.
         String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
         String gate = exchange.getRequestHeaders().getFirst("X-Kurumi-Web");
-        boolean validHost = "127.0.0.1:8765".equals(host) || "localhost:8765".equals(host);
-        // Requests from the built-in page are same-origin. Some local browsers omit Origin;
-        // require the custom header, strict Host check, and reject explicit foreign origins.
-        boolean validOrigin = origin == null || "http://127.0.0.1:8765".equals(origin)
-                || "http://localhost:8765".equals(origin);
-        String site = exchange.getRequestHeaders().getFirst("Sec-Fetch-Site");
-        boolean validSite = site == null || "same-origin".equals(site) || "none".equals(site);
-        if (!validHost || !validOrigin || !validSite || !"1".equals(gate)
+        if (!"1".equals(gate)
                 || contentType == null || !contentType.startsWith("application/json")) {
             JsonObject denied = new JsonObject();
-            denied.addProperty("error", "只能从本机 Kurumi 监测网页提交操作");
-            reply(exchange, 403, denied);
+            denied.addProperty("error", "请通过 Kurumi Web 面板提交 JSON 请求");
+            reply(exchange, 400, denied);
             return;
         }
         try {
@@ -212,7 +205,7 @@ public final class KurumiWebMonitor {
     public static synchronized void install() {
         if (server != null) return;
         try {
-            server = HttpServer.create(new InetSocketAddress("127.0.0.1", 8765), 0);
+            server = HttpServer.create(new InetSocketAddress("0.0.0.0", 8765), 0);
             server.createContext("/api/generate", exchange -> handlePost(exchange, true));
             server.createContext("/api/run", exchange -> handlePost(exchange, false));
             server.createContext("/api/status", exchange -> {
