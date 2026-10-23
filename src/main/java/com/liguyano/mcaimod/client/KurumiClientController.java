@@ -51,6 +51,7 @@ public final class KurumiClientController {
         KurumiBedShortcut.install();
         KurumiChestBridge.install();
         KurumiInteractionBridge.install();
+        KurumiBlockBreakingBridge.install();
         KurumiAutoCraftBridge.install();
         KurumiPickupBridge.install();
         KurumiCombatBridge.install();
@@ -72,6 +73,7 @@ public final class KurumiClientController {
         KurumiBedShortcut.cancel();
         KurumiChestBridge.cancel();
         KurumiInteractionBridge.cancel();
+        KurumiBlockBreakingBridge.cancel();
         KurumiAutoCraftBridge.cancel();
         KurumiPickupBridge.cancel();
         KurumiCombatBridge.cancel();
@@ -237,6 +239,11 @@ public final class KurumiClientController {
                         + "put_item(\\\"minecraft:iron_ore\\\",16,\\\"input\\\")、"
                         + "put_item(\\\"minecraft:coal\\\",16,\\\"fuel\\\")、"
                         + "take_item(\\\"minecraft:iron_ingot\\\",16) 操作已打开容器。"
+                        + "破坏世界方块：break_block(\\\"minecraft:stone\\\") 破坏4.5格内最近一块石头；"
+                        + "break_block(100,64,200) 破坏指定坐标；支持 break_block(target.x,target.y,target.z)，"
+                        + "也支持 break_block(\\\"minecraft:stone\\\",100,64,200) 限定方块种类。"
+                        + "break_block 为单方块近距离破坏，待服务端确认方块变化后才继续；"
+                        + "远处方块先 goto，批量资源采集仍用 mine。"
                         + "放置世界方块：place_block(\\\"minecraft:oak_planks\\\") 在面朝方向前一格的地面上放一块，"
                         + "或 place_block(\\\"minecraft:oak_planks\\\",100,64,200) 指定坐标。"
                         + "先 equip_main_hand(\\\"minecraft:oak_planks\\\")，如有背包交换，等待同步后再放。"
