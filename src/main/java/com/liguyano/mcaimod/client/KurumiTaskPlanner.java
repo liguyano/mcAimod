@@ -100,7 +100,7 @@ public final class KurumiTaskPlanner {
     }
 
     private static List<Statement> parseStatements(JsonArray array, int depth, int[] budget) {
-        if (depth > 3 || array.size() > 16) throw new IllegalArgumentException("nesting");
+        if (depth > 3 || array.size() > 200) throw new IllegalArgumentException("nesting");
         List<Statement> statements = new ArrayList<>();
         for (JsonElement el : array) {
             if (++budget[0] > 200 || !el.isJsonObject()) throw new IllegalArgumentException("budget");
