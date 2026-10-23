@@ -79,6 +79,13 @@ public final class KurumiWebMonitor {
         pending.state = "生成中";
         addEvent(pending, "收到需求，正在请求 AI 生成伪代码");
     }
+    /** Record a successfully dispatched non-script action, including long-task launches. */
+    public static synchronized void requestDispatched(String operation) {
+        if (pending == null) return;
+        pending.operation = operation;
+        addEvent(pending, "动作请求已接受：" + operation + "；运行结果仍待游戏确认");
+        finishPending("已提交执行");
+    }
     public static synchronized void requestFailed(String reason) {
         if (pending == null) return;
         addEvent(pending, "请求失败：" + reason);
@@ -166,12 +173,16 @@ public final class KurumiWebMonitor {
         String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
         String gate = exchange.getRequestHeaders().getFirst("X-Kurumi-Web");
         boolean validHost = "127.0.0.1:8765".equals(host) || "localhost:8765".equals(host);
-        boolean validOrigin = "http://127.0.0.1:8765".equals(origin)
+        // Requests from the built-in page are same-origin. Some local browsers omit Origin;
+        // require the custom header, strict Host check, and reject explicit foreign origins.
+        boolean validOrigin = origin == null || "http://127.0.0.1:8765".equals(origin)
                 || "http://localhost:8765".equals(origin);
-        if (!validHost || !validOrigin || !"1".equals(gate)
+        String site = exchange.getRequestHeaders().getFirst("Sec-Fetch-Site");
+        boolean validSite = site == null || "same-origin".equals(site) || "none".equals(site);
+        if (!validHost || !validOrigin || !validSite || !"1".equals(gate)
                 || contentType == null || !contentType.startsWith("application/json")) {
             JsonObject denied = new JsonObject();
-            denied.addProperty("error", "不允许的请求来源");
+            denied.addProperty("error", "只能从本机 Kurumi 监测网页提交操作");
             reply(exchange, 403, denied);
             return;
         }
