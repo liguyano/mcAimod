@@ -19,7 +19,7 @@ import java.util.regex.Pattern;
 public final class KurumiLocationMemory {
     private static final Gson GSON = new Gson();
     private static final Pattern SAVE = Pattern.compile("(?:记住|记下|标记)(?:这里|这个位置|这个地方)?(?:是|叫|为)(.{1,24})");
-    private static final Pattern GO = Pattern.compile("(?:去|前往|带我去|回到|回)(.{1,24})");
+    private static final Pattern GO = Pattern.compile("去 ([^\\s，,。！？!?；;]{1,24})");
     private static final Pattern WHERE = Pattern.compile("(.{1,24})(?:在哪里|在哪儿|在哪|的坐标)");
     private record Point(String dimension, int x, int y, int z) {}
 
@@ -36,7 +36,7 @@ public final class KurumiLocationMemory {
                 || body.contains("，") || body.contains(",") || body.contains("；")
                 || body.contains(";") || body.contains("。") || body.contains("\\n"))
             return false;
-        boolean locationIntent = body.startsWith("去") || body.startsWith("记住")
+        boolean locationIntent = body.startsWith("去 ") || body.startsWith("记住")
                 || body.startsWith("记下") || body.startsWith("标记")
                 || body.startsWith("忘记") || body.startsWith("删除地点")
                 || body.contains("在哪里") || body.contains("在哪儿")
@@ -44,8 +44,11 @@ public final class KurumiLocationMemory {
                 || body.contains("记住了哪些") || body.contains("地点列表")
                 || body.contains("记忆的地点");
         if (!locationIntent) return false;
+        // The direct navigation shortcut is opt-in: exactly "去 <地点>" or "去 <x> <y> <z>".
+        // Other phrasings, including "去仓库", "前往仓库", and "Kurumi 去 仓库", go to the AI.
+        if (body.startsWith("去 ") && !message.strip().equals(body)) return false;
         Matcher coordinates = Pattern.compile(
-                "去(?:坐标)?[ ]*(-?[0-9]+)[ ]+(-?[0-9]+)[ ]+(-?[0-9]+)").matcher(body);
+                "去 (-?[0-9]+) +(-?[0-9]+) +(-?[0-9]+)").matcher(body);
         if (coordinates.matches()) {
             try {
                 int x = Integer.parseInt(coordinates.group(1));
