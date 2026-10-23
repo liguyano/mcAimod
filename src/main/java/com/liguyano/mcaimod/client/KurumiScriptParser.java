@@ -109,9 +109,9 @@ public final class KurumiScriptParser {
                         throw new IllegalArgumentException("empty else");
                     node.add("else", block(lines, cursor, indent + 1, depth + 1));
                 }
-            } else if (VARIABLE_ASSIGN.matcher(code).matches()) {
+            } else if (VARIABLE_ASSIGN.matcher(code).matches() && !code.startsWith("result = ")) {
                 Matcher m = VARIABLE_ASSIGN.matcher(code); m.matches();
-                if ("result".equals(m.group(1))) throw new IllegalArgumentException("reserved variable");
+
                 node.addProperty("op", "EXPR_ASSIGN");
                 node.addProperty("name", m.group(1));
                 node.addProperty("expression", m.group(2));
