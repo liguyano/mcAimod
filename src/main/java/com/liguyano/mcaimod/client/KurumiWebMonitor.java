@@ -357,8 +357,18 @@ public final class KurumiWebMonitor {
           try{
             const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Kurumi-Web':'1'},
               body:JSON.stringify(body)});
-            const data=await response.json();
-            if(!response.ok||!data.accepted)throw Error(data.error||'提交失败');
+            const contentType=response.headers.get('content-type')||'';
+            if(!contentType.toLowerCase().includes('application/json')){
+              const message='执行接口没有返回 JSON（HTTP '+response.status+
+                '，类型 '+(contentType||'未知')+'，地址 '+response.url+
+                '）。请检查当前网页是否连接到 Minecraft 模组的 8765 端口，'
+                +'以及是否存在代理或其他网页服务接管 /api/run。';
+              throw Error(message);
+            }
+            let data;
+            try{data=await response.json();}
+            catch(e){throw Error('执行接口返回无效 JSON（HTTP '+response.status+'，地址 '+response.url+'）');}
+            if(!response.ok||!data.accepted)throw Error(data.error||'提交失败 (HTTP '+response.status+')');
             feedback.textContent='请求已提交';
             refresh();
           }catch(e){feedback.textContent=String(e.message||e);}
