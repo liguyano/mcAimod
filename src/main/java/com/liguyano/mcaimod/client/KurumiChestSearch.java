@@ -102,6 +102,33 @@ public final class KurumiChestSearch {
         for (String field : new String[]{"x","y","z","block_id"}) result.add(field,e.get(field).deepCopy());
         return result;
     }
+    /** Compact, grounded memory context for AI prompts; full entries remain queryable at runtime. */
+    public static String contextForModel() {
+        Minecraft mc=mc();
+        if (mc.player==null || mc.level==null) return "方块记忆：世界尚未加载。";
+        try {
+            JsonObject snapshot=listBlocks();
+            JsonArray blocks=snapshot.getAsJsonArray("blocks");
+            if (blocks.isEmpty()) return "当前服务器和维度没有已保存的方块记忆。";
+            StringBuilder out=new StringBuilder("当前服务器及维度永久方块记忆（仅历史记录，使用前确认方块仍存在）：");
+            int limit=Math.min(blocks.size(),30);
+            for (int i=0;i<limit;i++) {
+                JsonObject entry=blocks.get(i).getAsJsonObject();
+                out.append(entry.get("name").getAsString()).append(" [")
+                        .append(entry.get("block_id").getAsString()).append("] (")
+                        .append(entry.get("x").getAsInt()).append(",")
+                        .append(entry.get("y").getAsInt()).append(",")
+                        .append(entry.get("z").getAsInt()).append("); ");
+            }
+            if(blocks.size()>limit)
+                out.append("另有").append(blocks.size()-limit)
+                        .append("条未展示，可使用 list_remembered_blocks() 或 get_remembered_block(名称) 查询。");
+            return out.toString();
+        } catch(RuntimeException e) {
+            return "方块记忆读取失败；不要猜测已保存的坐标。";
+        }
+    }
+
     /** All remembered blocks in this server and dimension; nothing is assumed to still exist. */
     public static JsonObject listBlocks() {
         JsonObject output=new JsonObject();
