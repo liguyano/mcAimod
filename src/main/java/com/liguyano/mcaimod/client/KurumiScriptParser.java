@@ -28,6 +28,7 @@ public final class KurumiScriptParser {
     private static final Pattern ZERO = Pattern.compile("(stop|tpa_request|tpa_accept|craft_open|chest_open|chest_put_all|chest_take_all|drop_all|pickup_all)\\(\\)");
     private static final Pattern ONE = Pattern.compile("(tpa_request_to|drop_item_all|pickup_item_all|chest_put_item_all|equip_main_hand|equip_armor)\\(\"([A-Za-z0-9_.:-]+)\"\\)");
     private static final Pattern TWO = Pattern.compile("(drop|pickup|chest_take|chest_put|craft_item|collect_and_store)\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})\\)");
+    private static final Pattern PLACE_BLOCK = Pattern.compile("place_block\\(\"([a-z0-9_.:-]+)\"(?:,\\s*(-?\\d{1,8}),\\s*(-?\\d{1,4}),\\s*(-?\\d{1,8}))?\\)");
     private static final Pattern INTERACT = Pattern.compile("interact\\(\"([a-z0-9_.:-]+)\"\\)");
     private static final Pattern TAKE_ITEM = Pattern.compile("take_item\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})\\)");
     private static final Pattern PUT_ITEM = Pattern.compile("put_item\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})(?:,\\s*\"(input|fuel|auto)\")?\\)");
@@ -149,6 +150,18 @@ public final class KurumiScriptParser {
             } else if (code.equals("chain_on()") || code.equals("chain_off()")) {
                 node.addProperty("op", "CHAIN");
                 node.addProperty("enabled", code.equals("chain_on()"));
+            } else if (PLACE_BLOCK.matcher(code).matches()) {
+                Matcher m = PLACE_BLOCK.matcher(code); m.matches();
+                JsonObject step = new JsonObject();
+                step.addProperty("action", "PLACE_BLOCK");
+                step.addProperty("item_id", m.group(1));
+                if (m.group(2) != null) {
+                    step.addProperty("x", Integer.parseInt(m.group(2)));
+                    step.addProperty("y", Integer.parseInt(m.group(3)));
+                    step.addProperty("z", Integer.parseInt(m.group(4)));
+                }
+                node.addProperty("op", "ACTION");
+                node.add("step", step);
             } else if (INTERACT.matcher(code).matches() || PUT_ITEM.matcher(code).matches() || TAKE_ITEM.matcher(code).matches()) {
                 JsonObject step = new JsonObject();
                 if (INTERACT.matcher(code).matches()) {

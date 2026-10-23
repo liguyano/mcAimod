@@ -151,6 +151,27 @@ public final class KurumiTaskPlanner {
             } else if ("ACTION".equals(op) || "ACTION_RESULT".equals(op)) {
                 JsonObject stepNode = node.getAsJsonObject("step");
                 String special = stepNode.get("action").getAsString();
+                if ("PLACE_BLOCK".equals(special)) {
+                    String id = stepNode.get("item_id").getAsString();
+                    if (!id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+                        throw new IllegalArgumentException("invalid block item");
+                    boolean hasCoords = stepNode.has("x") || stepNode.has("y") || stepNode.has("z");
+                    Integer x = null, y = null, z = null;
+                    if (hasCoords) {
+                        if (!stepNode.has("x") || !stepNode.has("y") || !stepNode.has("z"))
+                            throw new IllegalArgumentException("partial coordinates");
+                        x = stepNode.get("x").getAsInt();
+                        y = stepNode.get("y").getAsInt();
+                        z = stepNode.get("z").getAsInt();
+                        if (y < -64 || y > 320 || Math.abs((long)x) > 30000000 || Math.abs((long)z) > 30000000)
+                            throw new IllegalArgumentException("invalid coordinates");
+                    }
+                    statements.add(new Statement(op,
+                            new Step("PLACE_BLOCK", id, 1, x, y, z, ""), null, List.of(), List.of()));
+                    if (node.has("line")) KurumiWebMonitor.registerLine(
+                            statements.get(statements.size() - 1), node.get("line").getAsInt());
+                    continue;
+                }
                 if ("MOVE".equals(special)) {
                     String direction = stepNode.get("target").getAsString();
                     int distance = stepNode.get("quantity").getAsInt();

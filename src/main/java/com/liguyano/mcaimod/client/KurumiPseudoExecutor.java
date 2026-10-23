@@ -346,10 +346,12 @@ public final class KurumiPseudoExecutor {
                     }
                     return;
                 }
-                if ("INTERACT".equals(stmt.step().action()) || "PUT_ITEM".equals(stmt.step().action()) || "TAKE_ITEM".equals(stmt.step().action())) {
+                if ("PLACE_BLOCK".equals(stmt.step().action()) || "INTERACT".equals(stmt.step().action()) || "PUT_ITEM".equals(stmt.step().action()) || "TAKE_ITEM".equals(stmt.step().action())) {
                     if (++actions > MAX_ACTIONS) { cancel(); return; }
                     var step = stmt.step();
-                    var result = "INTERACT".equals(step.action())
+                    var result = "PLACE_BLOCK".equals(step.action())
+                            ? KurumiBlockPlacementBridge.place(step.itemId(), step.x(), step.y(), step.z())
+                            : "INTERACT".equals(step.action())
                             ? KurumiInteractionBridge.interact(step.itemId())
                             : "TAKE_ITEM".equals(step.action())
                             ? KurumiInteractionBridge.takeItem(step.itemId(), step.quantity())
