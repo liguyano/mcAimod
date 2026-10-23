@@ -17,7 +17,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
-/** Nearby block right-click and item insertion into vanilla furnace-like menus. */
+/** Nearby block interaction and bounded item transfers into supported container menus. */
 public final class KurumiInteractionBridge {
     private record Pending(String item, int count, String slot, long since) {}
     private static Pending pending;
@@ -56,20 +56,77 @@ public final class KurumiInteractionBridge {
             return new BaritoneBridge.Result(false, "尚未进入游戏");
         if (itemId == null || !itemId.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}") || quantity < 1 || quantity > 64)
             return new BaritoneBridge.Result(false, "物品 ID 或数量无效");
-        if (!java.util.Set.of("input", "fuel", "auto").contains(slot))
-            return new BaritoneBridge.Result(false, "槽位只能为 input、fuel 或 auto");
+        if (slot == null || !java.util.Set.of("input", "fuel", "auto",
+                "grid_1", "grid_2", "grid_3", "grid_4", "grid_5", "grid_6",
+                "grid_7", "grid_8", "grid_9").contains(slot))
+            return new BaritoneBridge.Result(false, "槽位只能为 input、fuel、auto 或 grid_1 至 grid_9");
         if (pending != null) return new BaritoneBridge.Result(false, "仍在等待上一次放入操作");
-        if (mc.player.containerMenu instanceof AbstractFurnaceMenu menu)
+        if (mc.player.containerMenu instanceof AbstractFurnaceMenu menu) {
+            if (slot.startsWith("grid_"))
+                return new BaritoneBridge.Result(false, "熔炉不支持工作台 grid_1 至 grid_9 槽位");
             return transfer(menu, itemId, quantity, "auto".equals(slot) ? "input" : slot);
+        }
+        if (mc.player.containerMenu instanceof CraftingMenu menu) {
+            if ("input".equals(slot) || "fuel".equals(slot))
+                return new BaritoneBridge.Result(false, "工作台请使用 grid_1 至 grid_9 或 auto，不能使用熔炉 input/fuel");
+            int targetSlot = "auto".equals(slot) ? -1 : Integer.parseInt(slot.substring(5));
+            return craftingTransfer(menu, itemId, quantity, targetSlot);
+        }
         if (!"auto".equals(slot))
-            return new BaritoneBridge.Result(false, "普通容器不支持熔炉专用的 input/fuel 槽位参数");
-        if (mc.player.containerMenu instanceof CraftingMenu)
-            return new BaritoneBridge.Result(false, "工作台请使用 craft_item()，不能盲目填充合成格");
+            return new BaritoneBridge.Result(false, "普通容器只支持 auto；grid_1 至 grid_9 仅用于工作台");
         if (mc.player.containerMenu != mc.player.inventoryMenu)
             return genericTransfer(itemId, quantity, true);
-        if (mc.player.containerMenu != mc.player.inventoryMenu)
-            return new BaritoneBridge.Result(false, "当前容器不是支持的熔炉或箱子");
-        return new BaritoneBridge.Result(false, "请先用 interact() 打开附近熔炉或箱子");
+        return new BaritoneBridge.Result(false, "请先用 interact() 打开附近熔炉、箱子或工作台");
+    }
+
+    /** CraftingMenu: output=0, 3x3 input grid=1..9, followed by player inventory. */
+    private static BaritoneBridge.Result craftingTransfer(CraftingMenu menu, String itemId,
+                                                           int quantity, int targetSlot) {
+        Minecraft mc = Minecraft.getInstance();
+        if (!menu.getCarried().isEmpty())
+            return new BaritoneBridge.Result(false, "鼠标光标上有物品，先清空光标");
+        int source = -1;
+        for (int i = 10; i < menu.slots.size(); i++) {
+            Slot inventorySlot = menu.getSlot(i);
+            if (inventorySlot.container != mc.player.getInventory() || !inventorySlot.hasItem()
+                    || !inventorySlot.mayPickup(mc.player)) continue;
+            ItemStack stack = inventorySlot.getItem();
+            if (itemId.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString())
+                    && stack.getCount() >= quantity) {
+                source = i;
+                break;
+            }
+        }
+        if (source < 0)
+            return new BaritoneBridge.Result(false, "背包里没有单组数量足够的 " + itemId);
+        ItemStack sourceStack = menu.getSlot(source).getItem();
+        int destination = -1;
+        for (int i = targetSlot > 0 ? targetSlot : 1;
+             i <= (targetSlot > 0 ? targetSlot : 9); i++) {
+            Slot cell = menu.getSlot(i);
+            if (!cell.mayPlace(sourceStack)) continue;
+            ItemStack existing = cell.getItem();
+            if (!existing.isEmpty() && !ItemStack.isSameItemSameComponents(existing, sourceStack)) continue;
+            int capacity = Math.min(sourceStack.getMaxStackSize(), cell.getMaxStackSize())
+                    - existing.getCount();
+            if (capacity >= quantity) {
+                destination = i;
+                break;
+            }
+        }
+        if (destination < 0)
+            return new BaritoneBridge.Result(false, "工作台目标格子已占用、容量不足或不接受该物品");
+        int sourceCount = sourceStack.getCount();
+        mc.gameMode.handleContainerInput(menu.containerId, source, 0, ContainerInput.PICKUP, mc.player);
+        if (quantity == sourceCount) {
+            mc.gameMode.handleContainerInput(menu.containerId, destination, 0, ContainerInput.PICKUP, mc.player);
+        } else {
+            for (int n = 0; n < quantity; n++)
+                mc.gameMode.handleContainerInput(menu.containerId, destination, 1, ContainerInput.PICKUP, mc.player);
+            mc.gameMode.handleContainerInput(menu.containerId, source, 0, ContainerInput.PICKUP, mc.player);
+        }
+        return new BaritoneBridge.Result(true, "已尝试向工作台第 " + destination
+                + " 格放入 " + itemId + " × " + quantity + "（等待服务器同步确认；未自动领取产物）");
     }
 
     /** Take a matching result stack from the currently open furnace or crafting table. */
