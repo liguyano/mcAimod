@@ -82,6 +82,19 @@ class KurumiExpressionsTest {
         assertTrue(KurumiScriptParser.parse(script).isPresent());
     }
 
+    @Test void parserAcceptsGetPositionAndCoordinates() {
+        String script = """
+                pos = get_position()
+                x = 0 - pos.x
+                y = pos.y
+                z = 0 - pos.z
+                goto(x,y,z)
+                return "完成"
+                """;
+        assertTrue(KurumiScriptParser.parse(script).isPresent());
+        assertTrue(KurumiScriptParser.parse("talk(get_position())").isPresent());
+    }
+
     @Test void numericAndStringArgs() {
         Map<String, JsonElement> vars=Map.of();
         var args=KurumiExpressions.arguments("\"minecraft:oak_log\", 4",vars);

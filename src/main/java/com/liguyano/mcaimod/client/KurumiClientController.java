@@ -211,10 +211,12 @@ public final class KurumiClientController {
                         + "危险的全部丢弃/全部取放及玩家攻击仅在主人明确要求时执行；不要攻击主人。"
                         + "farm 参数4至32只表示命令请求，启动成功不代表收获完成。"));
                 conversation.add(new ChatMessage("system",
-                        "只读观察可以用变量保存，例如 status = get_player_status()、"
+                        "只读观察可以用变量保存，例如 pos = get_position() 返回包含 x、y、z 的坐标字典，"
+                        + "可使用 pos.x、pos.y、pos.z 或 goto(pos.x,pos.y,pos.z)。"
+                        + "例如 status = get_player_status()、"
                         + "target = find_nearest_block(\\\"minecraft:furnace\\\")、"
                         + "slot = inspect_slot(0)；需要公开输出时再用 talk(status) 或 talk(target)。"
-                        + "也支持直接 talk(工具调用)：get_player_status()、get_environment()、"
+                        + "也支持直接 talk(工具调用)：get_position()、get_player_status()、get_environment()、"
                         + "get_inventory()、scan_nearby_entities()、scan_nearby_blocks()、scan_dropped_items()、"
                         + "get_distance(\\\"block\\\",\\\"minecraft:furnace\\\")、"
                         + "find_nearest_block(\\\"minecraft:furnace\\\")、"
@@ -244,7 +246,7 @@ public final class KurumiClientController {
                 "最高优先级输出规则：只允许一个 JSON 对象，type 必须是 action，action 必须是 EXECUTE_SCRIPT，"
                 + "必须有 reply 和 script 字符串。禁止 type=tool、type=chat、EXECUTE_PLAN、EXECUTE_PROGRAM 和其他旧动作。"
                 + "普通聊天也写在 script 的 talk(\"文本\") 中；不要仅靠 reply 发言。"
-                + "只读观察也必须写在 script 中，调用 talk(get_player_status())、talk(get_environment())、"
+                + "只读观察也必须写在 script 中，调用 talk(get_position())、talk(get_player_status())、talk(get_environment())、"
                 + "talk(scan_nearby_entities())、talk(scan_nearby_blocks())、talk(scan_dropped_items())、"
                 + "talk(get_inventory())、talk(get_distance(\"block\",\"minecraft:warped_stem\"))、"
                 + "talk(get_distance(\"player\",\"SekaiSaionji\"))、"
