@@ -128,6 +128,18 @@ class KurumiExpressionsTest {
                 """).isPresent());
     }
 
+    @Test void genericBlockMemoryListIsIterable() {
+        assertTrue(KurumiScriptParser.parse("""
+                memory = list_remembered_blocks()
+                i = 0
+                while i < memory.count:
+                    block = get_remembered_block_at(i)
+                    if block.found:
+                        talk(block.name)
+                    i = i + 1
+                """).isPresent());
+    }
+
     @Test void numericAndStringArgs() {
         Map<String, JsonElement> vars=Map.of();
         var args=KurumiExpressions.arguments("\"minecraft:oak_log\", 4",vars);
