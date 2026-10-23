@@ -7,7 +7,7 @@
       "model_id": "qwen3:8b",
       "api_key": "",
       "api_key_env": "",
-      "request_timeout": 60,
+      "request_timeout": 120,
       "max_output_tokens": 512,
       "enabled": true
     },
@@ -17,7 +17,7 @@
       "model_id": "qwen3.8-max",
       "api_key": "",
       "api_key_env": "",
-      "request_timeout": 60,
+      "request_timeout": 120,
       "max_output_tokens": 1024,
       "enabled": false
     },
@@ -26,7 +26,7 @@
       "base_url": "https://api.deepseek.com/v1",
       "model_id": "deepseek-chat",
       "api_key_env": "DEEPSEEK_API_KEY",
-      "request_timeout": 30,
+      "request_timeout": 120,
       "max_output_tokens": 512,
       "enabled": false
     },
@@ -35,7 +35,7 @@
       "base_url": "https://api.openai.com/v1",
       "model_id": "gpt-4.1-mini",
       "api_key_env": "OPENAI_API_KEY",
-      "request_timeout": 30,
+      "request_timeout": 120,
       "max_output_tokens": 512,
       "enabled": false
     }
