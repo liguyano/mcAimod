@@ -65,6 +65,10 @@ public final class KurumiWebActions {
                 已检查的箱子记为 chest_1、chest_2 等，每次搜索会更新对应记忆。
                 通用方块记忆：saved = remember_block("矿场箱子",x,y,z)，
                 point = get_remembered_block("矿场箱子")，可用 point.x、point.y、point.z。
+                列出所有类型的方块记忆：memory = list_remembered_blocks()，返回 count 和 blocks。
+                逐项读取：entry = get_remembered_block_at(0)，从编号0开始；
+                可以用 while i < memory.count、get_remembered_block_at(i) 和 i = i + 1 遍历。
+                所有方块类型共用此列表，并非只存箱子；保存的坐标需要在使用时重新验证。
                 从记忆位置取物：take_from_memory("chest_1","minecraft:diamond",4)，
                 只打开记忆中的指定箱子，核对服务端菜单后取物，绝不改选附近其他箱子。
                 搜索和取物可分成两次任务完成，不能虚构箱子内容及取物数量。
