@@ -159,6 +159,11 @@ public final class KurumiToolbox {
         JsonObject out = new JsonObject();
         out.addProperty("tool", tool);
         switch (tool) {
+            case "get_position" -> {
+                out.addProperty("x", mc.player.getBlockX());
+                out.addProperty("y", mc.player.getBlockY());
+                out.addProperty("z", mc.player.getBlockZ());
+            }
             case "get_player_status" -> {
                 out.addProperty("x", mc.player.getBlockX());
                 out.addProperty("y", mc.player.getBlockY());
