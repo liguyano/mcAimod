@@ -65,6 +65,12 @@ public final class KurumiWebActions {
                 break_block(100,64,200) 按坐标破坏，或 break_block(target.x,target.y,target.z)，
                 也可 break_block("minecraft:stone",100,64,200) 验证方块类型。
                 这是近距离单方块破坏，远处先 goto；mine 用于 Baritone 采集。
+                如何选择：用户要求拆除明确坐标、清除附近某一块方块，优先 break_block()；
+                用户要求寻找资源、挖矿、砍树、批量收集，优先 mine("minecraft:方块ID")。
+                break_block() 只能近距离单块破坏，不自动寻找或寻路；
+                mine() 让 Baritone 自主搜索、前往并采集指定方块种类。
+                结合用户意图、目标位置和数量自行选择，不要一看到“挖”就固定使用 mine()。
+                mine() 不保证获得指定数量，break_block() 不保证拾取掉落物；不能把命令已提交当成任务已完成。
                 interact("minecraft:oak_log")、place_block("minecraft:oak_planks")、
                 place_block("minecraft:oak_planks",10,64,20)、move("forward",3)、goto(10,64,20)、
                 come("玩家名")、follow("玩家名")、stop()、mine("minecraft:oak_log")、
