@@ -217,7 +217,7 @@ public final class KurumiExpressions {
                 if (args.size()!=1) throw new IllegalArgumentException("工具参数数量错误");
                 tool=name+":"+string(args.get(0));
             }
-            case "get_player_status", "get_environment", "get_inventory",
+            case "get_position", "get_player_status", "get_environment", "get_inventory",
                     "scan_nearby_entities", "scan_nearby_blocks", "scan_dropped_items",
                     "inspect_container" -> {
                 if (!args.isEmpty()) throw new IllegalArgumentException("工具不接受参数");
