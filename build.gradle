@@ -118,6 +118,29 @@ dependencies {
             prefer '2.23.3'
         }
     }
+    // NeoForge JarJar does not automatically package ordinary transitive SDK libraries.
+    // Include the HTTP and reactive dependencies required by DashScope at runtime.
+    jarJar(implementation('io.reactivex.rxjava2:rxjava:2.2.21')) {
+        version { strictly '[2.2.21]'; prefer '2.2.21' }
+    }
+    jarJar(implementation('org.reactivestreams:reactive-streams:1.0.4')) {
+        version { strictly '[1.0.4]'; prefer '1.0.4' }
+    }
+    jarJar(implementation('com.squareup.okhttp3:okhttp:4.12.0')) {
+        version { strictly '[4.12.0]'; prefer '4.12.0' }
+    }
+    jarJar(implementation('com.squareup.okhttp3:okhttp-sse:4.12.0')) {
+        version { strictly '[4.12.0]'; prefer '4.12.0' }
+    }
+    jarJar(implementation('com.squareup.okhttp3:logging-interceptor:4.12.0')) {
+        version { strictly '[4.12.0]'; prefer '4.12.0' }
+    }
+    jarJar(implementation('com.squareup.okio:okio-jvm:3.6.0')) {
+        version { strictly '[3.6.0]'; prefer '3.6.0' }
+    }
+    jarJar(implementation('org.jetbrains.kotlin:kotlin-stdlib:1.8.21')) {
+        version { strictly '[1.8.21]'; prefer '1.8.21' }
+    }
     testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     // Minecraft supplies Gson at runtime; plain JUnit launches need it explicitly.
