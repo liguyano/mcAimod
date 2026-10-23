@@ -48,6 +48,7 @@ public final class KurumiClientController {
         NeoForge.EVENT_BUS.addListener(KurumiClientController::registerCommands);
         NeoForge.EVENT_BUS.addListener(KurumiClientController::onLogout);
         KurumiTpaBridge.install();
+        KurumiBedShortcut.install();
         KurumiChestBridge.install();
         KurumiInteractionBridge.install();
         KurumiAutoCraftBridge.install();
@@ -68,6 +69,7 @@ public final class KurumiClientController {
         GATE.reset();
         HISTORY.clear();
         KurumiChainBridge.release();
+        KurumiBedShortcut.cancel();
         KurumiChestBridge.cancel();
         KurumiInteractionBridge.cancel();
         KurumiAutoCraftBridge.cancel();
@@ -136,6 +138,33 @@ public final class KurumiClientController {
                 })));
     }
 
+    /** Fixed shortcuts only for exact owner messages; all other text uses the model. */
+    private static boolean handleExactShortcut(String message, String sender) {
+        if (!"过来".equals(message) && !"睡觉".equals(message) && !"tp".equals(message))
+            return false;
+        KurumiWebMonitor.requestReceived(message);
+        BaritoneBridge.Result result;
+        if (requestInFlight || KurumiPseudoExecutor.busy() || KurumiPlanExecutor.busy()
+                || KurumiLongTaskBridge.busy() || KurumiChestCraftTask.busy()
+                || KurumiBedShortcut.busy()) {
+            result = new BaritoneBridge.Result(false, "还有任务正在执行，请先停止");
+        } else {
+            result = switch (message) {
+                case "过来" -> BaritoneBridge.comeToPlayer(sender);
+                case "睡觉" -> KurumiBedShortcut.start();
+                case "tp" -> KurumiTpaBridge.requestTo(sender);
+                default -> throw new IllegalStateException("unknown shortcut");
+            };
+        }
+        if (result.success()) KurumiWebMonitor.requestDispatched("固定快捷指令：" + message);
+        else KurumiWebMonitor.requestFailed(result.message());
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.getConnection() != null)
+            mc.getConnection().sendChat(result.success() ? "好的，主人~ " + result.message()
+                    : "抱歉，主人~ " + result.message());
+        return true;
+    }
+
     private static void onPlayerChat(ClientChatReceivedEvent.Player event) {
         Minecraft minecraft = Minecraft.getInstance();
         if (!enabled || minecraft.player == null || minecraft.getConnection() == null) return;
@@ -147,6 +176,10 @@ public final class KurumiClientController {
                 ? "" : minecraft.getConnection().getPlayerInfo(event.getSender()).getProfile().name();
         boolean isOwner = "SekaiSaionji".equals(senderNameForMemory);
         if (requestInFlight || !GATE.tryAccept(isOwner ? "Kurumi " + message : message)) return;
+        if (isOwner && handleExactShortcut(message, senderNameForMemory)) {
+            GATE.finish();
+            return;
+        }
         if (KurumiLocationMemory.handle(message, senderNameForMemory)) {
             GATE.finish();
             return;
