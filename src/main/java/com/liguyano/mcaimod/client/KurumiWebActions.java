@@ -77,7 +77,7 @@ public final class KurumiWebActions {
                             completePreview(id, "", "模型没有返回合法的 script JSON");
                         }
                     }));
-        } catch (RuntimeException e) {
+        } catch (Exception e) {
             completePreview(id, "", "模型配置加载失败");
         }
     }
