@@ -183,15 +183,60 @@ public final class KurumiExpressions {
         return fields(value);
     }
     private JsonElement fields(JsonElement value) {
-        while(take(".")) {
-            String field=identifier();
-            if (field.isEmpty() || !value.isJsonObject() || !value.getAsJsonObject().has(field))
-                throw new IllegalArgumentException("字典字段不存在: "+field);
-            value=value.getAsJsonObject().get(field);
+        while (true) {
+            if (take(".")) {
+                String field=identifier();
+                if (field.isEmpty() || !value.isJsonObject() || !value.getAsJsonObject().has(field))
+                    throw new IllegalArgumentException("字典字段不存在: "+field);
+                value=value.getAsJsonObject().get(field);
+            } else if (take("[")) {
+                JsonElement indexValue=or();
+                expect("]");
+                int index=integer(indexValue);
+                if (!value.isJsonArray() || index<0 || index>=value.getAsJsonArray().size())
+                    throw new IllegalArgumentException("数组下标越界或目标不是数组");
+                value=value.getAsJsonArray().get(index);
+            } else return value;
         }
-        return value;
     }
     private JsonElement call(String name,java.util.List<JsonElement> args) {
+        if ("len".equals(name)) {
+            if (args.size()!=1 || !args.get(0).isJsonArray())
+                throw new IllegalArgumentException("len 需要一个数组变量");
+            return new JsonPrimitive(args.get(0).getAsJsonArray().size());
+        }
+        if ("search_all_block".equals(name)) {
+            if (args.size()!=1) throw new IllegalArgumentException("search_all_block 需要一个方块ID");
+            String id=string(args.get(0));
+            if (!id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+                throw new IllegalArgumentException("方块ID无效");
+            var mc=net.minecraft.client.Minecraft.getInstance();
+            if (mc.player==null || mc.level==null)
+                throw new IllegalArgumentException("未进入游戏世界");
+            var origin=mc.player.blockPosition();
+            java.util.List<net.minecraft.core.BlockPos> positions=new java.util.ArrayList<>();
+            for (var pos : net.minecraft.core.BlockPos.betweenClosed(
+                    origin.offset(-24,-8,-24),origin.offset(24,8,24))) {
+                if (!mc.level.hasChunkAt(pos)) continue;
+                if (!id.equals(net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(
+                        mc.level.getBlockState(pos).getBlock()).toString())) continue;
+                positions.add(pos.immutable());
+            }
+            positions.sort(java.util.Comparator.comparingDouble(pos->pos.distSqr(origin)));
+            com.google.gson.JsonArray result=new com.google.gson.JsonArray();
+            // Bound the result so it fits in one script variable (max 8192 serialized chars).
+            for (var pos : positions) {
+                if (result.size()>=64) break;
+                com.google.gson.JsonObject point=new com.google.gson.JsonObject();
+                point.addProperty("x",pos.getX());
+                point.addProperty("y",pos.getY());
+                point.addProperty("z",pos.getZ());
+                point.addProperty("block_id",id);
+                if (result.toString().length()+point.toString().length()+2>8000) break;
+                result.add(point);
+            }
+            return result;
+        }
         if ("check_inventory".equals(name)) {
             if (args.size()!=1) throw new IllegalArgumentException("背包检查需要一个物品ID");
             String id=string(args.get(0));
