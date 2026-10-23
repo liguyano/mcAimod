@@ -102,6 +102,39 @@ public final class KurumiChestSearch {
         for (String field : new String[]{"x","y","z","block_id"}) result.add(field,e.get(field).deepCopy());
         return result;
     }
+    /** All remembered blocks in this server and dimension; nothing is assumed to still exist. */
+    public static JsonObject listBlocks() {
+        JsonObject output=new JsonObject();
+        JsonArray blocks=new JsonArray();
+        JsonObject entries=entries(load());
+        java.util.List<String> names=new ArrayList<>(entries.keySet());
+        java.util.Collections.sort(names);
+        for (String name:names) {
+            JsonObject saved=entries.getAsJsonObject(name);
+            if (!saved.has("x") || !saved.has("y") || !saved.has("z") || !saved.has("block_id"))
+                continue;
+            JsonObject block=saved.deepCopy();
+            block.addProperty("name",name);
+            blocks.add(block);
+        }
+        output.addProperty("count",blocks.size());
+        output.add("blocks",blocks);
+        return output;
+    }
+
+    /** Zero-based indexing makes traversal possible without array subscripts in the DSL. */
+    public static JsonObject blockAt(int index) {
+        JsonArray blocks=listBlocks().getAsJsonArray("blocks");
+        if (index<0 || index>=blocks.size()) {
+            JsonObject absent=new JsonObject();
+            absent.addProperty("found",false);
+            return absent;
+        }
+        JsonObject found=blocks.get(index).getAsJsonObject().deepCopy();
+        found.addProperty("found",true);
+        return found;
+    }
+
     public static JsonObject rememberAt(String name,int x,int y,int z) {
         Minecraft mc=mc();
         if (mc.player==null || mc.level==null) throw new IllegalArgumentException("未进入世界");
