@@ -120,6 +120,29 @@ public final class KurumiTaskPlanner {
                 if (radius < 4 || radius > 32) throw new IllegalArgumentException("farm radius");
                 statements.add(new Statement(op, new Step("FARM", "", radius, null, null, null, ""),
                         null, List.of(), List.of()));
+            } else if ("EXPR_ASSIGN".equals(op)) {
+                String name = node.get("name").getAsString();
+                String expression = node.get("expression").getAsString();
+                if (!name.matches("[a-z][a-z0-9_]{0,23}") || expression.length() > 500)
+                    throw new IllegalArgumentException("invalid variable assignment");
+                statements.add(new Statement(op, new Step(op, expression, 1,
+                        null, null, null, name), null, List.of(), List.of()));
+            } else if ("EXPR_IF".equals(op) || "EXPR_WHILE".equals(op)) {
+                String expression = node.get("expression").getAsString();
+                if (expression.length() > 500) throw new IllegalArgumentException("condition too long");
+                List<Statement> body = parseStatements(node.getAsJsonArray("body"), depth + 1, budget);
+                List<Statement> other = "EXPR_IF".equals(op) && node.has("else")
+                        ? parseStatements(node.getAsJsonArray("else"), depth + 1, budget) : List.of();
+                statements.add(new Statement(op, new Step(op, expression, 1,
+                        null, null, null, ""), null, body, other));
+            } else if ("EXPR_CALL".equals(op)) {
+                String method = node.get("method").getAsString();
+                String args = node.get("expression").getAsString();
+                if (!java.util.Set.of("goto", "talk", "sleep", "move", "interact",
+                        "equip_main_hand", "place_block").contains(method) || args.length() > 500)
+                    throw new IllegalArgumentException("invalid dynamic call");
+                statements.add(new Statement(op, new Step(method, args, 1,
+                        null, null, null, ""), null, List.of(), List.of()));
             } else if ("SLEEP".equals(op)) {
                 int seconds = node.get("seconds").getAsInt();
                 if (seconds < 1 || seconds > 120) throw new IllegalArgumentException("sleep seconds");
