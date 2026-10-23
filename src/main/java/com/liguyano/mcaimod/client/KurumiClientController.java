@@ -152,6 +152,7 @@ public final class KurumiClientController {
             return;
         }
         requestInFlight = true;
+        KurumiWebMonitor.requestReceived(message);
         long requestGeneration = generation;
         // Acknowledgement is public and uses the player's normal chat account.
 
@@ -402,6 +403,7 @@ public final class KurumiClientController {
 
     /** Public status uses fixed or validated messages, never raw model/network exception text. */
     private static void publicFailure(String reason) {
+        KurumiWebMonitor.requestFailed(reason);
         notice(reason);
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player != null && minecraft.getConnection() != null) {
