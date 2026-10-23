@@ -10,13 +10,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class KurumiExpressionsTest {
     @Test void acceptsTwoHundredStatementsButNotMore() {
-        String twoHundred = "sleep(1)\\n".repeat(200);
-        String twoHundredOne = "sleep(1)\\n".repeat(201);
+        String twoHundred = "sleep(1)\n".repeat(200);
+        String twoHundredOne = "sleep(1)\n".repeat(201);
         assertTrue(KurumiScriptParser.parse(twoHundred).isPresent());
         assertTrue(KurumiScriptParser.parse(twoHundredOne).isEmpty());
-        String expanded = "repeat(20):\\n" + "    sleep(1)\\n".repeat(10);
+        String expanded = "repeat(20):\n" + "    sleep(1)\n".repeat(10);
         assertTrue(KurumiScriptParser.parse(expanded).isPresent());
-        String tooManyExpanded = "repeat(20):\\n" + "    sleep(1)\\n".repeat(11);
+        String tooManyExpanded = "repeat(20):\n" + "    sleep(1)\n".repeat(11);
         assertTrue(KurumiScriptParser.parse(tooManyExpanded).isEmpty());
     }
 
