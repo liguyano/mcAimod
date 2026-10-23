@@ -310,7 +310,9 @@ public final class KurumiClientController {
                         + " " + KurumiChestSearch.contextForModel()
                         + "。用户说回家、去某个已保存地点时，先核对维度与名称，"
                         + "使用 goto(x,y,z) 前往对应坐标；仅在确认抵达后才能声称到达。"
-                        + "多步骤指令须逐步执行，不能把发出寻路命令当成已经到达。"));
+                        + "多步骤指令须逐步执行，不能把发出寻路命令当成已经到达。"
+                        + "只有主人发送完整指令“去 地点名”（去后是空格）才走本地快捷寻路；"
+                        + "“去仓库”“前往仓库”“回家”等交给你根据已保存地点自行规划。"));
         conversation.add(new ChatMessage("system",
                 "最高优先级输出规则：只允许一个 JSON 对象，type 必须是 action，action 必须是 EXECUTE_SCRIPT，"
                 + "必须有 reply 和 script 字符串。禁止 type=tool、type=chat、EXECUTE_PLAN、EXECUTE_PROGRAM 和其他旧动作。"
