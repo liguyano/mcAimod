@@ -27,7 +27,7 @@ sourceSets.main.resources {
 }
 
 repositories {
-    // Add here additional repositories if required by some of the dependencies below.
+    mavenCentral()
 }
 
 base {
@@ -111,6 +111,13 @@ configurations {
 }
 
 dependencies {
+    // Official DashScope Java SDK for the Qwen multimodal API.
+    jarJar(implementation('com.alibaba:dashscope-sdk-java:2.23.3')) {
+        version {
+            strictly '[2.23.3]'
+            prefer '2.23.3'
+        }
+    }
     testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     // Minecraft supplies Gson at runtime; plain JUnit launches need it explicitly.
