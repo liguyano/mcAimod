@@ -97,6 +97,30 @@ public final class KurumiWebActions {
                 talk(find_nearest_block("minecraft:furnace"))、talk(get_inventory())、
                 talk(inspect_container())、talk(inspect_slot(0))。\n                观察结果可以直接保存为变量，例如 status = get_player_status()、\n                target = find_nearest_block("minecraft:furnace")、slot = inspect_slot(0)；\n                使用 status.health、target.x 等点号读取字段，需要公屏输出才调用 talk(status)。
                 只调用 talk(find_nearest_block(...)) 不会移动；保存查询结果为变量后可调用 goto(target.x,target.y,target.z)。\n                interact 只对附近方块交互。
+                常见任务完整模板（按实际需求选用，不能虚构已完成）：
+                打开附近木门：interact("minecraft:oak_door")。只有确认门的实际方块类型后才使用对应ID；
+                interact 是附近方块右键，不仅用于箱子和熔炉。铁门不能直接右键打开。
+                熔炉烧羊肉：
+                interact("minecraft:furnace")
+                put_item("minecraft:cherry_planks",8,"fuel")
+                put_item("minecraft:mutton",8,"input")
+                连锁砍樱花树，拾取三组原木，再放到附近箱子：
+                chain_on()
+                while check_inventory("minecraft:cherry_log") < 192:
+                    mine("minecraft:cherry_log")
+                    pickup_item_all("minecraft:cherry_log")
+                    sleep(2)
+                chain_off()
+                if check_inventory("minecraft:cherry_log") >= 192:
+                    target = find_nearest_block("minecraft:chest")
+                    if target.found:
+                        goto(target.x,target.y,target.z)
+                        chest_put_item_all("minecraft:cherry_log")
+                pickup_item_all("minecraft:cherry_log") 每轮拾取最多15秒，无进展目标会跳过；
+                背包中一组=64个，三组=192个。while 最多20轮，整个伪代码任务最多5分钟。
+                找到箱子坐标不等于已打开箱子，goto 也不保证最终到达，不能虚构成功。
+                用户要求去水边时，不要把水方块内部当安全落脚点；当前不具备自动选水边安全位置的专门工具，
+                不要胡编不存在的 find_safe_position、goto_water_edge 等函数。
                 不要猜测坐标、槽位和观察结果。优先输出可执行的保守脚本。
                 """;
             String groundedMemory = "游戏实时坐标、已保存地点及永久方块坐标（以此为准，禁止编造）："
@@ -104,41 +128,84 @@ public final class KurumiWebActions {
                     + KurumiChestSearch.contextForModel()
                     + "。当用户提到已保存的方块名称，可以使用 get_remembered_block(名称) 获取最新坐标；"
                     + "保存的坐标只是历史记录，不能保证方块目前还存在。";
-            PROVIDER.chat(profile.get(), List.of(new ChatMessage("system", rules),
+            requestPreview(profile.get(), List.of(new ChatMessage("system", rules),
                     new ChatMessage("system", groundedMemory),
-                    new ChatMessage("user", requirement)))
-                    .whenComplete((reply, error) -> mc.execute(() -> {
-                        if (error != null) {
-                            Throwable cause = error;
-                            int depth = 0;
-                            while (cause.getCause() != null && cause.getCause() != cause && depth++ < 12)
-                                cause = cause.getCause();
-                            String detail = cause.getClass().getSimpleName() + ": "
-                                    + (cause.getMessage() == null ? "(无详细信息)" : cause.getMessage());
-                            // Do not reveal keys or authorization tokens in errors visible in Web UI.
-                            detail = detail.replaceAll("(?i)(authorization\\s*[:=]\\s*bearer\\s+)[^\\s,;]+", "$1[REDACTED]")
-                                    .replaceAll("(?i)(api[_-]?key\\s*[:=]\\s*)[^\\s,;]+", "$1[REDACTED]");
-                            detail = detail.substring(0, Math.min(detail.length(), 400));
-                            KurumiWebMonitor.log("Web AI 生成失败：" + detail);
-                            completePreview(id, "", "模型请求失败：" + detail);
-                            return;
-                        }
-                        try {
-                            JsonObject json = JsonParser.parseString(reply).getAsJsonObject();
-                            String script = json.get("script").getAsString();
-                            boolean valid = script.length() <= 8192 && KurumiScriptParser.parse(script).isPresent();
-                            boolean wantsChain = requirement.contains("连锁") || requirement.toLowerCase(java.util.Locale.ROOT).contains("vein mine");
-                            boolean missingChain = wantsChain && !script.contains("chain_on()");
-                            if (missingChain) valid = false;
-                            completePreview(id, script.length() > 8192 ? script.substring(0, 8192) : script,
-                                    valid ? "" : missingChain ? "用户要求连锁，但 AI 未生成 chain_on()；请重新生成或手动补上" : "模型生成脚本未通过解释器校验");
-                        } catch (RuntimeException exception) {
-                            completePreview(id, "", "模型没有返回合法的 script JSON");
-                        }
-                    }));
+                    new ChatMessage("user", requirement)), requirement, id, 0);
+
         } catch (Exception e) {
             completePreview(id, "", "模型配置加载失败");
         }
+    }
+
+    private static final int MAX_PREVIEW_RETRIES = 2;
+
+    /** Retry only malformed or unsupported model output, never execute generated code. */
+    private static void requestPreview(com.liguyano.mcaimod.model.ModelProfile profile,
+                                       List<ChatMessage> messages, String requirement,
+                                       long id, int retry) {
+        PROVIDER.chat(profile, messages).whenComplete((reply, error) ->
+                Minecraft.getInstance().execute(() -> {
+                    synchronized (KurumiWebActions.class) {
+                        if (id != generationId) return;
+                    }
+                    if (error != null) {
+                        Throwable cause = error;
+                        int depth = 0;
+                        while (cause.getCause() != null && cause.getCause() != cause && depth++ < 12)
+                            cause = cause.getCause();
+                        String detail = cause.getClass().getSimpleName() + ": "
+                                + (cause.getMessage() == null ? "(无详细信息)" : cause.getMessage());
+                        detail = detail.replaceAll("(?i)(authorization\\s*[:=]\\s*bearer\\s+)[^\\s,;]+", "$1[REDACTED]")
+                                .replaceAll("(?i)(api[_-]?key\\s*[:=]\\s*)[^\\s,;]+", "$1[REDACTED]");
+                        detail = detail.substring(0, Math.min(detail.length(), 400));
+                        KurumiWebMonitor.log("Web AI 生成失败：" + detail);
+                        completePreview(id, "", "模型请求失败：" + detail);
+                        return;
+                    }
+                    String script = "";
+                    String reason = "";
+                    try {
+                        JsonObject json = JsonParser.parseString(reply).getAsJsonObject();
+                        script = json.get("script").getAsString();
+                        if (script.isBlank()) reason = "script 字段为空";
+                        else if (script.length() > 8192) reason = "script 超过8192字限制";
+                        else if (KurumiScriptParser.parse(script).isEmpty())
+                            reason = "script 不符合当前白名单伪代码语法或安全限制";
+                        else {
+                            boolean wantsChain = requirement.contains("连锁")
+                                    || requirement.toLowerCase(java.util.Locale.ROOT).contains("vein mine");
+                            if (wantsChain && !script.contains("chain_on()"))
+                                reason = "用户要求连锁挖掘，但没有调用 chain_on()";
+                        }
+                    } catch (RuntimeException exception) {
+                        reason = "未返回合法的 {\"script\":\"...\"} JSON 对象";
+                    }
+                    if (reason.isEmpty()) {
+                        KurumiWebMonitor.log("Web AI 伪代码生成成功（纠错次数 " + retry + "）");
+                        completePreview(id, script, "");
+                        return;
+                    }
+                    KurumiWebMonitor.log("Web AI 第 " + (retry + 1) + " 次生成校验失败：" + reason);
+                    if (retry < MAX_PREVIEW_RETRIES) {
+                        synchronized (KurumiWebActions.class) {
+                            if (id != generationId) return;
+                            previewStatus = "纠错中（" + (retry + 1) + "/" + MAX_PREVIEW_RETRIES + "）";
+                        }
+                        var next = new java.util.ArrayList<>(messages);
+                        // Model output is untrusted; quote only a bounded excerpt for repair.
+                        next.add(new ChatMessage("assistant", reply == null ? "" :
+                                reply.substring(0, Math.min(reply.length(), 3000))));
+                        next.add(new ChatMessage("user",
+                                "上一条伪代码未通过本地校验：" + reason
+                                + "。请重新输出唯一一个 JSON 对象 {\"script\":\"...\"}，"
+                                + "只用已经列出的函数及四空格缩进，字符串中的换行按 JSON 转义。"
+                                + "不要 Markdown、不要解释、不要虚构工具。保留原任务目标。"));
+                        requestPreview(profile, next, requirement, id, retry + 1);
+                    } else {
+                        completePreview(id, script.length() > 8192 ? script.substring(0, 8192) : script,
+                                "自动纠错" + MAX_PREVIEW_RETRIES + "次后仍失败：" + reason);
+                    }
+                }));
     }
 
     private static synchronized void completePreview(long id, String script, String error) {
