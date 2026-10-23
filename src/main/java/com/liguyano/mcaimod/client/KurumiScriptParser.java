@@ -102,7 +102,7 @@ public final class KurumiScriptParser {
             String code = lines.get(cursor.at++).code();
             JsonObject node = new JsonObject();
             node.addProperty("line", lines.get(cursor.at - 1).number());
-            if (code.matches("repeat\\\\([1-9][0-9]?\\\\):")) {
+            if (code.matches("repeat\\([1-9][0-9]?\\):")) {
                 int repetitions = Integer.parseInt(code.substring(7, code.length() - 2));
                 if (repetitions > 20) throw new IllegalArgumentException("repeat count");
                 if (cursor.at >= lines.size() || lines.get(cursor.at).indent() != indent + 1)
