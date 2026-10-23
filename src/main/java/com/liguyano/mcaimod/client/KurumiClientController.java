@@ -380,6 +380,13 @@ public final class KurumiClientController {
                             return;
                         }
                     }
+                    if (decision.program().isEmpty()) {
+                        KurumiWebMonitor.requestDispatched(decision.plan().isPresent()
+                                ? "组合任务" : decision.target().startsWith("collect_store:")
+                                ? "长任务：采集并存箱" : decision.action().isPresent()
+                                ? decision.action().get().type().name() : decision.target().isEmpty()
+                                ? "方块操作" : decision.target());
+                    }
                     if (decision.action().isPresent() && (decision.action().get().type() == KurumiActionValidator.Type.PICKUP || decision.action().get().type() == KurumiActionValidator.Type.PICKUP_ALL || decision.action().get().type() == KurumiActionValidator.Type.PICKUP_ITEM_ALL)) {
                         minecraft.getConnection().sendChat("" + "已开始前往掉落物位置，尚未确认拾取完成。");
                         return;
