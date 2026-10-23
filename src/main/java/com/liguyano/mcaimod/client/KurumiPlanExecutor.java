@@ -235,10 +235,13 @@ public final class KurumiPlanExecutor {
             }
             case VERIFY -> {
                 if (s.action().startsWith("ATTACK_") && now - r.stepStarted() < 700) return;
-                if (s.action().equals("PICKUP_ITEM_ALL")
-                        && !KurumiPickupBridge.busy()
-                        && !KurumiPickupBridge.hasNearby(s.itemId())) {
-                    KurumiWebMonitor.log("可选拾取已结束：没有剩余可见目标，继续后续步骤");
+                if (s.action().equals("PICKUP_ITEM_ALL")) {
+                    // Pickup rounds are best effort: unreachable drops or the 15-second
+                    // limit must not trap the enclosing pseudo-code task in VERIFY.
+                    if (KurumiPickupBridge.busy()) return;
+                    int collected = KurumiTaskChecks.inventoryCount(s.itemId()) - r.inventoryBefore();
+                    KurumiWebMonitor.log("本轮拾取已结束，背包增加 " + Math.max(0, collected)
+                            + " 个 " + s.itemId() + "；继续下一条指令");
                     next(r);
                     return;
                 }
