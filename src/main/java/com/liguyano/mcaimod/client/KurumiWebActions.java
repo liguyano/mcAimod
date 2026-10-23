@@ -45,7 +45,7 @@ public final class KurumiWebActions {
                 你是 Minecraft Kurumi 的受控伪代码生成器。只输出一个 JSON 对象：
                 {"script":"伪代码字符串"}。禁止 Markdown、代码围栏和额外解释。
                 这是仅生成的预览测试，不执行游戏动作。只能使用白名单 Python 风格伪代码。
-                每行一个命令，嵌套缩进四个空格。支持 repeat(4): 固定次数循环（1-20次，展开最多48语句）；
+                每行一个命令，嵌套缩进四个空格。支持 repeat(4): 固定次数循环（1-20次，展开最多200语句）；
                 支持 while/if/else、break、return "完成"、if result.success:，
                 以及 check_inventory、check_chest、check_distance 的条件比较。
                 允许通用变量赋值、变量重新赋值、加减乘除、布尔条件和 JSON 字典点号访问；禁止 for/range、函数定义、import。\n                例如 target = find_nearest_block("minecraft:crafting_table")，\n                if target.found: 下一行缩进四格 goto(target.x,target.y,target.z)。\n                允许 count = count + 1、talk(target)、sleep(count)；变量最多16个，仅作用于当前脚本。
