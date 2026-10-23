@@ -140,6 +140,31 @@ class KurumiExpressionsTest {
                 """).isPresent());
     }
 
+    @Test void expressionIndexesCoordinateLists() {
+        var values=new java.util.HashMap<String,com.google.gson.JsonElement>();
+        var list=new com.google.gson.JsonArray();
+        var first=new com.google.gson.JsonObject();
+        first.addProperty("x",100);
+        first.addProperty("y",64);
+        first.addProperty("z",200);
+        list.add(first);
+        values.put("blocks",list);
+        values.put("i",new com.google.gson.JsonPrimitive(0));
+        assertEquals(1, KurumiExpressions.integer(KurumiExpressions.evaluate("len(blocks)",values)));
+        assertEquals(100, KurumiExpressions.integer(KurumiExpressions.evaluate("blocks[i].x",values)));
+        assertEquals(200, KurumiExpressions.integer(KurumiExpressions.evaluate("blocks[0].z",values)));
+        assertThrows(IllegalArgumentException.class,
+                ()->KurumiExpressions.evaluate("blocks[1].x",values));
+        assertTrue(KurumiScriptParser.parse("""
+                blocks = search_all_block("minecraft:chest")
+                i = 0
+                while i < len(blocks):
+                    point = blocks[i]
+                    talk(point.x)
+                    i = i + 1
+                """).isPresent());
+    }
+
     @Test void numericAndStringArgs() {
         Map<String, JsonElement> vars=Map.of();
         var args=KurumiExpressions.arguments("\"minecraft:oak_log\", 4",vars);

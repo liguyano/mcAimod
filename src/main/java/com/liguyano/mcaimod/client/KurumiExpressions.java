@@ -183,15 +183,35 @@ public final class KurumiExpressions {
         return fields(value);
     }
     private JsonElement fields(JsonElement value) {
-        while(take(".")) {
-            String field=identifier();
-            if (field.isEmpty() || !value.isJsonObject() || !value.getAsJsonObject().has(field))
-                throw new IllegalArgumentException("字典字段不存在: "+field);
-            value=value.getAsJsonObject().get(field);
+        while (true) {
+            if (take(".")) {
+                String field=identifier();
+                if (field.isEmpty() || !value.isJsonObject() || !value.getAsJsonObject().has(field))
+                    throw new IllegalArgumentException("字典字段不存在: "+field);
+                value=value.getAsJsonObject().get(field);
+            } else if (take("[")) {
+                JsonElement indexValue=or();
+                expect("]");
+                int index=integer(indexValue);
+                if (!value.isJsonArray() || index<0 || index>=value.getAsJsonArray().size())
+                    throw new IllegalArgumentException("数组下标越界或目标不是数组");
+                value=value.getAsJsonArray().get(index);
+            } else return value;
         }
-        return value;
     }
     private JsonElement call(String name,java.util.List<JsonElement> args) {
+        if ("len".equals(name)) {
+            if (args.size()!=1 || !args.get(0).isJsonArray())
+                throw new IllegalArgumentException("len 需要一个数组变量");
+            return new JsonPrimitive(args.get(0).getAsJsonArray().size());
+        }
+        if ("search_all_block".equals(name)) {
+            if (args.size()!=1) throw new IllegalArgumentException("search_all_block 需要一个方块ID");
+            String id=string(args.get(0));
+            if (!id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+                throw new IllegalArgumentException("方块ID无效");
+            return KurumiBlockScanner.search(id);
+        }
         if ("check_inventory".equals(name)) {
             if (args.size()!=1) throw new IllegalArgumentException("背包检查需要一个物品ID");
             String id=string(args.get(0));
