@@ -33,6 +33,9 @@ public final class KurumiScriptParser {
     private static final Pattern TAKE_ITEM = Pattern.compile("take_item\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})\\)");
     private static final Pattern PUT_ITEM = Pattern.compile("put_item\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})(?:,\\s*\"(input|fuel|auto)\")?\\)");
     private static final Pattern MOVE = Pattern.compile("move\\(\\\"(forward|back|left|right)\\\",\\s*(\\d{1,2})\\)");
+    private static final Pattern DICT_FIND = Pattern.compile("([a-z][a-z0-9_]{0,23})\\s*=\\s*find_nearest_block\\(\"([a-z0-9_.:-]+)\"\\)");
+    private static final Pattern DICT_GOTO = Pattern.compile("goto\\(([a-z][a-z0-9_]{0,23})\\[\"x\"\\],\\s*([a-z][a-z0-9_]{0,23})\\[\"y\"\\],\\s*([a-z][a-z0-9_]{0,23})\\[\"z\"\\]\\)");
+    private static final Pattern DICT_TALK = Pattern.compile("talk\\(([a-z][a-z0-9_]{0,23})\\)");
     private static final Pattern GOTO_NAMED = Pattern.compile("goto\\(\"([^\"]{1,24})\"\\)");
     private static final Pattern GOTO = Pattern.compile("goto\\((-?\\d{1,8}),\\s*(-?\\d{1,4}),\\s*(-?\\d{1,8})\\)");
     private static final Pattern RETURN = Pattern.compile("return\\s+\"[^\"\\r\\n]{0,100}\"");
@@ -182,6 +185,21 @@ public final class KurumiScriptParser {
                 }
                 node.addProperty("op", "ACTION");
                 node.add("step", step);
+            } else if (DICT_FIND.matcher(code).matches()) {
+                Matcher m = DICT_FIND.matcher(code); m.matches();
+                node.addProperty("op", "DICT_FIND");
+                node.addProperty("name", m.group(1));
+                node.addProperty("block_id", m.group(2));
+            } else if (DICT_GOTO.matcher(code).matches()) {
+                Matcher m = DICT_GOTO.matcher(code); m.matches();
+                if (!m.group(1).equals(m.group(2)) || !m.group(1).equals(m.group(3)))
+                    throw new IllegalArgumentException("goto coordinate dictionaries must match");
+                node.addProperty("op", "DICT_GOTO");
+                node.addProperty("name", m.group(1));
+            } else if (DICT_TALK.matcher(code).matches()) {
+                Matcher m = DICT_TALK.matcher(code); m.matches();
+                node.addProperty("op", "DICT_TALK");
+                node.addProperty("name", m.group(1));
             } else if (MOVE.matcher(code).matches()) {
                 Matcher move = MOVE.matcher(code); move.matches();
                 JsonObject step = new JsonObject();
