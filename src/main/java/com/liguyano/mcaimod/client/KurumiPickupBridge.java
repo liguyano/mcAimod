@@ -4,6 +4,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.item.ItemEntity;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Set;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
@@ -12,7 +14,13 @@ public final class KurumiPickupBridge {
     private static String activeFilter;
     private static long startedAt;
     private static int ticks;
+    private static final long PICKUP_LIMIT_MS = 15_000L;
+    private static final long STUCK_LIMIT_MS = 5_000L;
+    private static final double MIN_PROGRESS_SQUARED = 0.25;
+    private static final Set<Integer> skippedTargets = new HashSet<>();
     private static int lastTargetId = -1;
+    private static long lastProgressAt;
+    private static double bestDistanceSquared;
 
     public static void install() {
         NeoForge.EVENT_BUS.addListener(KurumiPickupBridge::onTick);
@@ -23,6 +31,9 @@ public final class KurumiPickupBridge {
     public static void cancel() {
         activeFilter = null;
         lastTargetId = -1;
+        skippedTargets.clear();
+        lastProgressAt = 0;
+        bestDistanceSquared = Double.POSITIVE_INFINITY;
     }
 
     public static BaritoneBridge.Result pickupAll(String itemId) {
@@ -38,7 +49,10 @@ public final class KurumiPickupBridge {
         startedAt = System.currentTimeMillis();
         ticks = 0;
         lastTargetId = -1;
-        return new BaritoneBridge.Result(true, "开始连续拾取附近掉落物，直到范围内没有目标或超时");
+        skippedTargets.clear();
+        lastProgressAt = startedAt;
+        bestDistanceSquared = Double.POSITIVE_INFINITY;
+        return new BaritoneBridge.Result(true, "开始拾取附近掉落物，本轮最多15秒，卡住的目标会跳过");
     }
 
     public static boolean hasNearby(String itemId) {
@@ -57,6 +71,13 @@ public final class KurumiPickupBridge {
                 .toList();
     }
 
+    private static void finish(Minecraft mc, String message) {
+        cancel();
+        BaritoneBridge.stop();
+        KurumiWebMonitor.log("pickup_item_all: " + message);
+        mc.getConnection().sendChat(message);
+    }
+
     private static void onTick(ClientTickEvent.Post event) {
         if (activeFilter == null) return;
         Minecraft mc = Minecraft.getInstance();
@@ -65,28 +86,45 @@ public final class KurumiPickupBridge {
             return;
         }
         if (++ticks % 20 != 1) return;
-        if (System.currentTimeMillis() - startedAt > 120000) {
-            cancel();
-            BaritoneBridge.stop();
-            mc.getConnection().sendChat("连续拾取已超时，已停止。");
+        long now = System.currentTimeMillis();
+        if (now - startedAt >= PICKUP_LIMIT_MS) {
+            finish(mc, "本轮拾取已达到15秒上限，继续后续任务。");
             return;
         }
-        var targets = nearby(mc, activeFilter);
+        var targets = nearby(mc, activeFilter).stream()
+                .filter(target -> !skippedTargets.contains(target.getId()))
+                .toList();
         if (targets.isEmpty()) {
-            cancel();
-            BaritoneBridge.stop();
-            mc.getConnection().sendChat("附近已没有符合条件的可见掉落物，拾取任务结束。");
+            finish(mc, skippedTargets.isEmpty()
+                    ? "附近没有剩余符合条件的可见掉落物，本轮拾取结束。"
+                    : "可见掉落物已拾取或无法接近的目标已跳过，本轮拾取结束。");
             return;
         }
         ItemEntity target = targets.get(0);
-        if (target.getId() != lastTargetId || ticks % 100 == 1) {
+        int targetId = target.getId();
+        double distance = target.distanceToSqr(mc.player);
+        boolean newTarget = targetId != lastTargetId;
+        if (newTarget) {
+            lastTargetId = targetId;
+            bestDistanceSquared = distance;
+            lastProgressAt = now;
+        } else if (distance + MIN_PROGRESS_SQUARED < bestDistanceSquared) {
+            bestDistanceSquared = distance;
+            lastProgressAt = now;
+        } else if (now - lastProgressAt >= STUCK_LIMIT_MS) {
+            skippedTargets.add(targetId);
+            lastTargetId = -1;
+            KurumiWebMonitor.log("pickup_item_all: 5秒没有接近掉落物，跳过实体 " + targetId);
+            BaritoneBridge.stop();
+            return;
+        }
+        if (newTarget || ticks % 100 == 1) {
             var result = BaritoneBridge.gotoCoordinates(target.getBlockX(), target.getBlockY(), target.getBlockZ());
             if (!result.success()) {
-                cancel();
-                mc.getConnection().sendChat("拾取导航失败：" + result.message());
-                return;
+                skippedTargets.add(targetId);
+                lastTargetId = -1;
+                KurumiWebMonitor.log("pickup_item_all: 寻路失败，跳过实体 " + targetId + ": " + result.message());
             }
-            lastTargetId = target.getId();
         }
     }
 
