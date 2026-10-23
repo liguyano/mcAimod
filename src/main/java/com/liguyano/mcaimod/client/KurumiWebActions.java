@@ -99,7 +99,13 @@ public final class KurumiWebActions {
                 只调用 talk(find_nearest_block(...)) 不会移动；保存查询结果为变量后可调用 goto(target.x,target.y,target.z)。\n                interact 只对附近方块交互。
                 不要猜测坐标、槽位和观察结果。优先输出可执行的保守脚本。
                 """;
+            String groundedMemory = "游戏实时坐标、已保存地点及永久方块坐标（以此为准，禁止编造）："
+                    + KurumiLocationMemory.contextForModel() + " "
+                    + KurumiChestSearch.contextForModel()
+                    + "。当用户提到已保存的方块名称，可以使用 get_remembered_block(名称) 获取最新坐标；"
+                    + "保存的坐标只是历史记录，不能保证方块目前还存在。";
             PROVIDER.chat(profile.get(), List.of(new ChatMessage("system", rules),
+                    new ChatMessage("system", groundedMemory),
                     new ChatMessage("user", requirement)))
                     .whenComplete((reply, error) -> mc.execute(() -> {
                         if (error != null) {
