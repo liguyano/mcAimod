@@ -307,6 +307,7 @@ public final class KurumiClientController {
         conversation.add(new ChatMessage("system",
                 "实时游戏坐标与已保存地点（以本条为准，不能凭空编造）："
                         + KurumiLocationMemory.contextForModel()
+                        + " " + KurumiChestSearch.contextForModel()
                         + "。用户说回家、去某个已保存地点时，先核对维度与名称，"
                         + "使用 goto(x,y,z) 前往对应坐标；仅在确认抵达后才能声称到达。"
                         + "多步骤指令须逐步执行，不能把发出寻路命令当成已经到达。"));
