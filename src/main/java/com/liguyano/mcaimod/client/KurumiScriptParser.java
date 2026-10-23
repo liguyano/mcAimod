@@ -54,7 +54,7 @@ public final class KurumiScriptParser {
                 String code = raw.substring(n).stripTrailing();
                 lines.add(new Line(n / 4, code, sourceLine));
             }
-            if (lines.isEmpty() || lines.size() > 48 || lines.get(0).indent() != 0)
+            if (lines.isEmpty() || lines.size() > 200 || lines.get(0).indent() != 0)
                 return Optional.empty();
             Cursor cursor = new Cursor();
             JsonArray body = block(lines, cursor, 0, 0);
@@ -81,7 +81,7 @@ public final class KurumiScriptParser {
                 JsonArray body = block(lines, cursor, indent + 1, depth + 1);
                 for (int i = 0; i < repetitions; i++) {
                     for (var element : body) {
-                        if (out.size() >= 48) throw new IllegalArgumentException("expanded repeat too large");
+                        if (out.size() >= 200) throw new IllegalArgumentException("expanded repeat too large");
                         out.add(element.deepCopy());
                     }
                 }

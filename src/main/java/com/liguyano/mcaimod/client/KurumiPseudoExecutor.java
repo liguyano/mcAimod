@@ -11,7 +11,7 @@ import net.neoforged.neoforge.common.NeoForge;
 public final class KurumiPseudoExecutor {
     private static final long TIMEOUT = 300_000L;
     private static final int MAX_ITERATIONS = 20;
-    private static final int MAX_ACTIONS = 160;
+    private static final int MAX_ACTIONS = 200;
     private static final class Frame {
         final List<KurumiTaskPlanner.Statement> statements;
         final KurumiTaskPlanner.Statement loop;
