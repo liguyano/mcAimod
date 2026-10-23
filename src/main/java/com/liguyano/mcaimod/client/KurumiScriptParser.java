@@ -31,7 +31,7 @@ public final class KurumiScriptParser {
     private static final Pattern PLACE_BLOCK = Pattern.compile("place_block\\(\"([a-z0-9_.:-]+)\"(?:,\\s*(-?\\d{1,8}),\\s*(-?\\d{1,4}),\\s*(-?\\d{1,8}))?\\)");
     private static final Pattern INTERACT = Pattern.compile("interact\\(\"([a-z0-9_.:-]+)\"\\)");
     private static final Pattern TAKE_ITEM = Pattern.compile("take_item\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})\\)");
-    private static final Pattern PUT_ITEM = Pattern.compile("put_item\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})(?:,\\s*\"(input|fuel|auto)\")?\\)");
+    private static final Pattern PUT_ITEM = Pattern.compile("put_item\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})(?:,\\s*\"(input|fuel|auto|grid_[1-9])\")?\\)");
     private static final Pattern MOVE = Pattern.compile("move\\(\\\"(forward|back|left|right)\\\",\\s*(\\d{1,2})\\)");
     private static final Pattern VARIABLE_ASSIGN = Pattern.compile("([a-z][a-z0-9_]{0,23})\\s*=\\s*(.+)");
     private static final Pattern VARIABLE_CALL = Pattern.compile("(goto|talk|sleep|move|interact|equip_main_hand|place_block|break_block|search_chests|take_from_memory)\\((.*)\\)");
