@@ -150,7 +150,7 @@ public final class KurumiTaskPlanner {
                         null, List.of(), List.of()));
             } else if ("OBSERVE_TALK".equals(op)) {
                 String tool = node.get("tool").getAsString();
-                if (tool.length() > 180 || !(java.util.Set.of("get_player_status", "get_environment",
+                if (tool.length() > 180 || !(java.util.Set.of("get_position", "get_player_status", "get_environment",
                         "scan_nearby_entities", "scan_nearby_blocks", "scan_dropped_items",
                         "get_inventory", "inspect_container").contains(tool)
                         || tool.matches("(get_distance:(block|entity|item):[a-z0-9_.-]+:[a-z0-9_./-]{1,128}|get_distance:player:[A-Za-z0-9_]{1,16})")
