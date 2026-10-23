@@ -260,7 +260,7 @@ public final class KurumiClientController {
                         + "不可覆盖已有方块。place_block 是在世界里摆放，与 put_item 往容器存放不同。"
                         + "其他动作：attack(\\\"minecraft:zombie\\\") 与 attack_mob 同义，attack(\\\"玩家名\\\") 与 attack_player 同义；attack_mob、attack_player、tpa_request、tpa_request_to、tpa_accept。"
                         + "箱子搜索：search_chests(\\\"minecraft:diamond\\\") 会在附近已加载24格范围内依次寻路打开最多24个普通箱子，"
-                        + "搜索不会取物；脚本等待完成后 result = get_chest_search_result() 返回报告。"
+                        + "搜索不会取物；脚本等待完成后 report = get_chest_search_result() 返回报告。"
                         + "已检查箱子自动记为 chest_1、chest_2 等，每次搜索可能更新这些名称。"
                         + "方块记忆：saved = remember_block(\\\"矿场箱子\\\",x,y,z)，"
                         + "point = get_remembered_block(\\\"矿场箱子\\\")，通过 point.x、point.y、point.z 读取。"
