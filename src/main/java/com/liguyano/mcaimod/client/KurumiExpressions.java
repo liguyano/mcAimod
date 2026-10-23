@@ -210,32 +210,7 @@ public final class KurumiExpressions {
             String id=string(args.get(0));
             if (!id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
                 throw new IllegalArgumentException("方块ID无效");
-            var mc=net.minecraft.client.Minecraft.getInstance();
-            if (mc.player==null || mc.level==null)
-                throw new IllegalArgumentException("未进入游戏世界");
-            var origin=mc.player.blockPosition();
-            java.util.List<net.minecraft.core.BlockPos> positions=new java.util.ArrayList<>();
-            for (var pos : net.minecraft.core.BlockPos.betweenClosed(
-                    origin.offset(-24,-8,-24),origin.offset(24,8,24))) {
-                if (!mc.level.hasChunkAt(pos)) continue;
-                if (!id.equals(net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(
-                        mc.level.getBlockState(pos).getBlock()).toString())) continue;
-                positions.add(pos.immutable());
-            }
-            positions.sort(java.util.Comparator.comparingDouble(pos->pos.distSqr(origin)));
-            com.google.gson.JsonArray result=new com.google.gson.JsonArray();
-            // Bound the result so it fits in one script variable (max 8192 serialized chars).
-            for (var pos : positions) {
-                if (result.size()>=64) break;
-                com.google.gson.JsonObject point=new com.google.gson.JsonObject();
-                point.addProperty("x",pos.getX());
-                point.addProperty("y",pos.getY());
-                point.addProperty("z",pos.getZ());
-                point.addProperty("block_id",id);
-                if (result.toString().length()+point.toString().length()+2>8000) break;
-                result.add(point);
-            }
-            return result;
+            return KurumiBlockScanner.search(id);
         }
         if ("check_inventory".equals(name)) {
             if (args.size()!=1) throw new IllegalArgumentException("背包检查需要一个物品ID");
