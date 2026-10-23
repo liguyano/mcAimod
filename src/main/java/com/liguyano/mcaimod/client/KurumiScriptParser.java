@@ -33,6 +33,8 @@ public final class KurumiScriptParser {
     private static final Pattern TAKE_ITEM = Pattern.compile("take_item\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})\\)");
     private static final Pattern PUT_ITEM = Pattern.compile("put_item\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})(?:,\\s*\"(input|fuel|auto)\")?\\)");
     private static final Pattern MOVE = Pattern.compile("move\\(\\\"(forward|back|left|right)\\\",\\s*(\\d{1,2})\\)");
+    private static final Pattern VARIABLE_ASSIGN = Pattern.compile("([a-z][a-z0-9_]{0,23})\\s*=\\s*(.+)");
+    private static final Pattern VARIABLE_CALL = Pattern.compile("(goto|talk|sleep|move|interact|equip_main_hand|place_block)\\((.*)\\)");
     private static final Pattern GOTO_NAMED = Pattern.compile("goto\\(\"([^\"]{1,24})\"\\)");
     private static final Pattern GOTO = Pattern.compile("goto\\((-?\\d{1,8}),\\s*(-?\\d{1,4}),\\s*(-?\\d{1,8})\\)");
     private static final Pattern RETURN = Pattern.compile("return\\s+\"[^\"\\r\\n]{0,100}\"");
@@ -42,7 +44,6 @@ public final class KurumiScriptParser {
         if (source == null || source.length() > 8192) return Optional.empty();
         try {
             var lines = new java.util.ArrayList<Line>();
-            var constants = new java.util.HashMap<String, Integer>();
             int sourceLine = 0;
             for (String raw : source.replace("\r", "").split("\n")) {
                 sourceLine++;
@@ -51,37 +52,6 @@ public final class KurumiScriptParser {
                 while (n < raw.length() && raw.charAt(n) == ' ') n++;
                 if (n % 4 != 0 || raw.indexOf('\t') >= 0) return Optional.empty();
                 String code = raw.substring(n).stripTrailing();
-                Matcher assignment = ASSIGN.matcher(code);
-                if (assignment.matches()) {
-                    if (n != 0 || constants.containsKey(assignment.group(1))
-                            || constants.size() >= 8 || "result".equals(assignment.group(1)))
-                        return Optional.empty();
-                    int value = Integer.parseInt(assignment.group(2));
-                    if (value < 1 || value > 2304) return Optional.empty();
-                    constants.put(assignment.group(1), value);
-                    continue;
-                }
-                String expression = code.startsWith("while ") && code.endsWith(":")
-                        ? code.substring(6, code.length() - 1).strip()
-                        : code.startsWith("if ") && code.endsWith(":")
-                        ? code.substring(3, code.length() - 1).strip() : "";
-                Matcher comparison = COUNT_VAR.matcher(expression);
-                if (comparison.matches()) {
-                    Integer value = constants.get(comparison.group(4));
-                    if (value == null) return Optional.empty();
-                    String replacement = comparison.group(1) + "(\"" + comparison.group(2)
-                            + "\") " + comparison.group(3) + " " + value;
-                    code = code.substring(0, code.indexOf(' ') + 1) + replacement + ":";
-                }
-                Matcher distanceVar = DISTANCE_VAR.matcher(expression);
-                if (distanceVar.matches()) {
-                    Integer value = constants.get(distanceVar.group(4));
-                    if (value == null) return Optional.empty();
-                    code = code.substring(0, code.indexOf(' ') + 1)
-                            + "check_distance(\"" + distanceVar.group(1) + "\",\""
-                            + distanceVar.group(2) + "\") " + distanceVar.group(3)
-                            + " " + value + ":";
-                }
                 lines.add(new Line(n / 4, code, sourceLine));
             }
             if (lines.isEmpty() || lines.size() > 48 || lines.get(0).indent() != 0)
@@ -122,7 +92,12 @@ public final class KurumiScriptParser {
                 boolean loop = code.startsWith("while ");
                 node.addProperty("op", loop ? "WHILE" : "IF");
                 String condition = code.substring(loop ? 6 : 3, code.length() - 1).strip();
-                node.add("condition", condition(condition));
+                boolean dynamic = !condition.matches("(?s)(check_inventory|check_chest|check_distance)\\(.*")
+                        && !condition.equals("result.success") && !condition.equals("not result.success");
+                if (dynamic || condition.matches("(?s).*\\)\\s*(<=|>=|==|!=|<|>)\\s*[a-z][a-z0-9_]*")) {
+                    node.addProperty("op", loop ? "EXPR_WHILE" : "EXPR_IF");
+                    node.addProperty("expression", condition);
+                } else node.add("condition", condition(condition));
                 if (cursor.at >= lines.size() || lines.get(cursor.at).indent() != indent + 1)
                     throw new IllegalArgumentException("empty body");
                 node.add("body", block(lines, cursor, indent + 1, depth + 1));
@@ -134,6 +109,12 @@ public final class KurumiScriptParser {
                         throw new IllegalArgumentException("empty else");
                     node.add("else", block(lines, cursor, indent + 1, depth + 1));
                 }
+            } else if (VARIABLE_ASSIGN.matcher(code).matches()) {
+                Matcher m = VARIABLE_ASSIGN.matcher(code); m.matches();
+                if ("result".equals(m.group(1))) throw new IllegalArgumentException("reserved variable");
+                node.addProperty("op", "EXPR_ASSIGN");
+                node.addProperty("name", m.group(1));
+                node.addProperty("expression", m.group(2));
             } else if (SLEEP.matcher(code).matches()) {
                 Matcher sleep = SLEEP.matcher(code); sleep.matches();
                 int seconds = Integer.parseInt(sleep.group(1));
@@ -262,6 +243,11 @@ public final class KurumiScriptParser {
                 }
                 node.addProperty("op", "OBSERVE_TALK");
                 node.addProperty("tool", tool);
+            } else if (VARIABLE_CALL.matcher(code).matches()) {
+                Matcher m = VARIABLE_CALL.matcher(code); m.matches();
+                node.addProperty("op", "EXPR_CALL");
+                node.addProperty("method", m.group(1));
+                node.addProperty("expression", m.group(2));
             } else if (TALK.matcher(code).matches()) {
                 node.addProperty("op", "TALK");
                 node.addProperty("message", TALK.matcher(code).replaceFirst("$1"));
