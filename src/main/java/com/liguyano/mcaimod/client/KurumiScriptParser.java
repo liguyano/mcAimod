@@ -16,6 +16,7 @@ public final class KurumiScriptParser {
     private static final Pattern DISTANCE = Pattern.compile("check_distance\\(\"(block|entity|player|item)\",\\s*\"([A-Za-z0-9_.:-]+)\"\\)\\s*(<=|>=|==|!=|<|>)\\s*(\\d+)");
     private static final Pattern DISTANCE_VAR = Pattern.compile("check_distance\\(\"(block|entity|player|item)\",\\s*\"([A-Za-z0-9_.:-]+)\"\\)\\s*(<=|>=|==|!=|<|>)\\s*([a-z][a-z0-9_]{0,23})");
     private static final Pattern RESULT = Pattern.compile("result\\.success");
+    private static final Pattern SLEEP = Pattern.compile("sleep\\((\\d{1,3})\\)");
     private static final Pattern FARM = Pattern.compile("(?:(result)\\s*=\\s*)?farm\\((\\d{1,2})\\)");
     // Read-only observations will be exposed through the script interpreter.
     private static final Pattern OBSERVE = Pattern.compile("talk\\((get_player_status|get_environment|scan_nearby_entities|scan_nearby_blocks|scan_dropped_items|get_inventory)\\(\\)\\)");
@@ -117,6 +118,12 @@ public final class KurumiScriptParser {
                         throw new IllegalArgumentException("empty else");
                     node.add("else", block(lines, cursor, indent + 1, depth + 1));
                 }
+            } else if (SLEEP.matcher(code).matches()) {
+                Matcher sleep = SLEEP.matcher(code); sleep.matches();
+                int seconds = Integer.parseInt(sleep.group(1));
+                if (seconds < 1 || seconds > 120) throw new IllegalArgumentException("sleep seconds");
+                node.addProperty("op", "SLEEP");
+                node.addProperty("seconds", seconds);
             } else if (FARM.matcher(code).matches()) {
                 Matcher farm = FARM.matcher(code);
                 farm.matches();
