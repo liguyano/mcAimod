@@ -44,6 +44,27 @@ class KurumiExpressionsTest {
                 () -> KurumiExpressions.evaluate("unknown(1)", vars));
     }
 
+    @Test void parserAcceptsToolDictionaryAndGoto() {
+        String script = """
+                target = find_nearest_block("minecraft:crafting_table")
+                if target.found:
+                    goto(target.x, target.y, target.z)
+                else:
+                    talk("没有找到工作台")
+                """;
+        assertTrue(KurumiScriptParser.parse(script).isPresent());
+    }
+
+    @Test void parserAcceptsRuntimeCounterLoop() {
+        String script = """
+                count = 1
+                while count < 4:
+                    count = count + 1
+                talk(count)
+                """;
+        assertTrue(KurumiScriptParser.parse(script).isPresent());
+    }
+
     @Test void numericAndStringArgs() {
         Map<String, JsonElement> vars=Map.of();
         var args=KurumiExpressions.arguments("\"minecraft:oak_log\", 4",vars);
