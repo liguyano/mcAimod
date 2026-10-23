@@ -50,7 +50,8 @@ public final class KurumiWebActions {
                 以及 check_inventory、check_chest、check_distance 的条件比较。
                 禁止 for/range、函数定义、import、自增、变量计算和存储工具返回值。
                 常用动作：sleep(2)、talk("你好")、equip_main_hand("minecraft:iron_axe")、
-                interact("minecraft:oak_log")、move("forward",3)、goto(10,64,20)、
+                interact("minecraft:oak_log")、place_block("minecraft:oak_planks")、
+                place_block("minecraft:oak_planks",10,64,20)、move("forward",3)、goto(10,64,20)、
                 come("玩家名")、follow("玩家名")、stop()、mine("minecraft:oak_log")、
                 chest_open()、chest_take("minecraft:oak_log",4)、chest_put("minecraft:oak_log",4)、
                 craft_item("minecraft:stick",4)、put_item("minecraft:coal",1,"fuel")、
