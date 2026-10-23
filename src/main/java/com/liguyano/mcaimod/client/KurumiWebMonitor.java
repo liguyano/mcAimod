@@ -289,6 +289,15 @@ public final class KurumiWebMonitor {
         <div id="history" class="empty">暂无已结束任务</div>
         <script>
         function el(tag,cls,content){const n=document.createElement(tag);if(cls)n.className=cls;if(content!==undefined)n.textContent=String(content);return n;}
+        const logViews=new Map();
+        function rememberLogViews(){
+          for(const card of document.querySelectorAll('#pending article.card, #current article.card, #history article.card')){
+            const details=card.querySelector('details[data-task-id]');
+            if(!details)continue;
+            const logs=details.querySelector('.logs');
+            logViews.set(details.dataset.taskId,{open:details.open,scrollTop:logs?logs.scrollTop:0});
+          }
+        }
         function createTask(t,active){
           const card=el('article','card'+(active?' current':''));
           const head=el('div','head'), title=el('strong','', '任务 #'+t.id);
@@ -308,7 +317,12 @@ public final class KurumiWebMonitor {
           });card.append(code);
           if(t.events&&t.events.length){
             const details=el('details');const summary=el('summary','','执行日志（'+t.events.length+'）');
-            details.append(summary,el('div','logs',t.events.join('\\n')));card.append(details);
+            details.dataset.taskId=String(t.id);
+            const logs=el('div','logs',t.events.join('\\n'));
+            const previous=logViews.get(String(t.id));
+            if(previous){details.open=previous.open;logs.scrollTop=previous.scrollTop;}
+            details.append(summary,logs);card.append(details);
+            if(previous && previous.scrollTop)requestAnimationFrame(()=>{logs.scrollTop=previous.scrollTop;});
           }
           return card;
         }
@@ -317,6 +331,7 @@ public final class KurumiWebMonitor {
             const response=await fetch('/api/status',{cache:'no-store'});
             if(!response.ok)throw Error(response.status);
             const data=await response.json();
+            rememberLogViews();
             const controls=data.controls||{};
             document.getElementById('previewStatus').textContent=(controls.previewStatus||'空闲')+(controls.previewError?'：'+controls.previewError:'');
             document.getElementById('runStatus').textContent=(controls.runStatus||'空闲')+(controls.runError?'：'+controls.runError:'');
