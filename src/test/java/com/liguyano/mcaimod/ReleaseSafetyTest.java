@@ -15,7 +15,7 @@ class ReleaseSafetyTest {
             assertNotNull(input);
             String example = new String(input.readAllBytes(), StandardCharsets.UTF_8);
             assertTrue(example.contains("\"api_key\": \"\""));
-            assertTrue(example.contains("\"model_id\": \"qwen3.8-max\""));
+            assertTrue(example.contains("\"model_id\": \"qwen3.8-max-0902\""));
             assertTrue(example.contains("https://dashscope.aliyuncs.com/compatible-mode/v1"));
             assertEquals(Files.readString(Path.of("config/mcaimod-models.example.json")), example,
                     "Packaged example must match the documented example");
