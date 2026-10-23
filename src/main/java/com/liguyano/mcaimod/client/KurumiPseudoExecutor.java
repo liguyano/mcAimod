@@ -184,6 +184,8 @@ public final class KurumiPseudoExecutor {
                 awaitingCome = false;
                 lastResultSuccess = true;
                 KurumiWebMonitor.log("come(): 已靠近 " + comeTarget + "，自动取消 follow");
+                say("主人~ 我已经过来啦！");
+                KurumiWebMonitor.log("talk: 主人~ 我已经过来啦！");
             } else if (System.currentTimeMillis() - comeStarted > 90000L) {
                 BaritoneBridge.stop();
                 comeFollowing = false;
