@@ -139,7 +139,7 @@ public final class KurumiChestSearch {
         found.sort(Comparator.comparingDouble(p->p.distSqr(center)));
         if (found.size()>MAX_CHESTS) found=new ArrayList<>(found.subList(0,MAX_CHESTS));
         if (found.isEmpty()) return new BaritoneBridge.Result(false,"附近已加载区域没有普通箱子");
-        pending=found;index=0;item=itemId;amount=0;taking=false;busy=true;
+        pending=found;index=0;checked=0;total=0;item=itemId;amount=0;taking=false;busy=true;
         started=System.currentTimeMillis();lastSucceeded=false;
         resultRoot=new JsonObject();results=new JsonArray();
         resultRoot.addProperty("item_id",itemId);
