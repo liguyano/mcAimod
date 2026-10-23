@@ -15,7 +15,6 @@ import java.util.concurrent.Executors;
 public final class KurumiWebMonitor {
     private static final Map<KurumiTaskPlanner.Statement, Integer> LINES = new IdentityHashMap<>();
     private static final Map<KurumiTaskPlanner.Program, String> SOURCES = new IdentityHashMap<>();
-    private static final Deque<String> EVENTS = new ArrayDeque<>();
     private static final Deque<Task> HISTORY = new ArrayDeque<>();
     private static final int HISTORY_LIMIT = 30;
     private static Task current;
@@ -198,12 +197,12 @@ public final class KurumiWebMonitor {
             const response=await fetch('/api/status',{cache:'no-store'});
             if(!response.ok)throw Error(response.status);
             const data=await response.json();
-            const current=document.getElementById('current');current.replaceWith(data.current?createTask(data.current,true):el('div','empty','等待新任务…'));
-            document.querySelector('h2 + div').id='current';
-            const history=document.getElementById('history');const box=el('div');
-            for(const task of data.history||[])box.append(createTask(task,false));
-            if(!box.children.length){box.className='empty';box.textContent='暂无已结束任务';}
-            history.replaceWith(box);box.id='history';
+            const current=document.getElementById('current');current.className=data.current?'':'empty';
+            current.replaceChildren(data.current?createTask(data.current,true):document.createTextNode('等待新任务…'));
+            const history=document.getElementById('history');history.replaceChildren();
+            for(const task of data.history||[])history.append(createTask(task,false));
+            history.className=history.children.length?'':'empty';
+            if(!history.children.length)history.textContent='暂无已结束任务';
             document.getElementById('connection').textContent='已连接 · 每秒刷新';
           }catch(e){document.getElementById('connection').textContent='连接断开';}
         }
