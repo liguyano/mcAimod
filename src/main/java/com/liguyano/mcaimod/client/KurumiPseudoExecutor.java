@@ -44,6 +44,7 @@ public final class KurumiPseudoExecutor {
     private static long lastPublicMessageAt;
     private static boolean lastResultSuccess;
     private static boolean assignedResult;
+    private static final java.util.Map<String, com.google.gson.JsonElement> variables = new java.util.HashMap<>();
 
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiPseudoExecutor::tick); }
     public static boolean busy() { return running; }
@@ -61,6 +62,7 @@ public final class KurumiPseudoExecutor {
         awaitingCraft = false;
         awaitingMenu = false;
         frames.clear();
+        variables.clear();
         KurumiChestInspector.cancel();
         KurumiPlanExecutor.cancel();
     }
@@ -86,6 +88,7 @@ public final class KurumiPseudoExecutor {
         lastPublicMessageAt = 0;
         lastResultSuccess = false;
         assignedResult = false;
+        variables.clear();
         awaitingAction = false;
         awaitingChest = false;
         awaitingCome = false;
@@ -117,11 +120,11 @@ public final class KurumiPseudoExecutor {
         awaitingChest = false;
         awaitingCome = false;
         if (frame == null || stmt == null) { cancel(); return; }
-        if ("IF".equals(stmt.op())) {
+        if ("IF".equals(stmt.op()) || "EXPR_IF".equals(stmt.op())) {
             frame.index++;
             List<KurumiTaskPlanner.Statement> branch = result ? stmt.body() : stmt.otherwise();
             if (!branch.isEmpty()) frames.push(new Frame(branch, null));
-        } else if ("WHILE".equals(stmt.op())) {
+        } else if ("WHILE".equals(stmt.op()) || "EXPR_WHILE".equals(stmt.op())) {
             if (!result) { frame.index++; return; }
             if (++frame.iterations > MAX_ITERATIONS) {
                 say("伪代码循环达到每个 WHILE 最多 " + MAX_ITERATIONS + " 次的限制");
@@ -240,6 +243,132 @@ public final class KurumiPseudoExecutor {
         var stmt = frame.statements.get(frame.index);
         KurumiWebMonitor.step(stmt, actions, frame.iterations, lastResultSuccess);
         switch (stmt.op()) {
+            case "EXPR_ASSIGN" -> {
+                try {
+                    String name = stmt.step().target();
+                    if (variables.size() >= 16 && !variables.containsKey(name))
+                        throw new IllegalArgumentException("最多保存16个变量");
+                    var value = KurumiExpressions.evaluate(stmt.step().itemId(), variables);
+                    if (value.toString().length() > 8192)
+                        throw new IllegalArgumentException("变量内容超过8192字符");
+                    variables.put(name, value.deepCopy());
+                    KurumiWebMonitor.log("赋值 " + name + " = " + value);
+                    frame.index++;
+                } catch (RuntimeException ex) {
+                    KurumiWebMonitor.log("变量赋值失败：" + ex.getMessage());
+                    say("伪代码变量错误，任务停止");
+                    cancel();
+                }
+            }
+            case "EXPR_IF", "EXPR_WHILE" -> {
+                try {
+                    boolean yes = KurumiExpressions.truth(
+                            KurumiExpressions.evaluate(stmt.step().itemId(), variables));
+                    pendingStatement = stmt;
+                    completeCondition(yes);
+                } catch (RuntimeException ex) {
+                    KurumiWebMonitor.log("条件表达式失败：" + ex.getMessage());
+                    cancel();
+                }
+            }
+            case "EXPR_CALL" -> {
+                try {
+                    String name = stmt.step().action();
+                    var args = KurumiExpressions.arguments(stmt.step().itemId(), variables);
+                    if ("talk".equals(name)) {
+                        if (args.size()!=1) throw new IllegalArgumentException("talk 需要一个参数");
+                        long now = System.currentTimeMillis();
+                        if (publicMessages >= 12) throw new IllegalArgumentException("talk 次数超限");
+                        if (now - lastPublicMessageAt < 2000) return;
+                        String msg = KurumiExpressions.text(args.get(0));
+                        if (msg.isBlank() || msg.startsWith("/") || msg.contains("\n"))
+                            throw new IllegalArgumentException("消息内容不合法");
+                        if (msg.length() > 120) msg=msg.substring(0,108)+"...(已截断)";
+                        mc.getConnection().sendChat(msg);
+                        KurumiWebMonitor.log("talk(表达式): " + msg);
+                        publicMessages++;
+                        lastPublicMessageAt = now;
+                        frame.index++;
+                        return;
+                    }
+                    if ("sleep".equals(name)) {
+                        if (args.size()!=1) throw new IllegalArgumentException("sleep 需要一个参数");
+                        int secs = KurumiExpressions.integer(args.get(0));
+                        if (secs < 1 || secs > 120) throw new IllegalArgumentException("sleep 仅支持1到120秒");
+                        sleepUntil = System.currentTimeMillis() + secs * 1000L;
+                        frame.index++;
+                        return;
+                    }
+                    if (++actions > MAX_ACTIONS) throw new IllegalArgumentException("动作次数达到上限");
+                    BaritoneBridge.Result outcome;
+                    if ("goto".equals(name)) {
+                        if (args.size()!=3) throw new IllegalArgumentException("goto 需要3个坐标");
+                        int x=KurumiExpressions.integer(args.get(0));
+                        int y=KurumiExpressions.integer(args.get(1));
+                        int z=KurumiExpressions.integer(args.get(2));
+                        if (y < -64 || y > 320 || Math.abs((long)x)>30000000 || Math.abs((long)z)>30000000)
+                            throw new IllegalArgumentException("坐标超出世界范围");
+                        var destination = new net.minecraft.core.BlockPos(x,y,z);
+                        // If the coordinate is an occupied block, walk beside it instead of into it.
+                        if (mc.level != null && mc.level.hasChunkAt(destination)
+                                && !mc.level.getBlockState(destination)
+                                        .getCollisionShape(mc.level,destination).isEmpty()) {
+                            net.minecraft.core.BlockPos nearest=null;
+                            double best=Double.POSITIVE_INFINITY;
+                            for (var direction : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+                                var pos=destination.relative(direction);
+                                if (!mc.level.hasChunkAt(pos) || !mc.level.hasChunkAt(pos.above())
+                                        || !mc.level.hasChunkAt(pos.below())) continue;
+                                if (!mc.level.getBlockState(pos).getCollisionShape(mc.level,pos).isEmpty()
+                                        || !mc.level.getBlockState(pos.above()).getCollisionShape(mc.level,pos.above()).isEmpty()
+                                        || mc.level.getBlockState(pos.below()).getCollisionShape(mc.level,pos.below()).isEmpty())
+                                    continue;
+                                double distance=pos.distSqr(mc.player.blockPosition());
+                                if (distance<best) {best=distance;nearest=pos;}
+                            }
+                            if (nearest==null) throw new IllegalArgumentException("目标周围没有可站立位置");
+                            destination=nearest;
+                        }
+                        var step=new KurumiTaskPlanner.Step("GOTO","",1,destination.getX(),
+                                destination.getY(),destination.getZ(),"");
+                        var plan=new KurumiTaskPlanner.Plan(List.of(step),1,1,1,List.of());
+                        outcome=KurumiPlanExecutor.start(plan);
+                        if (outcome.success()) awaitingAction=true;
+                    } else if ("move".equals(name)) {
+                        if (args.size()!=2) throw new IllegalArgumentException("move 需要两个参数");
+                        String direction=KurumiExpressions.text(args.get(0));
+                        int blocks=KurumiExpressions.integer(args.get(1));
+                        if (!java.util.Set.of("forward","back","left","right").contains(direction)
+                                || blocks < 1 || blocks > 16) throw new IllegalArgumentException("move 参数无效");
+                        outcome=BaritoneBridge.moveRelative(direction,blocks);
+                    } else if ("interact".equals(name) || "equip_main_hand".equals(name)) {
+                        if (args.size()!=1) throw new IllegalArgumentException("指令需要一个物品ID");
+                        String id=KurumiExpressions.text(args.get(0));
+                        if (!id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+                            throw new IllegalArgumentException("方块或物品ID无效");
+                        outcome="interact".equals(name) ? KurumiInteractionBridge.interact(id)
+                                : KurumiEquipBridge.mainHand(id);
+                    } else if ("place_block".equals(name)) {
+                        if (args.size()!=1 && args.size()!=4)
+                            throw new IllegalArgumentException("place_block 需要1或4个参数");
+                        String id=KurumiExpressions.text(args.get(0));
+                        if (!id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+                            throw new IllegalArgumentException("物品ID无效");
+                        outcome=KurumiBlockPlacementBridge.place(id,
+                                args.size()==4 ? KurumiExpressions.integer(args.get(1)) : null,
+                                args.size()==4 ? KurumiExpressions.integer(args.get(2)) : null,
+                                args.size()==4 ? KurumiExpressions.integer(args.get(3)) : null);
+                    } else throw new IllegalArgumentException("函数不在动作白名单");
+                    KurumiWebMonitor.log(name + "(变量): " + outcome.message());
+                    lastResultSuccess=outcome.success();
+                    if (!outcome.success()) { cancel(); return; }
+                    frame.index++;
+                } catch (RuntimeException ex) {
+                    KurumiWebMonitor.log("变量参数执行失败：" + ex.getMessage());
+                    say("变量或动作参数错误，任务已停止");
+                    cancel();
+                }
+            }
             case "SLEEP" -> {
                 sleepUntil = System.currentTimeMillis() + stmt.step().quantity() * 1000L;
                 frame.index++;
