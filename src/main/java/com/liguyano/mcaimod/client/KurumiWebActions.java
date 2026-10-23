@@ -58,7 +58,12 @@ public final class KurumiWebActions {
                 take_item("minecraft:iron_ingot",1)、
                 talk(find_nearest_block("minecraft:furnace"))、talk(get_inventory())、
                 talk(inspect_container())、talk(inspect_slot(0))。
-                find_nearest_block 只能观察，不会自动带你走到目标；interact 只对附近方块交互。
+                如需前往最近的工作台，必须在同一份脚本里使用：
+                target = find_nearest_block("minecraft:crafting_table")
+                goto(target["x"],target["y"],target["z"])
+                第一条生成工具返回的字典，第二条从字典读取坐标后寻路到目标旁的可站立位置。
+                可以 talk(target) 显示观察结果。没找到就停止。
+                单独 talk(find_nearest_block(...)) 只观察；interact 只对附近方块交互。
                 不要猜测坐标、槽位和观察结果。优先输出可执行的保守脚本。
                 """;
             PROVIDER.chat(profile.get(), List.of(new ChatMessage("system", rules),
