@@ -211,6 +211,14 @@ public final class KurumiExpressions {
                 throw new IllegalArgumentException("距离目标不在搜索范围");
             return result.get("distance");
         }
+        if ("list_remembered_blocks".equals(name)) {
+            if(!args.isEmpty()) throw new IllegalArgumentException("list_remembered_blocks 不接受参数");
+            return KurumiChestSearch.listBlocks();
+        }
+        if ("get_remembered_block_at".equals(name)) {
+            if(args.size()!=1) throw new IllegalArgumentException("get_remembered_block_at 需要从0开始的编号");
+            return KurumiChestSearch.blockAt(integer(args.get(0)));
+        }
         if ("get_remembered_block".equals(name)) {
             if (args.size()!=1) throw new IllegalArgumentException("get_remembered_block 需要记忆名称");
             return KurumiChestSearch.get(string(args.get(0)));
