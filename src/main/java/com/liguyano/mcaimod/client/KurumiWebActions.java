@@ -109,7 +109,18 @@ public final class KurumiWebActions {
                     new ChatMessage("user", requirement)))
                     .whenComplete((reply, error) -> mc.execute(() -> {
                         if (error != null) {
-                            completePreview(id, "", "模型请求失败：" + error.getClass().getSimpleName());
+                            Throwable cause = error;
+                            int depth = 0;
+                            while (cause.getCause() != null && cause.getCause() != cause && depth++ < 12)
+                                cause = cause.getCause();
+                            String detail = cause.getClass().getSimpleName() + ": "
+                                    + (cause.getMessage() == null ? "(无详细信息)" : cause.getMessage());
+                            // Do not reveal keys or authorization tokens in errors visible in Web UI.
+                            detail = detail.replaceAll("(?i)(authorization\\s*[:=]\\s*bearer\\s+)[^\\s,;]+", "$1[REDACTED]")
+                                    .replaceAll("(?i)(api[_-]?key\\s*[:=]\\s*)[^\\s,;]+", "$1[REDACTED]");
+                            detail = detail.substring(0, Math.min(detail.length(), 400));
+                            KurumiWebMonitor.log("Web AI 生成失败：" + detail);
+                            completePreview(id, "", "模型请求失败：" + detail);
                             return;
                         }
                         try {
