@@ -65,6 +65,11 @@ public final class KurumiWebActions {
                 已检查的箱子记为 chest_1、chest_2 等，每次搜索会更新对应记忆。
                 通用方块记忆：saved = remember_block("矿场箱子",x,y,z)，
                 point = get_remembered_block("矿场箱子")，可用 point.x、point.y、point.z。
+                即时扫描：blocks = search_all_block("minecraft:chest") 返回坐标对象数组，
+                所有方块ID通用。仅搜索附近已加载区域（水平24格、上下8格），最多64项；
+                只扫描世界方块，不打开容器、不自动寻路、不自动保存到持久记忆。
+                使用 len(blocks) 获取数量、blocks[0].x 或 blocks[i].z 读取数组中的坐标。
+                要永久保存某一条才使用 remember_block("名称",blocks[i].x,blocks[i].y,blocks[i].z)。
                 列出所有类型的方块记忆：memory = list_remembered_blocks()，返回 count 和 blocks。
                 逐项读取：entry = get_remembered_block_at(0)，从编号0开始；
                 可以用 while i < memory.count、get_remembered_block_at(i) 和 i = i + 1 遍历。
