@@ -65,6 +65,17 @@ class KurumiExpressionsTest {
         assertTrue(KurumiScriptParser.parse(script).isPresent());
     }
 
+    @Test void attackAliasParsesIntoCorrectTargets() {
+        var mob = KurumiScriptParser.parse("attack(\"minecraft:zombie\")").orElseThrow();
+        assertEquals("ATTACK_MOB", mob.statements().get(0).step().action());
+        assertEquals("minecraft:zombie", mob.statements().get(0).step().target());
+        var player = KurumiScriptParser.parse("attack(\"OtherPlayer\")").orElseThrow();
+        assertEquals("ATTACK_PLAYER", player.statements().get(0).step().action());
+        assertEquals("OtherPlayer", player.statements().get(0).step().target());
+        assertTrue(KurumiScriptParser.parse("attack()").isEmpty());
+        assertTrue(KurumiScriptParser.parse("attack(\"SekaiSaionji\")").isEmpty());
+    }
+
     @Test void numericAndStringArgs() {
         Map<String, JsonElement> vars=Map.of();
         var args=KurumiExpressions.arguments("\"minecraft:oak_log\", 4",vars);

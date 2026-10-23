@@ -49,6 +49,8 @@ public final class KurumiWebActions {
                 支持 while/if/else、break、return "完成"、if result.success:，
                 以及 check_inventory、check_chest、check_distance 的条件比较。
                 允许通用变量赋值、变量重新赋值、加减乘除、布尔条件和 JSON 字典点号访问；禁止 for/range、函数定义、import。\n                例如 target = find_nearest_block("minecraft:crafting_table")，\n                if target.found: 下一行缩进四格 goto(target.x,target.y,target.z)。\n                允许 count = count + 1、talk(target)、sleep(count)；变量最多16个，仅作用于当前脚本。
+                攻击生物可以写 attack("minecraft:zombie") 或 attack_mob("minecraft:zombie")；
+                攻击玩家可以写 attack("玩家名") 或 attack_player("玩家名")，需要主人授权。
                 常用动作：sleep(2)、talk("你好")、equip_main_hand("minecraft:iron_axe")、
                 interact("minecraft:oak_log")、place_block("minecraft:oak_planks")、
                 place_block("minecraft:oak_planks",10,64,20)、move("forward",3)、goto(10,64,20)、
