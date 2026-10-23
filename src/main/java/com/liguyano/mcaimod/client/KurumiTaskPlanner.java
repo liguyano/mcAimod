@@ -120,6 +120,20 @@ public final class KurumiTaskPlanner {
                 if (radius < 4 || radius > 32) throw new IllegalArgumentException("farm radius");
                 statements.add(new Statement(op, new Step("FARM", "", radius, null, null, null, ""),
                         null, List.of(), List.of()));
+            } else if ("DICT_FIND".equals(op)) {
+                String name = node.get("name").getAsString();
+                String id = node.get("block_id").getAsString();
+                if (!name.matches("[a-z][a-z0-9_]{0,23}") || "result".equals(name)
+                        || !id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+                    throw new IllegalArgumentException("invalid dictionary assignment");
+                statements.add(new Statement(op, new Step("DICT_FIND", id, 1, null, null, null, name),
+                        null, List.of(), List.of()));
+            } else if ("DICT_GOTO".equals(op) || "DICT_TALK".equals(op)) {
+                String name = node.get("name").getAsString();
+                if (!name.matches("[a-z][a-z0-9_]{0,23}") || "result".equals(name))
+                    throw new IllegalArgumentException("invalid dictionary reference");
+                statements.add(new Statement(op, new Step(op, "", 1, null, null, null, name),
+                        null, List.of(), List.of()));
             } else if ("SLEEP".equals(op)) {
                 int seconds = node.get("seconds").getAsInt();
                 if (seconds < 1 || seconds > 120) throw new IllegalArgumentException("sleep seconds");
