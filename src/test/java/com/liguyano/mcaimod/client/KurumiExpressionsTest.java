@@ -95,6 +95,18 @@ class KurumiExpressionsTest {
         assertTrue(KurumiScriptParser.parse("talk(get_position())").isPresent());
     }
 
+    @Test void parserAllowsDirectBlockBreak() {
+        assertTrue(KurumiScriptParser.parse("break_block(\"minecraft:stone\")").isPresent());
+        assertTrue(KurumiScriptParser.parse("break_block(100,64,200)").isPresent());
+        assertTrue(KurumiScriptParser.parse("""
+                target = find_nearest_block("minecraft:stone")
+                if target.found:
+                    break_block(target.x,target.y,target.z)
+                """).isPresent());
+        assertTrue(KurumiScriptParser.parse("break_block(\"minecraft:stone\",100,64,200)").isPresent());
+        assertTrue(KurumiScriptParser.parse("break_block()").isPresent()); // runtime rejects invalid arity
+    }
+
     @Test void numericAndStringArgs() {
         Map<String, JsonElement> vars=Map.of();
         var args=KurumiExpressions.arguments("\"minecraft:oak_log\", 4",vars);
