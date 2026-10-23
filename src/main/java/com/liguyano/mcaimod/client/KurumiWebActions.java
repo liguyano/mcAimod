@@ -57,7 +57,7 @@ public final class KurumiWebActions {
                 craft_item("minecraft:stick",4)、put_item("minecraft:coal",1,"fuel")、
                 take_item("minecraft:iron_ingot",1)、
                 talk(find_nearest_block("minecraft:furnace"))、talk(get_inventory())、
-                talk(inspect_container())、talk(inspect_slot(0))。
+                talk(inspect_container())、talk(inspect_slot(0))。\n                观察结果可以直接保存为变量，例如 status = get_player_status()、\n                target = find_nearest_block("minecraft:furnace")、slot = inspect_slot(0)；\n                使用 status.health、target.x 等点号读取字段，需要公屏输出才调用 talk(status)。
                 只调用 talk(find_nearest_block(...)) 不会移动；保存查询结果为变量后可调用 goto(target.x,target.y,target.z)。\n                interact 只对附近方块交互。
                 不要猜测坐标、槽位和观察结果。优先输出可执行的保守脚本。
                 """;

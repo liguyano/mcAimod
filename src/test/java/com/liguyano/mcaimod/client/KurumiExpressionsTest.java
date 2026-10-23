@@ -65,6 +65,23 @@ class KurumiExpressionsTest {
         assertTrue(KurumiScriptParser.parse(script).isPresent());
     }
 
+    @Test void parserAcceptsObservationResultAssignments() {
+        String script = """
+                status = get_player_status()
+                env = get_environment()
+                inventory = get_inventory()
+                entities = scan_nearby_entities()
+                blocks = scan_nearby_blocks()
+                dropped = scan_dropped_items()
+                target = find_nearest_block("minecraft:furnace")
+                distance = get_distance("block","minecraft:furnace")
+                slots = inspect_container()
+                slot = inspect_slot(0)
+                talk(slot)
+                """;
+        assertTrue(KurumiScriptParser.parse(script).isPresent());
+    }
+
     @Test void numericAndStringArgs() {
         Map<String, JsonElement> vars=Map.of();
         var args=KurumiExpressions.arguments("\"minecraft:oak_log\", 4",vars);

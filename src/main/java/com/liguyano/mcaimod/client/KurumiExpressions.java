@@ -223,6 +223,12 @@ public final class KurumiExpressions {
                 if (!args.isEmpty()) throw new IllegalArgumentException("工具不接受参数");
                 tool=name;
             }
+            case "inspect_slot" -> {
+                if (args.size()!=1) throw new IllegalArgumentException("inspect_slot 需要一个槽位编号");
+                int slot=integer(args.get(0));
+                if (slot < 0 || slot > 255) throw new IllegalArgumentException("槽位编号必须在0到255之间");
+                tool="inspect_slot:"+slot;
+            }
             case "get_distance" -> {
                 if (args.size()!=2) throw new IllegalArgumentException("距离工具参数数量错误");
                 tool=name+":"+string(args.get(0))+":"+string(args.get(1));
