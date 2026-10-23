@@ -116,8 +116,8 @@ class KurumiExpressionsTest {
     @Test void chestMemoryScriptSyntax() {
         assertTrue(KurumiScriptParser.parse("""
                 search_chests("minecraft:diamond")
-                result = get_chest_search_result()
-                talk(result)
+                report = get_chest_search_result()
+                talk(report)
                 """).isPresent());
         assertTrue(KurumiScriptParser.parse("""
                 saved = remember_block("矿场箱子",100,64,200)
