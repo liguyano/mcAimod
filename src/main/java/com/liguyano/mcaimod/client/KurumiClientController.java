@@ -327,6 +327,7 @@ public final class KurumiClientController {
                         }
                         if (decision.target().startsWith("collect_store:"))
                             KurumiTaskRecovery.begin();
+                        if (decision.program().isPresent()) KurumiWebMonitor.requirement(message);
                         BaritoneBridge.Result result = decision.program().isPresent()
                                 ? KurumiPseudoExecutor.start(decision.program().get())
                                 : decision.plan().isPresent()
