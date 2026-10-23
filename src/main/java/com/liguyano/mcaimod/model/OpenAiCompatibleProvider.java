@@ -18,6 +18,7 @@ import java.util.function.Function;
 /** OpenAI-compatible Chat Completions for OpenAI, DeepSeek and local Ollama. */
 public final class OpenAiCompatibleProvider implements ModelProvider {
     private static final int MAX_REPLY_BODY_BYTES = 1024 * 1024;
+    private final DashscopeMultimodalProvider dashscope = new DashscopeMultimodalProvider();
     private final HttpClient client;
     private final Function<String, String> environment;
 
@@ -32,6 +33,7 @@ public final class OpenAiCompatibleProvider implements ModelProvider {
 
     @Override
     public CompletableFuture<String> chat(ModelProfile profile, List<ChatMessage> messages) {
+        if (DashscopeMultimodalProvider.supports(profile)) return dashscope.chat(profile, messages);
         final HttpRequest request;
         try {
             String key = profile.apiKey();
