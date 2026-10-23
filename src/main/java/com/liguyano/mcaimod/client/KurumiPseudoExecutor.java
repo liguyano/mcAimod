@@ -36,6 +36,7 @@ public final class KurumiPseudoExecutor {
     private static String comeTarget;
     private static boolean comeFollowing;
     private static long comeStarted;
+    private static long sleepUntil;
     private static KurumiTaskPlanner.Condition pendingCondition;
     private static KurumiTaskPlanner.Statement pendingStatement;
     private static int actions;
@@ -55,6 +56,7 @@ public final class KurumiPseudoExecutor {
         awaitingAction = false;
         awaitingChest = false;
         awaitingCome = false;
+        sleepUntil = 0;
         awaitingExternal = false;
         awaitingCraft = false;
         awaitingMenu = false;
@@ -137,6 +139,11 @@ public final class KurumiPseudoExecutor {
             say("伪代码超过5分钟，已停止");
             cancel();
             return;
+        }
+        if (sleepUntil > 0) {
+            if (System.currentTimeMillis() < sleepUntil) return;
+            sleepUntil = 0;
+            KurumiWebMonitor.log("sleep(): 等待结束，继续执行");
         }
         if (awaitingMenu) {
             if (mc.player.containerMenu != mc.player.inventoryMenu) {
@@ -233,6 +240,11 @@ public final class KurumiPseudoExecutor {
         var stmt = frame.statements.get(frame.index);
         KurumiWebMonitor.step(stmt, actions, frame.iterations, lastResultSuccess);
         switch (stmt.op()) {
+            case "SLEEP" -> {
+                sleepUntil = System.currentTimeMillis() + stmt.step().quantity() * 1000L;
+                frame.index++;
+                KurumiWebMonitor.log("sleep(): 等待 " + stmt.step().quantity() + " 秒");
+            }
             case "FARM", "FARM_RESULT" -> {
                 if (++actions > MAX_ACTIONS) { cancel(); return; }
                 var result = BaritoneBridge.farm(stmt.step().quantity());
