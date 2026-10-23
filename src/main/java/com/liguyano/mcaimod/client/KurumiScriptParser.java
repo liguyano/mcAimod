@@ -19,8 +19,9 @@ public final class KurumiScriptParser {
     private static final Pattern SLEEP = Pattern.compile("sleep\\((\\d{1,3})\\)");
     private static final Pattern FARM = Pattern.compile("(?:(result)\\s*=\\s*)?farm\\((\\d{1,2})\\)");
     // Read-only observations will be exposed through the script interpreter.
-    private static final Pattern OBSERVE = Pattern.compile("talk\\((get_player_status|get_environment|scan_nearby_entities|scan_nearby_blocks|scan_dropped_items|get_inventory)\\(\\)\\)");
+    private static final Pattern OBSERVE = Pattern.compile("talk\\((get_player_status|get_environment|scan_nearby_entities|scan_nearby_blocks|scan_dropped_items|get_inventory|inspect_container)\\(\\)\\)");
     private static final Pattern OBSERVE_ARG = Pattern.compile("talk\\((get_distance|find_nearest_block|check_inventory_count|get_crafting_recipe|check_nearby_chest|get_nearby_chest_result)\\(\\\"([A-Za-z0-9_.:-]+)\\\"(?:,\\s*\\\"([A-Za-z0-9_.:-]+)\\\")?\\)\\)");
+    private static final Pattern INSPECT_SLOT = Pattern.compile("talk\\(inspect_slot\\((\\d{1,3})\\)\\)");
     private static final Pattern OBSERVE_POSITION = Pattern.compile("talk\\(check_position\\(\\s*(-?\\d{1,8})\\s*,\\s*(-?\\d{1,4})\\s*,\\s*(-?\\d{1,8})\\s*,\\s*(\\d{1,2})\\s*\\)\\)");
     private static final Pattern TALK = Pattern.compile("talk\\(\"([^\"\\r\\n]{1,120})\"\\)");
 
@@ -204,6 +205,12 @@ public final class KurumiScriptParser {
                     throw new IllegalArgumentException("invalid position");
                 node.addProperty("op", "OBSERVE_TALK");
                 node.addProperty("tool", "check_position:" + x + ":" + y + ":" + z + ":" + radius);
+            } else if (INSPECT_SLOT.matcher(code).matches()) {
+                Matcher slot = INSPECT_SLOT.matcher(code); slot.matches();
+                int index = Integer.parseInt(slot.group(1));
+                if (index > 255) throw new IllegalArgumentException("slot index");
+                node.addProperty("op", "OBSERVE_TALK");
+                node.addProperty("tool", "inspect_slot:" + index);
             } else if (OBSERVE.matcher(code).matches()) {
                 Matcher m = OBSERVE.matcher(code);
                 m.matches();
