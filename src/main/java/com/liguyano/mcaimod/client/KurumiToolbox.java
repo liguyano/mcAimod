@@ -15,6 +15,43 @@ public final class KurumiToolbox {
     public static String observe(String tool) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return "{\"error\":\"not_in_world\"}";
+        if ("inspect_container".equals(tool) || (tool != null && tool.startsWith("inspect_slot:"))) {
+            var menu = mc.player.containerMenu;
+            JsonObject out = new JsonObject();
+            if (menu == mc.player.inventoryMenu) return "{\\"error\\":\\"no_open_container\\"}";
+            out.addProperty("menu_class", menu.getClass().getName());
+            out.addProperty("container_id", menu.containerId);
+            out.addProperty("slot_count", menu.slots.size());
+            int selected = -1;
+            if (tool.startsWith("inspect_slot:")) {
+                try { selected = Integer.parseInt(tool.substring("inspect_slot:".length())); }
+                catch (NumberFormatException ex) { return "{\\"error\\":\\"invalid_slot\\"}"; }
+                if (selected < 0 || selected >= menu.slots.size()) return "{\\"error\\":\\"slot_out_of_range\\"}";
+            }
+            JsonArray slots = new JsonArray();
+            for (int i = 0; i < menu.slots.size(); i++) {
+                if (selected >= 0 && i != selected) continue;
+                var slot = menu.getSlot(i);
+                var stack = slot.getItem();
+                JsonObject info = new JsonObject();
+                info.addProperty("index", i);
+                info.addProperty("x", slot.x);
+                info.addProperty("y", slot.y);
+                info.addProperty("player_inventory", slot.container == mc.player.getInventory());
+                info.addProperty("has_item", !stack.isEmpty());
+                info.addProperty("may_pickup", slot.mayPickup(mc.player));
+                info.addProperty("max_stack_size", slot.getMaxStackSize());
+                if (!stack.isEmpty()) {
+                    info.addProperty("item_id", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+                    info.addProperty("count", stack.getCount());
+                    info.addProperty("may_place_same_item", slot.mayPlace(stack));
+                }
+                slots.add(info);
+            }
+            out.add("slots", slots);
+            out.addProperty("note", "槽位用途未预设；空槽可放物品类型需用具体物品验证");
+            return out.toString();
+        }
         if (tool != null && tool.startsWith("get_distance:")) {
             String[] parts = tool.split(":", 3);
             JsonObject out = new JsonObject();
