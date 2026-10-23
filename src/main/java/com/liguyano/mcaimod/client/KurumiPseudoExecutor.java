@@ -27,6 +27,7 @@ public final class KurumiPseudoExecutor {
     private static boolean running;
     private static boolean awaitingAction;
     private static boolean awaitingBlockBreak;
+    private static boolean awaitingChestSearch;
     private static boolean awaitingChest;
     private static boolean awaitingCome;
     private static boolean awaitingExternal;
@@ -65,6 +66,8 @@ public final class KurumiPseudoExecutor {
         awaitingMenu = false;
         frames.clear();
         KurumiBlockBreakingBridge.cancel();
+        KurumiChestSearch.cancel();
+        awaitingChestSearch = false;
         awaitingBlockBreak = false;
         variables.clear();
         KurumiChestInspector.cancel();
@@ -99,6 +102,7 @@ public final class KurumiPseudoExecutor {
         awaitingExternal = false;
         awaitingCraft = false;
         awaitingMenu = false;
+        awaitingChestSearch = false;
         pendingCondition = null;
         pendingStatement = null;
         running = true;
@@ -207,6 +211,17 @@ public final class KurumiPseudoExecutor {
                 lastResultSuccess = false;
                 KurumiWebMonitor.log("come(): 跟随90秒未能抵达，已停止");
                 if (!assignedResult) { say("未能靠近目标玩家，已停止后续动作"); cancel(); }
+            }
+            return;
+        }
+        if (awaitingChestSearch) {
+            if (KurumiChestSearch.busy()) return;
+            awaitingChestSearch = false;
+            lastResultSuccess = KurumiChestSearch.lastSucceeded();
+            KurumiWebMonitor.log("箱子任务结果：" + KurumiChestSearch.status());
+            if (!lastResultSuccess) {
+                say("箱子搜索或按记忆取物失败，请查看 Web 日志");
+                cancel();
             }
             return;
         }
@@ -363,6 +378,15 @@ public final class KurumiPseudoExecutor {
                             throw new IllegalArgumentException("方块或物品ID无效");
                         outcome="interact".equals(name) ? KurumiInteractionBridge.interact(id)
                                 : KurumiEquipBridge.mainHand(id);
+                    } else if ("search_chests".equals(name)) {
+                        if (args.size()!=1) throw new IllegalArgumentException("search_chests 需要一个物品ID");
+                        outcome=KurumiChestSearch.search(KurumiExpressions.text(args.get(0)));
+                        if(outcome.success()) awaitingChestSearch=true;
+                    } else if ("take_from_memory".equals(name)) {
+                        if(args.size()!=3) throw new IllegalArgumentException("take_from_memory 需要记忆名称、物品ID、数量");
+                        outcome=KurumiChestSearch.take(KurumiExpressions.text(args.get(0)),
+                                KurumiExpressions.text(args.get(1)),KurumiExpressions.integer(args.get(2)));
+                        if(outcome.success()) awaitingChestSearch=true;
                     } else if ("break_block".equals(name)) {
                         if (args.size()!=1 && args.size()!=3 && args.size()!=4)
                             throw new IllegalArgumentException("break_block 支持方块ID、坐标或ID加坐标");
