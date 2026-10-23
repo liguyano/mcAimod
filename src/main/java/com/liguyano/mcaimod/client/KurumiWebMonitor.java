@@ -21,6 +21,7 @@ public final class KurumiWebMonitor {
     private static final Deque<Task> HISTORY = new ArrayDeque<>();
     private static final int HISTORY_LIMIT = 30;
     private static Task current;
+    private static Task pending;
     private static String nextRequirement = "";
     private static long nextId = 1;
     private static HttpServer server;
@@ -28,7 +29,7 @@ public final class KurumiWebMonitor {
     private static final class Task {
         final long id = nextId++;
         final String requirement;
-        final String script;
+        String script;
         final String startedAt = java.time.LocalDateTime.now().toString();
         final Deque<String> events = new ArrayDeque<>();
         String state = "执行中", operation = "";
@@ -71,11 +72,45 @@ public final class KurumiWebMonitor {
     public static synchronized void requirement(String message) {
         nextRequirement = message == null ? "" : message.strip();
     }
+    /** Begin tracking as soon as a chat request is accepted, including model failures. */
+    public static synchronized void requestReceived(String message) {
+        if (pending != null) finishPending("已中断");
+        pending = new Task(message == null || message.isBlank() ? "未记录原始需求" : message.strip(), "");
+        pending.state = "生成中";
+        addEvent(pending, "收到需求，正在请求 AI 生成伪代码");
+    }
+    /** Record a successfully dispatched non-script action, including long-task launches. */
+    public static synchronized void requestDispatched(String operation) {
+        if (pending == null) return;
+        pending.operation = operation;
+        addEvent(pending, "动作请求已接受：" + operation + "；运行结果仍待游戏确认");
+        finishPending("已提交执行");
+    }
+    public static synchronized void requestFailed(String reason) {
+        if (pending == null) return;
+        addEvent(pending, "请求失败：" + reason);
+        finishPending("生成失败");
+    }
+    private static void finishPending(String status) {
+        if (pending == null) return;
+        pending.state = status;
+        pending.endedAt = java.time.LocalDateTime.now().toString();
+        HISTORY.addFirst(pending);
+        while (HISTORY.size() > HISTORY_LIMIT) HISTORY.removeLast();
+        pending = null;
+    }
     public static synchronized void begin(KurumiTaskPlanner.Program program) {
         if (current != null) archive("已中断");
         String source = SOURCES.remove(program);
-        current = new Task(nextRequirement.isBlank() ? "未记录原始需求" : nextRequirement,
-                source == null ? "(结构化任务，无原始伪代码)" : source);
+        if (pending != null) {
+            current = pending;
+            pending = null;
+            current.script = source == null ? "(结构化任务，无原始伪代码)" : source;
+        } else {
+            current = new Task(nextRequirement.isBlank() ? "未记录原始需求" : nextRequirement,
+                    source == null ? "(结构化任务，无原始伪代码)" : source);
+        }
+        current.state = "执行中";
         nextRequirement = "";
         log("任务启动");
     }
@@ -101,14 +136,18 @@ public final class KurumiWebMonitor {
         current.state = value;
         if (!"执行中".equals(value)) archive(value);
     }
+    private static void addEvent(Task task, String value) {
+        if (task == null) return;
+        task.events.addLast(java.time.LocalTime.now().withNano(0) + "  " + value);
+        while (task.events.size() > 100) task.events.removeFirst();
+    }
     public static synchronized void log(String value) {
-        if (current == null) return;
-        current.events.addLast(java.time.LocalTime.now().withNano(0) + "  " + value);
-        while (current.events.size() > 100) current.events.removeFirst();
+        addEvent(pending != null ? pending : current, value);
     }
     private static synchronized String snapshot() {
         JsonObject o = new JsonObject();
         o.add("current", current == null ? com.google.gson.JsonNull.INSTANCE : current.json());
+        o.add("pending", pending == null ? com.google.gson.JsonNull.INSTANCE : pending.json());
         JsonArray history = new JsonArray();
         for (Task task : HISTORY) history.add(task.json());
         o.add("history", history);
@@ -134,12 +173,16 @@ public final class KurumiWebMonitor {
         String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
         String gate = exchange.getRequestHeaders().getFirst("X-Kurumi-Web");
         boolean validHost = "127.0.0.1:8765".equals(host) || "localhost:8765".equals(host);
-        boolean validOrigin = "http://127.0.0.1:8765".equals(origin)
+        // Requests from the built-in page are same-origin. Some local browsers omit Origin;
+        // require the custom header, strict Host check, and reject explicit foreign origins.
+        boolean validOrigin = origin == null || "http://127.0.0.1:8765".equals(origin)
                 || "http://localhost:8765".equals(origin);
-        if (!validHost || !validOrigin || !"1".equals(gate)
+        String site = exchange.getRequestHeaders().getFirst("Sec-Fetch-Site");
+        boolean validSite = site == null || "same-origin".equals(site) || "none".equals(site);
+        if (!validHost || !validOrigin || !validSite || !"1".equals(gate)
                 || contentType == null || !contentType.startsWith("application/json")) {
             JsonObject denied = new JsonObject();
-            denied.addProperty("error", "不允许的请求来源");
+            denied.addProperty("error", "只能从本机 Kurumi 监测网页提交操作");
             reply(exchange, 403, denied);
             return;
         }
@@ -247,6 +290,7 @@ public final class KurumiWebMonitor {
             <p class="muted">通过原有解释器校验；执行后可在下方当前任务查看进度。</p>
           </section>
         </div>
+        <h2>生成请求</h2><div id="pending" class="empty">暂无生成请求</div>
         <h2>当前任务</h2><div id="current" class="empty">等待新任务…</div>
         <h2>历史任务 <span class="muted">最近30条 · 新结束的排在最上方</span></h2>
         <div id="history" class="empty">暂无已结束任务</div>
@@ -286,6 +330,9 @@ public final class KurumiWebMonitor {
             document.getElementById('previewScript').value=controls.previewScript||'';
             document.getElementById('generateBtn').disabled=controls.previewStatus==='生成中';
             document.getElementById('runBtn').disabled=controls.runStatus==='检查中';
+            const pending=document.getElementById('pending');
+            pending.className=data.pending?'':'empty';
+            pending.replaceChildren(data.pending?createTask(data.pending,false):document.createTextNode('暂无生成请求'));
             const current=document.getElementById('current');current.className=data.current?'':'empty';
             current.replaceChildren(data.current?createTask(data.current,true):document.createTextNode('等待新任务…'));
             const history=document.getElementById('history');history.replaceChildren();
@@ -293,7 +340,9 @@ public final class KurumiWebMonitor {
             history.className=history.children.length?'':'empty';
             if(!history.children.length)history.textContent='暂无已结束任务';
             document.getElementById('connection').textContent='已连接 · 每秒刷新';
-          }catch(e){document.getElementById('connection').textContent='连接断开';}
+          }catch(e){
+            document.getElementById('connection').textContent='监测刷新失败：'+String(e.message||e);
+          }
         }
 
         async function submit(path,body,feedback){
