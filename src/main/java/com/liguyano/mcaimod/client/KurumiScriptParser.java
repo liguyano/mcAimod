@@ -259,6 +259,7 @@ public final class KurumiScriptParser {
                 Matcher m = CALL.matcher(code);
                 if (!m.matches()) throw new IllegalArgumentException("unknown command");
                 String action = switch (m.group(2)) {
+                    case "attack" -> m.group(3).contains(":") ? "ATTACK_MOB" : "ATTACK_PLAYER";
                     case "attack_mob" -> "ATTACK_MOB";
                     case "attack_player" -> "ATTACK_PLAYER";
                     case "pickup_item_all" -> "PICKUP_ITEM_ALL";
