@@ -192,6 +192,25 @@ public final class KurumiExpressions {
         return value;
     }
     private JsonElement call(String name,java.util.List<JsonElement> args) {
+        if ("check_inventory".equals(name)) {
+            if (args.size()!=1) throw new IllegalArgumentException("背包检查需要一个物品ID");
+            String id=string(args.get(0));
+            if (!id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+                throw new IllegalArgumentException("物品ID无效");
+            return new JsonPrimitive(KurumiTaskChecks.inventoryCount(id));
+        }
+        if ("check_distance".equals(name)) {
+            if (args.size()!=2) throw new IllegalArgumentException("距离检查需要两个参数");
+            String kind=string(args.get(0)), target=string(args.get(1));
+            if (!java.util.Set.of("block","entity","item","player").contains(kind)
+                    || !target.matches("[A-Za-z0-9_.:-]{1,128}"))
+                throw new IllegalArgumentException("距离目标无效");
+            var result=JsonParser.parseString(KurumiToolbox.observe("get_distance:"+kind+":"+target))
+                    .getAsJsonObject();
+            if (!result.has("found") || !result.get("found").getAsBoolean())
+                throw new IllegalArgumentException("距离目标不在搜索范围");
+            return result.get("distance");
+        }
         String tool;
         switch(name) {
             case "find_nearest_block", "check_inventory_count", "get_crafting_recipe" -> {
