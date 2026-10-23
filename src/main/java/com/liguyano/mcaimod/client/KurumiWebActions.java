@@ -61,6 +61,10 @@ public final class KurumiWebActions {
                 mine("minecraft:oak_log")
                 chain_off()
                 常用动作：sleep(2)、talk("你好")、equip_main_hand("minecraft:iron_axe")、
+                破坏指定方块：break_block("minecraft:stone") 破坏4.5格内最近的石头；
+                break_block(100,64,200) 按坐标破坏，或 break_block(target.x,target.y,target.z)，
+                也可 break_block("minecraft:stone",100,64,200) 验证方块类型。
+                这是近距离单方块破坏，远处先 goto；mine 用于 Baritone 采集。
                 interact("minecraft:oak_log")、place_block("minecraft:oak_planks")、
                 place_block("minecraft:oak_planks",10,64,20)、move("forward",3)、goto(10,64,20)、
                 come("玩家名")、follow("玩家名")、stop()、mine("minecraft:oak_log")、

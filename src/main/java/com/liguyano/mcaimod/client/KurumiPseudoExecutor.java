@@ -26,6 +26,7 @@ public final class KurumiPseudoExecutor {
     private static long started;
     private static boolean running;
     private static boolean awaitingAction;
+    private static boolean awaitingBlockBreak;
     private static boolean awaitingChest;
     private static boolean awaitingCome;
     private static boolean awaitingExternal;
@@ -55,6 +56,7 @@ public final class KurumiPseudoExecutor {
         if (running) KurumiWebMonitor.state("已取消");
         running = false;
         awaitingAction = false;
+        awaitingBlockBreak = false;
         awaitingChest = false;
         awaitingCome = false;
         sleepUntil = 0;
@@ -62,6 +64,8 @@ public final class KurumiPseudoExecutor {
         awaitingCraft = false;
         awaitingMenu = false;
         frames.clear();
+        KurumiBlockBreakingBridge.cancel();
+        awaitingBlockBreak = false;
         variables.clear();
         KurumiChestInspector.cancel();
         KurumiPlanExecutor.cancel();
@@ -203,6 +207,17 @@ public final class KurumiPseudoExecutor {
                 lastResultSuccess = false;
                 KurumiWebMonitor.log("come(): 跟随90秒未能抵达，已停止");
                 if (!assignedResult) { say("未能靠近目标玩家，已停止后续动作"); cancel(); }
+            }
+            return;
+        }
+        if (awaitingBlockBreak) {
+            if (KurumiBlockBreakingBridge.busy()) return;
+            awaitingBlockBreak = false;
+            lastResultSuccess = KurumiBlockBreakingBridge.lastSucceeded();
+            KurumiWebMonitor.log("破坏方块验证：" + lastResultSuccess);
+            if (!lastResultSuccess) {
+                say("破坏方块失败，已停止");
+                cancel();
             }
             return;
         }
@@ -348,6 +363,19 @@ public final class KurumiPseudoExecutor {
                             throw new IllegalArgumentException("方块或物品ID无效");
                         outcome="interact".equals(name) ? KurumiInteractionBridge.interact(id)
                                 : KurumiEquipBridge.mainHand(id);
+                    } else if ("break_block".equals(name)) {
+                        if (args.size()!=1 && args.size()!=3 && args.size()!=4)
+                            throw new IllegalArgumentException("break_block 支持方块ID、坐标或ID加坐标");
+                        String id = (args.size()==1 || args.size()==4)
+                                ? KurumiExpressions.text(args.get(0)) : null;
+                        if (id != null && !id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+                            throw new IllegalArgumentException("方块ID无效");
+                        int offset = args.size()==4 ? 1 : 0;
+                        Integer bx = args.size()==1 ? null : KurumiExpressions.integer(args.get(offset));
+                        Integer by = args.size()==1 ? null : KurumiExpressions.integer(args.get(offset+1));
+                        Integer bz = args.size()==1 ? null : KurumiExpressions.integer(args.get(offset+2));
+                        outcome=KurumiBlockBreakingBridge.start(id,bx,by,bz);
+                        if (outcome.success()) awaitingBlockBreak=true;
                     } else if ("place_block".equals(name)) {
                         if (args.size()!=1 && args.size()!=4)
                             throw new IllegalArgumentException("place_block 需要1或4个参数");
