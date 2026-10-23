@@ -2,6 +2,9 @@ package com.liguyano.mcaimod.client;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.sun.net.httpserver.HttpExchange;
+import java.io.IOException;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -109,12 +112,66 @@ public final class KurumiWebMonitor {
         JsonArray history = new JsonArray();
         for (Task task : HISTORY) history.add(task.json());
         o.add("history", history);
+        o.add("controls", KurumiWebActions.status());
         return o.toString();
+    }
+    private static void reply(HttpExchange exchange, int code, JsonObject payload) throws IOException {
+        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+        exchange.getResponseHeaders().set("Cache-Control", "no-store");
+        byte[] bytes = payload.toString().getBytes(StandardCharsets.UTF_8);
+        exchange.sendResponseHeaders(code, bytes.length);
+        try (var out = exchange.getResponseBody()) { out.write(bytes); }
+    }
+    private static void handlePost(HttpExchange exchange, boolean preview) throws IOException {
+        if (!"POST".equals(exchange.getRequestMethod())) {
+            exchange.sendResponseHeaders(405, -1);
+            exchange.close();
+            return;
+        }
+        // A hostile web page must not be able to send game commands to localhost.
+        String host = exchange.getRequestHeaders().getFirst("Host");
+        String origin = exchange.getRequestHeaders().getFirst("Origin");
+        String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
+        String gate = exchange.getRequestHeaders().getFirst("X-Kurumi-Web");
+        boolean validHost = "127.0.0.1:8765".equals(host) || "localhost:8765".equals(host);
+        boolean validOrigin = "http://127.0.0.1:8765".equals(origin)
+                || "http://localhost:8765".equals(origin);
+        if (!validHost || !validOrigin || !"1".equals(gate)
+                || contentType == null || !contentType.startsWith("application/json")) {
+            JsonObject denied = new JsonObject();
+            denied.addProperty("error", "不允许的请求来源");
+            reply(exchange, 403, denied);
+            return;
+        }
+        try {
+            byte[] bytes = exchange.getRequestBody().readNBytes(16385);
+            if (bytes.length > 16384) {
+                JsonObject tooLarge = new JsonObject();
+                tooLarge.addProperty("error", "请求内容过长");
+                reply(exchange, 413, tooLarge);
+                return;
+            }
+            JsonObject payload = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8))
+                    .getAsJsonObject();
+            String value = payload.get(preview ? "requirement" : "script").getAsString();
+            String error = preview ? KurumiWebActions.submitGenerate(value)
+                    : KurumiWebActions.submitRun(value);
+            JsonObject result = new JsonObject();
+            result.addProperty("accepted", error == null);
+            if (error != null) result.addProperty("error", error);
+            reply(exchange, error == null ? 202 : 400, result);
+        } catch (RuntimeException error) {
+            JsonObject response = new JsonObject();
+            response.addProperty("error", "请求 JSON 格式错误");
+            reply(exchange, 400, response);
+        }
     }
     public static synchronized void install() {
         if (server != null) return;
         try {
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", 8765), 0);
+            server.createContext("/api/generate", exchange -> handlePost(exchange, true));
+            server.createContext("/api/run", exchange -> handlePost(exchange, false));
             server.createContext("/api/status", exchange -> {
                 if (!"GET".equals(exchange.getRequestMethod())) { exchange.sendResponseHeaders(405, -1); exchange.close(); return; }
                 exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
@@ -162,8 +219,34 @@ public final class KurumiWebMonitor {
         details{margin-top:12px}summary{cursor:pointer;color:#a9c8e3}
         .logs{white-space:pre-wrap;overflow-wrap:anywhere;font:12px ui-monospace,monospace;color:#a2b8cd;max-height:180px;overflow:auto}
         .empty{border:1px dashed #46556a;border-radius:12px;padding:24px;color:#a1b0c4}
+        textarea{display:block;width:100%;min-height:155px;resize:vertical;background:#101825;color:#e6f1ff;border:1px solid #415773;border-radius:8px;padding:12px;font:13px ui-monospace,Consolas,monospace}
+        textarea:focus{outline:2px solid #4185b9}button{background:#2d6da1;color:#fff;border:0;padding:9px 15px;border-radius:8px;cursor:pointer;font-weight:600}
+        button.secondary{background:#394960}button:disabled{opacity:.5;cursor:default}
+        .controls{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:10px 0}
+        .feedback{color:#b8cee4;font-size:13px;white-space:pre-wrap}
+        .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+        @media(max-width:750px){.cols{grid-template-columns:1fr}body{padding:12px}}
+
         </style></head><body>
         <header><h1>Kurumi · 任务监测</h1><span class="muted" id="connection">连接中…</span></header>
+        <div class="cols">
+          <section class="card">
+            <h2>生成伪代码 · 仅测试</h2>
+            <p class="muted">输入自然语言需求，调用已配置的 AI 生成和校验脚本。不会在游戏里执行。</p>
+            <textarea id="requirement" placeholder="例如：用铁斧给附近4个橡木原木去皮"></textarea>
+            <div class="controls"><button id="generateBtn">生成伪代码（不执行）</button><span id="previewStatus" class="feedback">空闲</span></div>
+            <h3>生成结果</h3>
+            <textarea id="previewScript" readonly placeholder="生成结果会显示在这里"></textarea>
+            <div class="controls"><button class="secondary" id="copyPreviewBtn">复制到执行区</button></div>
+          </section>
+          <section class="card">
+            <h2>直接执行伪代码</h2>
+            <p class="muted">编辑或粘贴受支持的伪代码，然后手动确认执行；会在当前游戏世界中进行真实操作。</p>
+            <textarea id="runScript" placeholder="talk(get_player_status())"></textarea>
+            <div class="controls"><button id="runBtn">确认并执行</button><span id="runStatus" class="feedback">空闲</span></div>
+            <p class="muted">通过原有解释器校验；执行后可在下方当前任务查看进度。</p>
+          </section>
+        </div>
         <h2>当前任务</h2><div id="current" class="empty">等待新任务…</div>
         <h2>历史任务 <span class="muted">最近30条 · 新结束的排在最上方</span></h2>
         <div id="history" class="empty">暂无已结束任务</div>
@@ -197,6 +280,12 @@ public final class KurumiWebMonitor {
             const response=await fetch('/api/status',{cache:'no-store'});
             if(!response.ok)throw Error(response.status);
             const data=await response.json();
+            const controls=data.controls||{};
+            document.getElementById('previewStatus').textContent=(controls.previewStatus||'空闲')+(controls.previewError?'：'+controls.previewError:'');
+            document.getElementById('runStatus').textContent=(controls.runStatus||'空闲')+(controls.runError?'：'+controls.runError:'');
+            document.getElementById('previewScript').value=controls.previewScript||'';
+            document.getElementById('generateBtn').disabled=controls.previewStatus==='生成中';
+            document.getElementById('runBtn').disabled=controls.runStatus==='检查中';
             const current=document.getElementById('current');current.className=data.current?'':'empty';
             current.replaceChildren(data.current?createTask(data.current,true):document.createTextNode('等待新任务…'));
             const history=document.getElementById('history');history.replaceChildren();
@@ -206,6 +295,31 @@ public final class KurumiWebMonitor {
             document.getElementById('connection').textContent='已连接 · 每秒刷新';
           }catch(e){document.getElementById('connection').textContent='连接断开';}
         }
+
+        async function submit(path,body,feedback){
+          try{
+            const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Kurumi-Web':'1'},
+              body:JSON.stringify(body)});
+            const data=await response.json();
+            if(!response.ok||!data.accepted)throw Error(data.error||'提交失败');
+            feedback.textContent='请求已提交';
+            refresh();
+          }catch(e){feedback.textContent=String(e.message||e);}
+        }
+        document.getElementById('generateBtn').addEventListener('click',()=>{
+          submit('/api/generate',{requirement:document.getElementById('requirement').value},
+            document.getElementById('previewStatus'));
+        });
+        document.getElementById('copyPreviewBtn').addEventListener('click',()=>{
+          document.getElementById('runScript').value=document.getElementById('previewScript').value;
+          document.getElementById('runScript').focus();
+        });
+        document.getElementById('runBtn').addEventListener('click',()=>{
+          const script=document.getElementById('runScript').value;
+          if(!script.trim())return;
+          if(!confirm('这段伪代码会在当前 Minecraft 世界中执行真实操作。确定执行吗？'))return;
+          submit('/api/run',{script},document.getElementById('runStatus'));
+        });
         refresh();setInterval(refresh,1000);
         </script></body></html>
         """;
