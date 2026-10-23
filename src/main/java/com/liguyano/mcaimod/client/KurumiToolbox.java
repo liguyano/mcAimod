@@ -18,15 +18,15 @@ public final class KurumiToolbox {
         if ("inspect_container".equals(tool) || (tool != null && tool.startsWith("inspect_slot:"))) {
             var menu = mc.player.containerMenu;
             JsonObject out = new JsonObject();
-            if (menu == mc.player.inventoryMenu) return "{\\"error\\":\\"no_open_container\\"}";
+            if (menu == mc.player.inventoryMenu) return "{\"error\":\"no_open_container\"}";
             out.addProperty("menu_class", menu.getClass().getName());
             out.addProperty("container_id", menu.containerId);
             out.addProperty("slot_count", menu.slots.size());
             int selected = -1;
             if (tool.startsWith("inspect_slot:")) {
                 try { selected = Integer.parseInt(tool.substring("inspect_slot:".length())); }
-                catch (NumberFormatException ex) { return "{\\"error\\":\\"invalid_slot\\"}"; }
-                if (selected < 0 || selected >= menu.slots.size()) return "{\\"error\\":\\"slot_out_of_range\\"}";
+                catch (NumberFormatException ex) { return "{\"error\":\"invalid_slot\"}"; }
+                if (selected < 0 || selected >= menu.slots.size()) return "{\"error\":\"slot_out_of_range\"}";
             }
             JsonArray slots = new JsonArray();
             for (int i = 0; i < menu.slots.size(); i++) {
