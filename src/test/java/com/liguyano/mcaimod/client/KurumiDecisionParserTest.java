@@ -29,6 +29,12 @@ class KurumiDecisionParserTest {
         assertTrue(KurumiDecisionParser.parse(request("stop()")).isPresent());
     }
 
+    @Test void supportsBoundedSleep() {
+        assertTrue(KurumiDecisionParser.parse(request("talk(\"稍等一下\")\nsleep(5)\ntalk(\"继续啦\")")).isPresent());
+        assertTrue(KurumiDecisionParser.parse(request("sleep(0)")).isEmpty());
+        assertTrue(KurumiDecisionParser.parse(request("sleep(121)")).isEmpty());
+    }
+
     @Test void rejectsLegacyResponses() {
         assertTrue(KurumiDecisionParser.parse("{\"type\":\"chat\",\"reply\":\"你好\"}").isEmpty());
         assertTrue(KurumiDecisionParser.parse("{\"type\":\"tool\",\"tool\":\"get_environment\",\"reply\":\"查询\"}").isEmpty());
