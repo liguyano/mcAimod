@@ -180,6 +180,8 @@ public final class KurumiClientController {
                         + "支持 if/else、while、break、return、if result.success、if not result.success；"
                         + "check_inventory、check_chest、check_distance 可用于条件比较。"
                         + "顶层最多8个整数常量（1至2304），不可运算或重新赋值，不可 import 或自定义函数。"
+                        + "固定次数任务使用 repeat(4):，其下各语句缩进4格，最多重复20次；"
+                        + "repeat 在解析时展开，每次重新执行查询和动作；展开后总语句最多48条。"
                         + "循环最多20轮，任务最多5分钟；不确定时先观察，不要假称动作已完成。"));
                 conversation.add(new ChatMessage("system",
                         "常用动作：come(\\\"玩家名\\\") 到玩家附近停止；follow(\\\"玩家名\\\") 持续跟随；"
@@ -211,6 +213,10 @@ public final class KurumiClientController {
                         + "打开容器后可使用 talk(inspect_container()) 查看全部槽位，"
                         + "talk(inspect_slot(0)) 查看指定槽位；不得预设模组机器的槽位用途。"
                         + "搜索只覆盖已加载区域；find_nearest_block 只返回位置，不会自动寻路。"
+                        + "例如给附近4个原木用斧头去皮：先 equip_main_hand(\\\"minecraft:iron_axe\\\")，"
+                        + "再 repeat(4): 下依次 talk(find_nearest_block(\\\"minecraft:oak_log\\\"))、interact(\\\"minecraft:oak_log\\\")。"
+                        + "每次都须重新寻找，原木变成 stripped 类型后才会自然跳过；只能直接交互约4.5格内方块，"
+                        + "较远目标需另外寻路，交互请求成功不代表服务器状态已变化。"
                         + "观察通过公屏发送，最多12条、间隔至少2秒，长 JSON 可能截断。"
                         + "检查箱子返回 pending 时须等待并查询结果；失败、未找到、未确认都应如实说明。"));
         // The locally controlled player is the sole owner; chat senders are not the owner.
