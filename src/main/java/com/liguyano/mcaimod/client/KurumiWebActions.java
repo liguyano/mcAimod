@@ -61,7 +61,7 @@ public final class KurumiWebActions {
                 mine("minecraft:oak_log")
                 chain_off()
                 战斗：attack("minecraft:skeleton") 攻击指定生物；attack("玩家名") 攻击指定玩家（须符合玩家攻击权限）；也支持 attack_mob("minecraft:skeleton") 和 attack_player("玩家名")。\n                箱子搜索：search_chests("minecraft:diamond") 遍历附近已加载的24格范围内最多24个普通箱子；
-                不会自动取物。完成后 result = get_chest_search_result()，talk(result) 查看报告。
+                不会自动取物。完成后 report = get_chest_search_result()，talk(report) 查看报告。
                 已检查的箱子记为 chest_1、chest_2 等，每次搜索会更新对应记忆。
                 通用方块记忆：saved = remember_block("矿场箱子",x,y,z)，
                 point = get_remembered_block("矿场箱子")，可用 point.x、point.y、point.z。
