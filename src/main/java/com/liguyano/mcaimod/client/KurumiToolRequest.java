@@ -4,13 +4,19 @@ import com.google.gson.JsonParser;
 import java.util.Set;
 public final class KurumiToolRequest {
     private static final Set<String> ALLOWED = Set.of("get_player_status", "get_environment",
-            "scan_nearby_entities", "scan_nearby_blocks", "scan_dropped_items", "get_inventory");
+            "scan_nearby_entities", "scan_nearby_blocks", "scan_dropped_items", "get_inventory",
+            "inspect_container");
     public static String parse(String raw) {
         if (raw == null || raw.length() > 8192) return null;
         try {
             JsonObject object = JsonParser.parseString(raw.strip()).getAsJsonObject();
             if (!object.has("type") || !"tool".equals(object.get("type").getAsString())) return null;
             String tool = object.get("tool").getAsString();
+            if ("inspect_slot".equals(tool)) {
+                if (!object.has("index")) return null;
+                int index = object.get("index").getAsInt();
+                return index >= 0 && index <= 255 ? "inspect_slot:" + index : null;
+            }
             if ("get_distance".equals(tool)) {
                 String kind = object.has("kind") ? object.get("kind").getAsString() : "";
                 String target = object.has("target") ? object.get("target").getAsString() : "";
