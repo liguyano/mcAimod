@@ -51,6 +51,15 @@ public final class KurumiWebActions {
                 允许通用变量赋值、变量重新赋值、加减乘除、布尔条件和 JSON 字典点号访问；禁止 for/range、函数定义、import。\n                例如 target = find_nearest_block("minecraft:crafting_table")，\n                if target.found: 下一行缩进四格 goto(target.x,target.y,target.z)。\n                允许 count = count + 1、talk(target)、sleep(count)；变量最多16个，仅作用于当前脚本。
                 get_position() 返回 x、y、z 坐标对象，可赋值 pos = get_position()，使用 goto(pos.x,pos.y,pos.z)。
                 也支持 talk(get_position()) 直接输出坐标。
+                连锁挖掘：chain_on() 启用 OneKeyMiner 连锁按键，chain_off() 关闭它。
+                用户明确要求“连锁”、连锁砍树、连锁挖矿、批量连锁破坏时，生成脚本必须在 mine() 之前调用 chain_on()，
+                并在采集结束后调用 chain_off()。注意 chain_on() 只是按下 OneKeyMiner 连锁按键，
+                只有客户端安装兼容的 OneKeyMiner 才能生效，不能虚构它已成功挖掘。
+                不要把 repeat/while 多次 mine() 当成开启连锁；二者不是同一种功能。
+                例子：
+                chain_on()
+                mine("minecraft:oak_log")
+                chain_off()
                 常用动作：sleep(2)、talk("你好")、equip_main_hand("minecraft:iron_axe")、
                 interact("minecraft:oak_log")、place_block("minecraft:oak_planks")、
                 place_block("minecraft:oak_planks",10,64,20)、move("forward",3)、goto(10,64,20)、
@@ -74,8 +83,11 @@ public final class KurumiWebActions {
                             JsonObject json = JsonParser.parseString(reply).getAsJsonObject();
                             String script = json.get("script").getAsString();
                             boolean valid = script.length() <= 8192 && KurumiScriptParser.parse(script).isPresent();
+                            boolean wantsChain = requirement.contains("连锁") || requirement.toLowerCase(java.util.Locale.ROOT).contains("vein mine");
+                            boolean missingChain = wantsChain && !script.contains("chain_on()");
+                            if (missingChain) valid = false;
                             completePreview(id, script.length() > 8192 ? script.substring(0, 8192) : script,
-                                    valid ? "" : "模型生成脚本未通过解释器校验");
+                                    valid ? "" : missingChain ? "用户要求连锁，但 AI 未生成 chain_on()；请重新生成或手动补上" : "模型生成脚本未通过解释器校验");
                         } catch (RuntimeException exception) {
                             completePreview(id, "", "模型没有返回合法的 script JSON");
                         }

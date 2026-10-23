@@ -198,6 +198,8 @@ public final class KurumiClientController {
                         + "drop、drop_all、drop_item_all、chest_open、chest_take、chest_put、"
                         + "chest_take_all、chest_put_all、chest_put_item_all、"
                         + "craft_open、craft_item、equip_armor、equip_main_hand、chain_on、chain_off。"
+                        + "连锁砍树或连锁挖矿必须在 mine 前执行 chain_on()，结束时 chain_off()。"
+                        + "连锁需要客户端安装兼容 OneKeyMiner；普通 repeat/mine 循环不等于开启连锁。"
                         + "交互：interact(\\\"minecraft:furnace\\\") 打开附近对应方块界面，"
                         + "put_item(\\\"minecraft:iron_ore\\\",16,\\\"input\\\")、"
                         + "put_item(\\\"minecraft:coal\\\",16,\\\"fuel\\\")、"
