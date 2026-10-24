@@ -115,18 +115,20 @@ public final class KurumiToolbox {
             result.addProperty("block_id", blockId);
             BlockPos origin = mc.player.blockPosition();
             BlockPos nearest = null;
+            String actualBlockId = "";
             double best = Double.POSITIVE_INFINITY;
             for (BlockPos pos : BlockPos.betweenClosed(
                     origin.offset(-24, -8, -24), origin.offset(24, 8, 24))) {
                 if (!mc.level.hasChunkAt(pos)) continue;
                 String id = BuiltInRegistries.BLOCK.getKey(
                         mc.level.getBlockState(pos).getBlock()).toString();
-                if (!blockId.equals(id)) continue;
+                if (!KurumiBedMatcher.matches(blockId, id)) continue;
                 double distance = pos.distSqr(origin);
-                if (distance < best) { best = distance; nearest = pos.immutable(); }
+                if (distance < best) { best = distance; nearest = pos.immutable(); actualBlockId = id; }
             }
             result.addProperty("found", nearest != null);
             if (nearest != null) {
+                result.addProperty("block_id", actualBlockId);
                 result.addProperty("x", nearest.getX());
                 result.addProperty("y", nearest.getY());
                 result.addProperty("z", nearest.getZ());
