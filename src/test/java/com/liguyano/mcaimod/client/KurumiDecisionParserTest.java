@@ -21,6 +21,19 @@ class KurumiDecisionParserTest {
                 "{\"type\":\"clarify\",\"question\":\"\"}").isEmpty());
     }
 
+    @Test void continueFlagIsOptInAndValidated() {
+        String basic = request("talk(get_environment())");
+        assertFalse(KurumiDecisionParser.wantsContinuation(basic));
+        String ongoing = basic.substring(0, basic.length() - 1) + ",\"continue\":true}";
+        assertTrue(KurumiDecisionParser.wantsContinuation(ongoing));
+        assertTrue(KurumiDecisionParser.parse(ongoing).isPresent());
+        assertFalse(KurumiDecisionParser.wantsContinuation(
+                basic.substring(0, basic.length() - 1) + ",\"continue\":false}"));
+        assertFalse(KurumiDecisionParser.wantsContinuation(
+                basic.substring(0, basic.length() - 1) + ",\"continue\":\"true\"}"));
+        assertFalse(KurumiDecisionParser.wantsContinuation("not-json"));
+    }
+
     @Test void acceptsScriptSpeech() {
         var decision = KurumiDecisionParser.parse(request("talk(\"你好，主人~\")")).orElseThrow();
         assertTrue(decision.action().isEmpty());
