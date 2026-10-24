@@ -75,6 +75,7 @@ public final class KurumiClientController {
         KurumiChestInspector.install();
         KurumiChestSearch.install();
         KurumiFishingBridge.install();
+        KurumiItemUseBridge.install();
     }
 
     private static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
@@ -102,6 +103,7 @@ public final class KurumiClientController {
         KurumiChestSearch.cancel();
         KurumiTaskRecovery.cancel();
         KurumiFishingBridge.cancel();
+        KurumiItemUseBridge.cancel();
     }
 
     /** Immediate local emergency stop; never invokes or waits for the language model. */
@@ -121,6 +123,7 @@ public final class KurumiClientController {
         KurumiChestCraftTask.cancel();
         KurumiTaskRecovery.cancel();
         KurumiFishingBridge.cancel();
+        KurumiItemUseBridge.cancel();
         KurumiBedShortcut.cancel();
         KurumiChestBridge.cancel();
         KurumiInteractionBridge.cancel();
@@ -377,7 +380,22 @@ public final class KurumiClientController {
                         + "craft_open、craft_item、equip_armor、equip_main_hand、chain_on、chain_off。"
                         + "连锁砍树或连锁挖矿必须在 mine 前执行 chain_on()，结束时 chain_off()。"
                         + "连锁需要客户端安装兼容 OneKeyMiner；普通 repeat/mine 循环不等于开启连锁。"
-                        + "交互：interact(\\\"minecraft:furnace\\\") 打开附近对应方块界面，"
+                        + "Minecraft 的操作分为方块交互、实体交互、手持物品持续使用、菜单槽位操作等，"
+                        + "不能把所有操作理解为右键一次。interact(\\\"minecraft:furnace\\\") 打开附近方块界面；"
+                        + "遇到不熟悉的Minecraft操作时，先观察目标的实际类型、方块/实体ID、距离和当前状态；"
+                        + "再推测是否属于右键交互，并优先尝试合适的 interact(\\\"目标ID\\\")。"
+                        + "如果是手持物品需要持续按住使用，则考虑 use_item；需要向机器放东西则先 interact 打开菜单，"
+                        + "再观察槽位并使用 put_item。不要仅因没有专用动作就回答不会做。"
+                        + "每次尝试后观察工具反馈和世界变化，成功就继续，失败则依据原因换一种方法，"
+                        + "不要无限重复同一失败交互；对攻击玩家、破坏方块、丢弃物品等有风险操作，"
+                        + "绝不可用猜测交互来代替明确授权。"
+                        + "interact(\\\"minecraft:oak_boat\\\") 尝试与附近船实体交互上船；"
+                        + "interact(\\\"minecraft:villager\\\") 尝试与村民实体交互。"
+                        + "interact 的响应只是尝试结果，必须再次观察是否真正乘坐或打开菜单。"
+                        + "使用食物或药水先 equip_main_hand(\\\"minecraft:apple\\\")，等待装备完成，"
+                        + "再 use_item(\\\"minecraft:apple\\\") 持续使用，直到观察到消耗或超时。"
+                        + "不要用 sleep 或 interact 冒充吃东西；停止指令可取消持续使用。"
+                        + "已打开容器后的转移使用槽位操作："
                         + "put_item(\\\"minecraft:iron_ore\\\",16,\\\"input\\\")、"
                         + "put_item(\\\"minecraft:coal\\\",16,\\\"fuel\\\")、"
                         + "take_item(\\\"minecraft:iron_ingot\\\",16) 操作已打开容器。"

@@ -61,6 +61,7 @@ public final class KurumiPseudoExecutor {
     private static boolean awaitingChest;
     private static boolean awaitingCome;
     private static boolean awaitingBed;
+    private static boolean awaitingItemUse;
     private static boolean awaitingExternal;
     private static boolean awaitingCraft;
     private static boolean awaitingMenu;
@@ -126,6 +127,8 @@ public final class KurumiPseudoExecutor {
         awaitingCome = false;
         if (awaitingBed) KurumiBedShortcut.cancel();
         awaitingBed = false;
+        if (awaitingItemUse) KurumiItemUseBridge.cancel();
+        awaitingItemUse = false;
         sleepUntil = 0;
         awaitingExternal = false;
         awaitingCraft = false;
@@ -175,6 +178,7 @@ public final class KurumiPseudoExecutor {
         awaitingChest = false;
         awaitingCome = false;
         awaitingBed = false;
+        awaitingItemUse = false;
         awaitingExternal = false;
         awaitingCraft = false;
         awaitingMenu = false;
@@ -231,6 +235,16 @@ public final class KurumiPseudoExecutor {
             if (System.currentTimeMillis() < sleepUntil) return;
             sleepUntil = 0;
             KurumiWebMonitor.log("sleep(): 等待结束，继续执行");
+        }
+        if (awaitingItemUse) {
+            if (KurumiItemUseBridge.busy()) return;
+            awaitingItemUse = false;
+            lastResultSuccess = KurumiItemUseBridge.lastSucceeded();
+            finishPendingAction(lastResultSuccess,
+                    lastResultSuccess ? "物品已使用，客户端观察到消耗" : "物品使用没有在时限内完成");
+            KurumiWebMonitor.log("use_item(): " + (lastResultSuccess ? "使用成功" : "使用失败或超时"));
+            if (!lastResultSuccess && !assignedResult) cancel();
+            return;
         }
         if (awaitingMenu) {
             if (mc.player.containerMenu != mc.player.inventoryMenu) {
@@ -514,13 +528,15 @@ public final class KurumiPseudoExecutor {
                         if (!java.util.Set.of("forward","back","left","right").contains(direction)
                                 || blocks < 1 || blocks > 16) throw new IllegalArgumentException("move 参数无效");
                         outcome=BaritoneBridge.moveRelative(direction,blocks);
-                    } else if ("interact".equals(name) || "equip_main_hand".equals(name)) {
+                    } else if ("interact".equals(name) || "use_item".equals(name) || "equip_main_hand".equals(name)) {
                         if (args.size()!=1) throw new IllegalArgumentException("指令需要一个物品ID");
                         String id=KurumiExpressions.text(args.get(0));
                         if (!id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
                             throw new IllegalArgumentException("方块或物品ID无效");
                         outcome="interact".equals(name) ? KurumiInteractionBridge.interact(id)
+                                : "use_item".equals(name) ? KurumiItemUseBridge.use(id)
                                 : KurumiEquipBridge.mainHand(id);
+                        if (outcome.success() && "use_item".equals(name)) awaitingItemUse = true;
                     } else if ("search_chests".equals(name)) {
                         if (args.size()!=1) throw new IllegalArgumentException("search_chests 需要一个物品ID");
                         outcome=KurumiChestSearch.search(KurumiExpressions.text(args.get(0)));
@@ -558,7 +574,7 @@ public final class KurumiPseudoExecutor {
                     observe("动作 " + name, outcome.success() + "; " + outcome.message());
                     lastResultSuccess=outcome.success();
                     if (assign) {
-                        if (outcome.success() && (awaitingAction || awaitingBlockBreak || awaitingChestSearch)) {
+                        if (outcome.success() && (awaitingAction || awaitingBlockBreak || awaitingChestSearch || awaitingItemUse)) {
                             pendingActionVariable = resultVariable;
                         } else {
                             // For move()/place_block()/interact() the bridge only confirms that

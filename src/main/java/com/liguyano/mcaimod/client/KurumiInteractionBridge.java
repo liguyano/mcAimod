@@ -12,6 +12,7 @@ import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
@@ -25,6 +26,7 @@ public final class KurumiInteractionBridge {
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiInteractionBridge::tick); }
     public static boolean busy() { return pending != null; }
     public static void cancel() { pending = null; }
+
 
     public static BaritoneBridge.Result interact(String blockId) {
         Minecraft mc = Minecraft.getInstance();
@@ -42,7 +44,23 @@ public final class KurumiInteractionBridge {
             double dist = mc.player.getEyePosition().distanceToSqr(Vec3.atCenterOf(pos));
             if (dist < best) { best = dist; nearest = pos.immutable(); }
         }
-        if (nearest == null) return new BaritoneBridge.Result(false, "交互距离内找不到 " + blockId);
+        if (nearest == null) {
+            net.minecraft.world.entity.Entity target = null;
+            double entityDistance = 4.5 * 4.5;
+            for (var entity : mc.level.getEntities(mc.player,
+                    mc.player.getBoundingBox().inflate(5.0), e -> e.isAlive() && e.isPickable())) {
+                String id = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
+                if (!KurumiEntityMatcher.matches(blockId, id) || !mc.player.isWithinEntityInteractionRange(entity, 0.0)) continue;
+                double distance = mc.player.getEyePosition().distanceToSqr(entity.getBoundingBox().getCenter());
+                if (distance < entityDistance) { entityDistance = distance; target = entity; }
+            }
+            if (target == null) return new BaritoneBridge.Result(false, "交互距离内找不到方块或实体 " + blockId);
+            var result = mc.gameMode.interact(mc.player, target,
+                    new EntityHitResult(target), InteractionHand.MAIN_HAND);
+            return new BaritoneBridge.Result(result.consumesAction(),
+                    result.consumesAction() ? "已尝试与实体 " + blockId + " 交互（需再次观察是否成功上船或打开界面）"
+                            : "实体未接受交互 " + blockId);
+        }
         var result = mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND,
                 new BlockHitResult(Vec3.atCenterOf(nearest), Direction.UP, nearest, false));
         return new BaritoneBridge.Result(result.consumesAction(),
