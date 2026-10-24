@@ -287,9 +287,19 @@ public final class KurumiExpressions {
         return e.getAsString();
     }
     private static double number(JsonElement e) {
-        if (e==null || !e.isJsonPrimitive() || !e.getAsJsonPrimitive().isNumber())
-            throw new IllegalArgumentException("需要数值");
-        return e.getAsDouble();
+        // Observation helpers such as check_inventory_count return {"item_id": ..., "count": N}.
+        // Retain the object for .count access, but permit its numeric count in expressions.
+        if (e != null && e.isJsonObject()) {
+            JsonObject object = e.getAsJsonObject();
+            if (object.has("count") && object.get("count").isJsonPrimitive()
+                    && object.get("count").getAsJsonPrimitive().isNumber())
+                e = object.get("count");
+        }
+        if (e == null || !e.isJsonPrimitive() || !e.getAsJsonPrimitive().isNumber())
+            throw new IllegalArgumentException("需要数值（对象请使用 .count 等数字字段）");
+        double value = e.getAsDouble();
+        if (!Double.isFinite(value)) throw new IllegalArgumentException("数值必须有限");
+        return value;
     }
     private static JsonElement numeric(double value) {
         if (!Double.isFinite(value) || Math.abs(value)>30000000)

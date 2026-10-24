@@ -48,7 +48,12 @@ public final class KurumiWebActions {
                 每行一个命令，嵌套缩进四个空格。支持 repeat(4): 固定次数循环（1-20次，展开最多200语句）；
                 支持 while/if/else、break、return "完成"、if result.success:，
                 以及 check_inventory、check_chest、check_distance 的条件比较。
-                允许通用变量赋值、变量重新赋值、加减乘除、布尔条件和 JSON 字典点号访问；禁止 for/range、函数定义、import。\n                例如 target = find_nearest_block("minecraft:crafting_table")，\n                if target.found: 下一行缩进四格 goto(target.x,target.y,target.z)。\n                允许 count = count + 1、talk(target)、sleep(count)；变量最多16个，仅作用于当前脚本。
+                允许通用变量赋值、变量重新赋值、加减乘除、布尔条件和 JSON 字典点号访问；禁止 for/range、函数定义、import。\n                例如 target = find_nearest_block("minecraft:crafting_table")，\n                if target.found: 下一行缩进四格 goto(target.x,target.y,target.z)。\n                数量比较优先使用 check_inventory("minecraft:cherry_log")，它直接返回数字；
+                check_inventory_count("minecraft:cherry_log") 返回包含 count 字段的对象，
+                可写 status = check_inventory_count("minecraft:cherry_log")，然后 if status.count >= 256:，
+                也兼容 if status >= 256:。支持小数变量和运算，例如 rate = 1.5、rate = rate + 0.5，
+                if / while 可直接比较数值变量。整数坐标和整数槽位仍须用整数。
+                允许 count = count + 1、talk(target)、sleep(count)；变量最多16个，仅作用于当前脚本。
                 get_position() 返回 x、y、z 坐标对象，可赋值 pos = get_position()，使用 goto(pos.x,pos.y,pos.z)。
                 也支持 talk(get_position()) 直接输出坐标。
                 连锁挖掘：chain_on() 启用 OneKeyMiner 连锁按键，chain_off() 关闭它。

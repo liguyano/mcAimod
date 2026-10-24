@@ -20,6 +20,41 @@ class KurumiExpressionsTest {
         assertTrue(KurumiScriptParser.parse(tooManyExpanded).isEmpty());
     }
 
+    @Test void countObjectCanBeComparedAndUsedInWhileIfExpressions() {
+        Map<String, JsonElement> vars = new HashMap<>();
+        JsonObject observation = new JsonObject();
+        observation.addProperty("item_id", "minecraft:cherry_log");
+        observation.addProperty("count", 0);
+        vars.put("count", observation);
+        assertTrue(KurumiScriptParser.parse("""
+                count = check_inventory_count("minecraft:cherry_log")
+                i = 0
+                while i < 20:
+                    if count >= 256:
+                        break
+                    i = i + 1
+                """).isPresent());
+        assertFalse(KurumiExpressions.truth(KurumiExpressions.evaluate("count >= 256", vars)));
+        assertTrue(KurumiExpressions.truth(KurumiExpressions.evaluate("count.count == 0", vars)));
+        assertEquals(1, KurumiExpressions.integer(KurumiExpressions.evaluate("count + 1", vars)));
+        observation.addProperty("count", 256);
+        assertTrue(KurumiExpressions.truth(KurumiExpressions.evaluate("count >= 256", vars)));
+    }
+
+    @Test void floatArithmeticAndConditionsRemainSupported() {
+        Map<String, JsonElement> vars = new HashMap<>();
+        vars.put("ratio", KurumiExpressions.evaluate("1.5 + 2.25 / 2", vars));
+        assertTrue(KurumiExpressions.truth(KurumiExpressions.evaluate("ratio > 2.6", vars)));
+        assertTrue(KurumiExpressions.truth(KurumiExpressions.evaluate("ratio < 3.0 and not (ratio < 2)", vars)));
+        assertTrue(KurumiScriptParser.parse("""
+                ratio = 1.5
+                while ratio < 4.0:
+                    ratio = ratio + 0.5
+                if ratio >= 4.0:
+                    talk("done")
+                """).isPresent());
+    }
+
     @Test void dictionaryFieldsAndArguments() {
         Map<String, JsonElement> vars = new HashMap<>();
         JsonObject target = new JsonObject();
