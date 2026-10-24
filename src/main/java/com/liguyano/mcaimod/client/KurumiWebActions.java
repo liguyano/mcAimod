@@ -122,7 +122,7 @@ public final class KurumiWebActions {
                         goto(target.x,target.y,target.z)
                         chest_put_item_all("minecraft:cherry_log")
                 pickup_item_all("minecraft:cherry_log") 每轮拾取最多15秒，无进展目标会跳过；
-                背包中一组=64个，三组=192个。while 最多20轮，整个脚本任务最多5分钟。
+                背包中一组=64个，三组=192个。while 最多20轮，整个脚本任务最多20分钟。
                 找到箱子坐标不等于已打开箱子，goto 也不保证最终到达，不能虚构成功。
                 用户要求去水边时，不要把水方块内部当安全落脚点；当前不具备自动选水边安全位置的专门工具，
                 不要胡编不存在的 find_safe_position、goto_water_edge 等函数。
