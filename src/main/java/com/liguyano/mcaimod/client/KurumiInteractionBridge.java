@@ -69,7 +69,7 @@ public final class KurumiInteractionBridge {
         if (mc.player.containerMenu instanceof CraftingMenu menu) {
             if ("fuel".equals(slot))
                 return new BaritoneBridge.Result(false, "工作台没有燃料槽 fuel，请使用 input、auto 或 grid_1 至 grid_9");
-            int targetSlot = craftingSlotIndex(slot);
+            int targetSlot = KurumiCraftingSlotRules.index(slot);
             return craftingTransfer(menu, itemId, quantity, targetSlot);
         }
         if (!"auto".equals(slot))
@@ -77,13 +77,6 @@ public final class KurumiInteractionBridge {
         if (mc.player.containerMenu != mc.player.inventoryMenu)
             return genericTransfer(itemId, quantity, true);
         return new BaritoneBridge.Result(false, "请先用 interact() 打开附近熔炉、箱子或工作台");
-    }
-
-    /** On a crafting table, input and auto both mean the first compatible crafting cell. */
-    static int craftingSlotIndex(String slot) {
-        if ("input".equals(slot) || "auto".equals(slot)) return -1;
-        if (slot != null && slot.matches("grid_[1-9]")) return Integer.parseInt(slot.substring(5));
-        throw new IllegalArgumentException("工作台槽位无效");
     }
 
     /** CraftingMenu: output=0, 3x3 input grid=1..9, followed by player inventory. */
