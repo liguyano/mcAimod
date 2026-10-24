@@ -259,6 +259,8 @@ public final class KurumiWebMonitor {
         textarea:focus{outline:2px solid #4185b9}button{background:#2d6da1;color:#fff;border:0;padding:9px 15px;border-radius:8px;cursor:pointer;font-weight:600}
         button.secondary{background:#394960}button:disabled{opacity:.5;cursor:default}
         .controls{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:10px 0}
+        .section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:12px}
+        .section-head h3{margin:0}.copy-btn{padding:6px 11px;font-size:12px}
         .feedback{color:#b8cee4;font-size:13px;white-space:pre-wrap}
         .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
         @media(max-width:750px){.cols{grid-template-columns:1fr}body{padding:12px}}
@@ -298,6 +300,33 @@ public final class KurumiWebMonitor {
             logViews.set(details.dataset.taskId,{open:details.open,scrollTop:logs?logs.scrollTop:0});
           }
         }
+        async function copyText(text,button){
+          const value=String(text??'');
+          if(!value){button.textContent='没有内容';return;}
+          try{
+            if(navigator.clipboard && window.isSecureContext){
+              await navigator.clipboard.writeText(value);
+            }else{
+              // LAN HTTP pages usually lack navigator.clipboard; use selectable temporary textarea.
+              const temporary=document.createElement('textarea');
+              temporary.value=value;temporary.setAttribute('readonly','');
+              temporary.style.cssText='position:fixed;left:-9999px;top:0;opacity:0';
+              document.body.append(temporary);
+              temporary.focus();temporary.select();
+              let copied=false;
+              try{copied=document.execCommand('copy');}
+              finally{temporary.remove();}
+              if(!copied)throw Error('浏览器拒绝复制，请手动选中文本');
+            }
+            button.textContent='已复制';
+          }catch(error){button.textContent='复制失败';button.title=String(error.message||error);}
+        }
+        function createCopyButton(label,value){
+          const button=el('button','secondary copy-btn',label);
+          button.type='button';
+          button.addEventListener('click',()=>copyText(value,button));
+          return button;
+        }
         function createTask(t,active){
           const card=el('article','card'+(active?' current':''));
           const head=el('div','head'), title=el('strong','', '任务 #'+t.id);
@@ -309,7 +338,9 @@ public final class KurumiWebMonitor {
           [['当前行',t.line||'-'],['步骤',t.operation||'-'],['动作数',t.actions||0],['循环次数',t.iteration||0]].forEach(([k,v])=>{
             const x=el('span','',k+'：');x.append(el('strong','',v));stats.append(x);
           });
-          card.append(stats,el('h3','','脚本'));
+          const scriptHeader=el('div','section-head');
+          scriptHeader.append(el('h3','','脚本'),createCopyButton('复制脚本',t.script||''));
+          card.append(stats,scriptHeader);
           const code=el('div','code');
           (t.script||'（无脚本）').split('\\n').forEach((line,i)=>{
             const row=el('div','code-line'+(active&&i+1===t.line?' active':''));
@@ -321,7 +352,9 @@ public final class KurumiWebMonitor {
             const logs=el('div','logs',t.events.join('\\n'));
             const previous=logViews.get(String(t.id));
             if(previous){details.open=previous.open;logs.scrollTop=previous.scrollTop;}
-            details.append(summary,logs);card.append(details);
+            const logCopy=createCopyButton('复制日志',t.events.join('\\n'));
+            const logHead=el('div','section-head');logHead.append(details,logCopy);
+            details.append(summary,logs);card.append(logHead);
             if(previous && previous.scrollTop)requestAnimationFrame(()=>{logs.scrollTop=previous.scrollTop;});
           }
           return card;
