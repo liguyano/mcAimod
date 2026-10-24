@@ -135,6 +135,17 @@ public final class KurumiTaskPlanner {
                         ? parseStatements(node.getAsJsonArray("else"), depth + 1, budget) : List.of();
                 statements.add(new Statement(op, new Step(op, expression, 1,
                         null, null, null, ""), null, body, other));
+            } else if ("EXPR_ACTION_ASSIGN".equals(op)) {
+                String name = node.get("name").getAsString();
+                String method = node.get("method").getAsString();
+                String args = node.get("expression").getAsString();
+                if (!name.matches("[a-z][a-z0-9_]{0,23}")
+                        || !java.util.Set.of("goto", "move", "interact", "equip_main_hand",
+                                "place_block", "break_block", "search_chests", "take_from_memory").contains(method)
+                        || args.length() > 500)
+                    throw new IllegalArgumentException("invalid assigned action");
+                statements.add(new Statement(op, new Step(method, args, 1,
+                        null, null, null, name), null, List.of(), List.of()));
             } else if ("EXPR_CALL".equals(op)) {
                 String method = node.get("method").getAsString();
                 String args = node.get("expression").getAsString();
