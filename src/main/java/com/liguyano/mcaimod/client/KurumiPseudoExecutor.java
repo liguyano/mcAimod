@@ -78,15 +78,15 @@ public final class KurumiPseudoExecutor {
         if (mc.getConnection() != null) mc.getConnection().sendChat(msg);
     }
     public static String status() {
-        return running ? "伪代码执行中：动作 " + actions + "/" + MAX_ACTIONS
-                + "，嵌套层级 " + frames.size() : "没有伪代码任务";
+        return running ? "脚本执行中：动作 " + actions + "/" + MAX_ACTIONS
+                + "，嵌套层级 " + frames.size() : "没有脚本任务";
     }
     public static BaritoneBridge.Result start(KurumiTaskPlanner.Program program) {
         if (running || KurumiPlanExecutor.busy() || KurumiLongTaskBridge.busy()
                 || KurumiChestCraftTask.busy())
             return new BaritoneBridge.Result(false, "已有任务正在执行");
         if (program == null || program.statements().isEmpty())
-            return new BaritoneBridge.Result(false, "伪代码为空");
+            return new BaritoneBridge.Result(false, "脚本为空");
         frames.clear();
         frames.push(new Frame(program.statements(), null));
         started = System.currentTimeMillis();
@@ -107,7 +107,7 @@ public final class KurumiPseudoExecutor {
         pendingStatement = null;
         running = true;
         KurumiWebMonitor.begin(program);
-        return new BaritoneBridge.Result(true, "已开始执行受控伪代码任务");
+        return new BaritoneBridge.Result(true, "已开始执行受控脚本任务");
     }
     private static boolean matches(int actual, KurumiTaskPlanner.Condition c) {
         return switch (c.operator()) {
@@ -135,7 +135,7 @@ public final class KurumiPseudoExecutor {
         } else if ("WHILE".equals(stmt.op()) || "EXPR_WHILE".equals(stmt.op())) {
             if (!result) { frame.index++; return; }
             if (++frame.iterations > MAX_ITERATIONS) {
-                say("伪代码循环达到每个 WHILE 最多 " + MAX_ITERATIONS + " 次的限制");
+                say("脚本循环达到每个 WHILE 最多 " + MAX_ITERATIONS + " 次的限制");
                 cancel();
                 return;
             }
@@ -147,7 +147,7 @@ public final class KurumiPseudoExecutor {
         var mc = Minecraft.getInstance();
         if (mc.player == null || mc.getConnection() == null) { cancel(); return; }
         if (System.currentTimeMillis() - started > TIMEOUT) {
-            say("伪代码超过5分钟，已停止");
+            say("脚本超过5分钟，已停止");
             cancel();
             return;
         }
@@ -242,7 +242,7 @@ public final class KurumiPseudoExecutor {
             lastResultSuccess = KurumiPlanExecutor.lastSucceeded();
             KurumiWebMonitor.log("动作结束，验证结果：" + lastResultSuccess);
             if (!lastResultSuccess && !assignedResult) {
-                say("伪代码动作失败，已停止");
+                say("脚本动作失败，已停止");
                 cancel();
             }
             return;
@@ -262,7 +262,7 @@ public final class KurumiPseudoExecutor {
         if (frames.isEmpty()) {
             running = false;
             KurumiWebMonitor.state("已完成");
-            say("伪代码任务执行完成");
+            say("脚本任务执行完成");
             return;
         }
         Frame frame = frames.peek();
@@ -286,7 +286,7 @@ public final class KurumiPseudoExecutor {
                     frame.index++;
                 } catch (RuntimeException ex) {
                     KurumiWebMonitor.log("变量赋值失败：" + ex.getMessage());
-                    say("伪代码变量错误，任务停止");
+                    say("脚本变量错误，任务停止");
                     cancel();
                 }
             }
@@ -466,7 +466,7 @@ public final class KurumiPseudoExecutor {
                 // Rate-limit scripted public messages to avoid flooding multiplayer chat.
                 long now = System.currentTimeMillis();
                 if (publicMessages >= 12) {
-                    say("伪代码 talk 次数超过上限，任务已停止");
+                    say("脚本 talk 次数超过上限，任务已停止");
                     cancel();
                     return;
                 }
@@ -607,14 +607,14 @@ public final class KurumiPseudoExecutor {
                     return;
                 }
                 if (++actions > MAX_ACTIONS) {
-                    say("伪代码动作数量达到安全上限");
+                    say("脚本动作数量达到安全上限");
                     cancel();
                     return;
                 }
                 var plan = new KurumiTaskPlanner.Plan(List.of(stmt.step()), 1, 1, 1, List.of());
                 var result = KurumiPlanExecutor.start(plan);
                 if (!result.success()) {
-                    say("伪代码动作启动失败：" + result.message());
+                    say("脚本动作启动失败：" + result.message());
                     cancel();
                     return;
                 }
@@ -672,7 +672,7 @@ public final class KurumiPseudoExecutor {
                 running = false;
                 frames.clear();
                 KurumiWebMonitor.state("RETURN 结束");
-                say("伪代码执行 RETURN，任务结束");
+                say("脚本执行 RETURN，任务结束");
             }
             case "BREAK" -> {
                 Frame target = null;
