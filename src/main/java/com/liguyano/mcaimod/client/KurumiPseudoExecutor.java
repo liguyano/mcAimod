@@ -27,17 +27,21 @@ public final class KurumiPseudoExecutor {
     private static long runSequence, activeRunId, finishedRunId;
     private static boolean finishedRunSucceeded;
     private static String finishedRunReport = "";
+    private static boolean finishedRunObserved;
     private static final StringBuilder observations = new StringBuilder();
     private static int observationCount;
     public static long activeRunId() { return activeRunId; }
     public static long finishedRunId() { return finishedRunId; }
     public static boolean finishedRunSucceeded() { return finishedRunSucceeded; }
     public static String finishedRunReport() { return finishedRunReport; }
+    public static boolean finishedRunObserved() { return finishedRunObserved; }
 
     private static void observe(String category, String value) {
-        if (observationCount >= 18 || observations.length() >= 5200) return;
+        if (observationCount >= 18 || observations.length() >= 32000) return;
         String safe = value == null ? "(null)" : value.replace('\r', ' ').replace('\n', ' ');
-        if (safe.length() > 850) safe = safe.substring(0, 850) + "...(已截断)";
+        if (safe.length() > 32000 - observations.length())
+            safe = safe.substring(0, Math.max(0, 32000 - observations.length()))
+                    + "[观察过大：后续数据必须缩小范围重新查询]";
         observations.append(category).append(": ").append(safe).append('\n');
         observationCount++;
     }
@@ -47,7 +51,8 @@ public final class KurumiPseudoExecutor {
         finishedRunSucceeded = success;
         String report = "结果：" + reason + "; 成功=" + success + "; 动作数=" + actions
                 + "; 观察与结果：\n" + observations;
-        finishedRunReport = report.length() > 6000 ? report.substring(0, 6000) : report;
+        finishedRunReport = report.length() > 48000
+                ? report.substring(0, 48000) + "\n[报告过大，后续内容需重新分批查询]" : report;
     }
     private static boolean running;
     private static boolean awaitingAction;
@@ -75,6 +80,18 @@ public final class KurumiPseudoExecutor {
     /** Deferred result variable for a script action awaiting postflight verification. */
     private static String pendingActionVariable;
     private static final java.util.Map<String, com.google.gson.JsonElement> variables = new java.util.HashMap<>();
+    private static final int MAX_VARIABLE_BYTES = 2_000_000;
+
+    public static String variablesSnapshot() {
+        return new com.google.gson.Gson().toJson(variables);
+    }
+    public static void clearVariables() { variables.clear(); }
+    private static void checkMemory(String name, com.google.gson.JsonElement value) {
+        int total = name.length() + value.toString().length();
+        for (var e : variables.entrySet()) if (!e.getKey().equals(name))
+            total += e.getKey().length() + e.getValue().toString().length();
+        if (total > MAX_VARIABLE_BYTES) throw new IllegalArgumentException("脚本变量总内存预算超出2MB");
+    }
 
     private static void assignActionResult(String name, boolean success, boolean completed, String message) {
         if (name == null) return;
@@ -132,6 +149,9 @@ public final class KurumiPseudoExecutor {
                 + "，嵌套层级 " + frames.size() : "没有脚本任务";
     }
     public static BaritoneBridge.Result start(KurumiTaskPlanner.Program program) {
+        return start(program, false);
+    }
+    public static BaritoneBridge.Result start(KurumiTaskPlanner.Program program, boolean preserveVariables) {
         if (running || KurumiPlanExecutor.busy() || KurumiLongTaskBridge.busy()
                 || KurumiChestCraftTask.busy())
             return new BaritoneBridge.Result(false, "已有任务正在执行");
@@ -139,6 +159,7 @@ public final class KurumiPseudoExecutor {
             return new BaritoneBridge.Result(false, "脚本为空");
         frames.clear();
         activeRunId = ++runSequence;
+        finishedRunObserved = false;
         observations.setLength(0);
         observationCount = 0;
         frames.push(new Frame(program.statements(), null));
@@ -148,7 +169,7 @@ public final class KurumiPseudoExecutor {
         lastPublicMessageAt = 0;
         lastResultSuccess = false;
         assignedResult = false;
-        variables.clear();
+        if (!preserveVariables) variables.clear();
         pendingActionVariable = null;
         awaitingAction = false;
         awaitingChest = false;
@@ -338,8 +359,7 @@ public final class KurumiPseudoExecutor {
         if (frames.isEmpty()) {
             finishRun(true, "脚本全部完成");
             running = false;
-            KurumiWebMonitor.state("已完成");
-            say("脚本任务执行完成");
+            KurumiWebMonitor.state("当前脚本阶段完成，等待 AI 决策");
             return;
         }
         Frame frame = frames.peek();
@@ -353,14 +373,16 @@ public final class KurumiPseudoExecutor {
             case "EXPR_ASSIGN" -> {
                 try {
                     String name = stmt.step().target();
-                    if (variables.size() >= 16 && !variables.containsKey(name))
-                        throw new IllegalArgumentException("最多保存16个变量");
                     var value = KurumiExpressions.evaluate(stmt.step().itemId(), variables);
-                    if (value.toString().length() > 8192)
-                        throw new IllegalArgumentException("变量内容超过8192字符");
+                    if (value.toString().length() > 262144)
+                        throw new IllegalArgumentException("单个变量超过256KB，需要分批读取");
+                    checkMemory(name, value);
                     variables.put(name, value.deepCopy());
-                    KurumiWebMonitor.log("赋值 " + name + " = " + value);
-                    observe("变量 " + name, value.toString());
+                    String summary = value.toString();
+                    KurumiWebMonitor.log("赋值 " + name + " = "
+                            + summary.substring(0, Math.min(400, summary.length())));
+                    observe("变量 " + name, summary.length() <= 200 ? summary
+                            : "已保存结构化数据（" + summary.length() + "字符），使用 observe(" + name + ") 发送完整结果");
                     frame.index++;
                 } catch (RuntimeException ex) {
                     KurumiWebMonitor.log("变量赋值失败：" + ex.getMessage());
@@ -384,9 +406,18 @@ public final class KurumiPseudoExecutor {
                 String resultVariable = assign ? stmt.step().target() : null;
                 try {
                     String name = stmt.step().action();
-                    if (assign && variables.size() >= 16 && !variables.containsKey(resultVariable))
-                        throw new IllegalArgumentException("最多保存16个变量");
                     var args = KurumiExpressions.arguments(stmt.step().itemId(), variables);
+                    if ("observe".equals(name)) {
+                        if (args.size() != 1) throw new IllegalArgumentException("observe 需要一个参数");
+                        String value = KurumiExpressions.text(args.get(0));
+                        observe("AI观察", value);
+                        finishedRunObserved = true;
+                        finishRun(true, "observe() 主动交还控制权给 AI");
+                        running = false;
+                        frames.clear();
+                        KurumiWebMonitor.state("等待 AI 分析观察结果");
+                        return;
+                    }
                     if ("talk".equals(name)) {
                         if (args.size()!=1) throw new IllegalArgumentException("talk 需要一个参数");
                         long now = System.currentTimeMillis();
@@ -769,8 +800,7 @@ public final class KurumiPseudoExecutor {
                 finishRun(true, "脚本主动 RETURN");
                 running = false;
                 frames.clear();
-                KurumiWebMonitor.state("RETURN 结束");
-                say("脚本执行 RETURN，任务结束");
+                KurumiWebMonitor.state("当前脚本 RETURN，等待 AI 决策");
             }
             case "BREAK" -> {
                 Frame target = null;
