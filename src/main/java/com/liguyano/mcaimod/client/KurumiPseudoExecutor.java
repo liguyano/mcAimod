@@ -24,6 +24,31 @@ public final class KurumiPseudoExecutor {
     }
     private static final Deque<Frame> frames = new ArrayDeque<>();
     private static long started;
+    private static long runSequence, activeRunId, finishedRunId;
+    private static boolean finishedRunSucceeded;
+    private static String finishedRunReport = "";
+    private static final StringBuilder observations = new StringBuilder();
+    private static int observationCount;
+    public static long activeRunId() { return activeRunId; }
+    public static long finishedRunId() { return finishedRunId; }
+    public static boolean finishedRunSucceeded() { return finishedRunSucceeded; }
+    public static String finishedRunReport() { return finishedRunReport; }
+
+    private static void observe(String category, String value) {
+        if (observationCount >= 18 || observations.length() >= 5200) return;
+        String safe = value == null ? "(null)" : value.replace('\r', ' ').replace('\n', ' ');
+        if (safe.length() > 850) safe = safe.substring(0, 850) + "...(已截断)";
+        observations.append(category).append(": ").append(safe).append('\n');
+        observationCount++;
+    }
+    private static void finishRun(boolean success, String reason) {
+        if (!running || activeRunId == 0) return;
+        finishedRunId = activeRunId;
+        finishedRunSucceeded = success;
+        String report = "结果：" + reason + "; 成功=" + success + "; 动作数=" + actions
+                + "; 观察与结果：\n" + observations;
+        finishedRunReport = report.length() > 6000 ? report.substring(0, 6000) : report;
+    }
     private static boolean running;
     private static boolean awaitingAction;
     private static boolean awaitingBlockBreak;
@@ -59,6 +84,7 @@ public final class KurumiPseudoExecutor {
         result.addProperty("message", message);
         variables.put(name, result);
         KurumiWebMonitor.log("动作结果 " + name + " = " + result);
+        observe("动作结果 " + name, result.toString());
     }
     private static void finishPendingAction(boolean succeeded, String message) {
         if (pendingActionVariable == null) return;
@@ -72,7 +98,10 @@ public final class KurumiPseudoExecutor {
         if (comeFollowing) BaritoneBridge.stop();
         comeFollowing = false;
         comeTarget = null;
-        if (running) KurumiWebMonitor.state("已取消");
+        if (running) {
+            finishRun(false, "任务取消或执行失败");
+            KurumiWebMonitor.state("已取消");
+        }
         running = false;
         awaitingAction = false;
         awaitingBlockBreak = false;
@@ -109,6 +138,9 @@ public final class KurumiPseudoExecutor {
         if (program == null || program.statements().isEmpty())
             return new BaritoneBridge.Result(false, "脚本为空");
         frames.clear();
+        activeRunId = ++runSequence;
+        observations.setLength(0);
+        observationCount = 0;
         frames.push(new Frame(program.statements(), null));
         started = System.currentTimeMillis();
         actions = 0;
@@ -254,6 +286,7 @@ public final class KurumiPseudoExecutor {
             awaitingChestSearch = false;
             lastResultSuccess = KurumiChestSearch.lastSucceeded();
             KurumiWebMonitor.log("箱子任务结果：" + KurumiChestSearch.status());
+            observe("箱子任务", KurumiChestSearch.status());
             boolean assigned = pendingActionVariable != null;
             finishPendingAction(lastResultSuccess, KurumiChestSearch.status());
             if (!lastResultSuccess && !assigned) {
@@ -267,6 +300,7 @@ public final class KurumiPseudoExecutor {
             awaitingBlockBreak = false;
             lastResultSuccess = KurumiBlockBreakingBridge.lastSucceeded();
             KurumiWebMonitor.log("破坏方块验证：" + lastResultSuccess);
+            observe("破坏方块", String.valueOf(lastResultSuccess));
             boolean assigned = pendingActionVariable != null;
             finishPendingAction(lastResultSuccess, "方块破坏验证：" + lastResultSuccess);
             if (!lastResultSuccess && !assigned) {
@@ -280,6 +314,7 @@ public final class KurumiPseudoExecutor {
             awaitingAction = false;
             lastResultSuccess = KurumiPlanExecutor.lastSucceeded();
             KurumiWebMonitor.log("动作结束，验证结果：" + lastResultSuccess);
+            observe("异步动作完成", String.valueOf(lastResultSuccess));
             boolean assigned = pendingActionVariable != null;
             finishPendingAction(lastResultSuccess, "动作完成验证：" + lastResultSuccess);
             if (!lastResultSuccess && !assignedResult && !assigned) {
@@ -301,6 +336,7 @@ public final class KurumiPseudoExecutor {
             return;
         }
         if (frames.isEmpty()) {
+            finishRun(true, "脚本全部完成");
             running = false;
             KurumiWebMonitor.state("已完成");
             say("脚本任务执行完成");
@@ -324,6 +360,7 @@ public final class KurumiPseudoExecutor {
                         throw new IllegalArgumentException("变量内容超过8192字符");
                     variables.put(name, value.deepCopy());
                     KurumiWebMonitor.log("赋值 " + name + " = " + value);
+                    observe("变量 " + name, value.toString());
                     frame.index++;
                 } catch (RuntimeException ex) {
                     KurumiWebMonitor.log("变量赋值失败：" + ex.getMessage());
@@ -361,6 +398,7 @@ public final class KurumiPseudoExecutor {
                         if (msg.length() > 120) msg=msg.substring(0,108)+"...(已截断)";
                         mc.getConnection().sendChat(msg);
                         KurumiWebMonitor.log("talk(表达式): " + msg);
+                        observe("talk", msg);
                         publicMessages++;
                         lastPublicMessageAt = now;
                         frame.index++;
@@ -457,6 +495,7 @@ public final class KurumiPseudoExecutor {
                                 args.size()==4 ? KurumiExpressions.integer(args.get(3)) : null);
                     } else throw new IllegalArgumentException("函数不在动作白名单");
                     KurumiWebMonitor.log(name + "(变量): " + outcome.message());
+                    observe("动作 " + name, outcome.success() + "; " + outcome.message());
                     lastResultSuccess=outcome.success();
                     if (assign) {
                         if (outcome.success() && (awaitingAction || awaitingBlockBreak || awaitingChestSearch)) {
@@ -511,6 +550,7 @@ public final class KurumiPseudoExecutor {
                 }
                 mc.getConnection().sendChat(message);
                 KurumiWebMonitor.log("talk(observe): " + observation);
+                observe("工具查询 " + stmt.step().target(), observation);
                 publicMessages++;
                 lastPublicMessageAt = now;
                 frame.index++;
@@ -533,6 +573,7 @@ public final class KurumiPseudoExecutor {
                 }
                 mc.getConnection().sendChat(message);
                 KurumiWebMonitor.log("talk: " + message);
+                observe("talk", message);
                 publicMessages++;
                 lastPublicMessageAt = now;
                 frame.index++;
@@ -725,6 +766,7 @@ public final class KurumiPseudoExecutor {
                 }
             }
             case "RETURN" -> {
+                finishRun(true, "脚本主动 RETURN");
                 running = false;
                 frames.clear();
                 KurumiWebMonitor.state("RETURN 结束");

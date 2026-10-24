@@ -26,6 +26,19 @@ public final class KurumiDecisionParser {
         }
     }
 
+    /** A model may request another observation/planning round after this script finishes. */
+    public static boolean wantsContinuation(String raw) {
+        if (raw == null || raw.length() > 8192) return false;
+        try {
+            JsonObject object = JsonParser.parseString(raw.strip()).getAsJsonObject();
+            return object.has("continue") && object.get("continue").isJsonPrimitive()
+                    && object.get("continue").getAsJsonPrimitive().isBoolean()
+                    && object.get("continue").getAsBoolean();
+        } catch (RuntimeException ex) {
+            return false;
+        }
+    }
+
     public static Optional<Decision> parse(String raw) {
         if (raw == null || raw.length() > 8192) return Optional.empty();
         try {
