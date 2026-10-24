@@ -42,9 +42,9 @@ public final class KurumiWebActions {
                 return;
             }
             String rules = """
-                你是 Minecraft Kurumi 的受控伪代码生成器。只输出一个 JSON 对象：
-                {"script":"伪代码字符串"}。禁止 Markdown、代码围栏和额外解释。
-                这是仅生成的预览测试，不执行游戏动作。只能使用白名单 Python 风格伪代码。
+                你是 Minecraft Kurumi 的受控脚本生成器。只输出一个 JSON 对象：
+                {"script":"脚本字符串"}。禁止 Markdown、代码围栏和额外解释。
+                这是仅生成的预览测试，不执行游戏动作。只能使用白名单 Python 风格脚本。
                 每行一个命令，嵌套缩进四个空格。支持 repeat(4): 固定次数循环（1-20次，展开最多200语句）；
                 支持 while/if/else、break、return "完成"、if result.success:，
                 以及 check_inventory、check_chest、check_distance 的条件比较。
@@ -122,7 +122,7 @@ public final class KurumiWebActions {
                         goto(target.x,target.y,target.z)
                         chest_put_item_all("minecraft:cherry_log")
                 pickup_item_all("minecraft:cherry_log") 每轮拾取最多15秒，无进展目标会跳过；
-                背包中一组=64个，三组=192个。while 最多20轮，整个伪代码任务最多5分钟。
+                背包中一组=64个，三组=192个。while 最多20轮，整个脚本任务最多5分钟。
                 找到箱子坐标不等于已打开箱子，goto 也不保证最终到达，不能虚构成功。
                 用户要求去水边时，不要把水方块内部当安全落脚点；当前不具备自动选水边安全位置的专门工具，
                 不要胡编不存在的 find_safe_position、goto_water_edge 等函数。
@@ -186,7 +186,7 @@ public final class KurumiWebActions {
                         reason = "未返回合法的 {\"script\":\"...\"} JSON 对象";
                     }
                     if (reason.isEmpty()) {
-                        KurumiWebMonitor.log("Web AI 伪代码生成成功（纠错次数 " + retry + "）");
+                        KurumiWebMonitor.log("Web AI 脚本生成成功（纠错次数 " + retry + "）");
                         completePreview(id, script, "");
                         return;
                     }
@@ -201,7 +201,7 @@ public final class KurumiWebActions {
                         next.add(new ChatMessage("assistant", reply == null ? "" :
                                 reply.substring(0, Math.min(reply.length(), 3000))));
                         next.add(new ChatMessage("user",
-                                "上一条伪代码未通过本地校验：" + reason
+                                "上一条脚本未通过本地校验：" + reason
                                 + "。请重新输出唯一一个 JSON 对象 {\"script\":\"...\"}，"
                                 + "只用已经列出的函数及四空格缩进，字符串中的换行按 JSON 转义。"
                                 + "不要 Markdown、不要解释、不要虚构工具。保留原任务目标。"));
@@ -222,7 +222,7 @@ public final class KurumiWebActions {
 
     public static synchronized String submitRun(String source) {
         if (source == null || source.isBlank() || source.length() > 8192)
-            return "伪代码不能为空且最多8192字";
+            return "脚本不能为空且最多8192字";
         if (runQueued) return "上一条提交正在处理";
         runQueued = true; runStatus = "检查中"; runError = "";
         Minecraft.getInstance().execute(() -> runOnClient(source));
@@ -249,7 +249,7 @@ public final class KurumiWebActions {
                 error = "已有任务在执行";
             else {
                 Optional<KurumiTaskPlanner.Program> program = KurumiScriptParser.parse(source);
-                if (program.isEmpty()) error = "伪代码不符合当前解释器语法或安全限制";
+                if (program.isEmpty()) error = "脚本不符合当前解释器语法或安全限制";
                 else if (ownerOnly(program.get().statements())
                         && !"SekaiSaionji".equals(mc.player.getName().getString()))
                     error = "该任务包含仅主人可以执行的操作";
