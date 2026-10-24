@@ -20,7 +20,7 @@ public final class KurumiBlockScanner {
         for (BlockPos pos : BlockPos.betweenClosed(
                 origin.offset(-24,-8,-24),origin.offset(24,8,24))) {
             if (!mc.level.hasChunkAt(pos)) continue;
-            if (!id.equals(BuiltInRegistries.BLOCK.getKey(
+            if (!KurumiBedMatcher.matches(id, BuiltInRegistries.BLOCK.getKey(
                     mc.level.getBlockState(pos).getBlock()).toString())) continue;
             positions.add(pos.immutable());
         }
@@ -33,7 +33,8 @@ public final class KurumiBlockScanner {
             point.addProperty("x",pos.getX());
             point.addProperty("y",pos.getY());
             point.addProperty("z",pos.getZ());
-            point.addProperty("block_id",id);
+            point.addProperty("block_id", BuiltInRegistries.BLOCK.getKey(
+                    mc.level.getBlockState(pos).getBlock()).toString());
             if (result.toString().length()+point.toString().length()+2>8000) break;
             result.add(point);
         }
