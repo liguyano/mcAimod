@@ -411,11 +411,12 @@ public final class KurumiClientController {
                     }
                     Optional<KurumiDecisionParser.Decision> parsed = KurumiDecisionParser.parse(reply);
                     if (parsed.isEmpty()) {
-                        KurumiWebMonitor.log("模型回复解析失败（第 " + (formatRetries + 1) + " 次）");
+                        KurumiWebMonitor.log("模型回复解析失败（第 " + (formatRetries + 1) + " 次）："
+                                + KurumiScriptParser.lastError());
                         if (formatRetries == 0) {
                             List<ChatMessage> retry = new ArrayList<>(conversation);
                             retry.add(new ChatMessage("assistant", reply == null ? "" : reply));
-                            retry.add(new ChatMessage("user", "上一条回复未通过格式或参数校验。请严格只返回一个有效 JSON 对象，禁止 Markdown 和代码块。需要澄清才返回 type=clarify 和 question 字段，否则返回 type=action、action=EXECUTE_SCRIPT、reply 和 script 字段。聊天和查询都写入 script，通过 talk() 发送；不要返回 type=tool 或 type=chat。"));
+                            retry.add(new ChatMessage("user", "上一条回复未通过格式或参数校验（" + KurumiScriptParser.lastError() + "）。请严格只返回一个有效 JSON 对象，禁止 Markdown 和代码块。需要澄清才返回 type=clarify 和 question 字段，否则返回 type=action、action=EXECUTE_SCRIPT、reply 和 script 字段。聊天和查询都写入 script，通过 talk() 发送；不要返回 type=tool 或 type=chat。"));
                             runAgent(profile, retry, sender, message, requestGeneration, toolCalls, 1);
                             return;
                         }
