@@ -89,6 +89,33 @@ public final class KurumiClientController {
         KurumiTaskRecovery.cancel();
     }
 
+    /** Immediate local emergency stop; never invokes or waits for the language model. */
+    private static BaritoneBridge.Result stopAll() {
+        // Invalidate in-flight AI callbacks before releasing any executor state.
+        generation++;
+        requestInFlight = false;
+        GATE.reset();
+        PENDING_CLARIFICATIONS.clear();
+        KurumiWebActions.cancelPending();
+        KurumiPseudoExecutor.cancel();
+        KurumiPlanExecutor.cancel();
+        KurumiLongTaskBridge.cancel();
+        KurumiChestCraftTask.cancel();
+        KurumiTaskRecovery.cancel();
+        KurumiBedShortcut.cancel();
+        KurumiChestBridge.cancel();
+        KurumiInteractionBridge.cancel();
+        KurumiBlockBreakingBridge.cancel();
+        KurumiAutoCraftBridge.cancel();
+        KurumiPickupBridge.cancel();
+        KurumiCombatBridge.cancel();
+        KurumiChestSearch.cancel();
+        KurumiChestInspector.cancel();
+        KurumiChainBridge.release();
+        KurumiWebMonitor.requestFailed("已通过直接停止指令取消");
+        return BaritoneBridge.stop();
+    }
+
     private static void registerCommands(RegisterClientCommandsEvent event) {
         event.getDispatcher().register(LiteralArgumentBuilder.<CommandSourceStack>literal("kurumi")
                 .then(LiteralArgumentBuilder.<CommandSourceStack>literal("on").executes(context -> {
@@ -129,13 +156,7 @@ public final class KurumiClientController {
                     return result.success() ? 1 : 0;
                 }))
                 .then(LiteralArgumentBuilder.<CommandSourceStack>literal("stop").executes(context -> {
-                    generation++;
-                    GATE.reset();
-                    KurumiLongTaskBridge.cancel();
-                    KurumiChestCraftTask.cancel();
-                    KurumiTaskRecovery.cancel();
-                    KurumiPlanExecutor.cancel();
-                    BaritoneBridge.Result result = BaritoneBridge.stop();
+                    BaritoneBridge.Result result = stopAll();
                     notice("已取消等待中的 Kurumi 请求。" + result.message());
                     return 1;
                 }))
@@ -182,6 +203,12 @@ public final class KurumiClientController {
         String senderNameForMemory = minecraft.getConnection().getPlayerInfo(event.getSender()) == null
                 ? "" : minecraft.getConnection().getPlayerInfo(event.getSender()).getProfile().name();
         boolean isOwner = "SekaiSaionji".equals(senderNameForMemory);
+        // The owner can interrupt busy tasks and model requests, bypassing cooldown and gate.
+        if (isOwner && ("停止".equals(message.strip()) || "stop".equalsIgnoreCase(message.strip()))) {
+            BaritoneBridge.Result result = stopAll();
+            minecraft.getConnection().sendChat("已直接停止当前任务。" + result.message());
+            return;
+        }
         if (requestInFlight || !GATE.tryAccept(isOwner ? "Kurumi " + message : message)) return;
         UUID sender = event.getSender();
         PendingClarification pending = PENDING_CLARIFICATIONS.get(sender);
