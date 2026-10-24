@@ -210,7 +210,7 @@ public final class KurumiTaskPlanner {
                 }
                 // Script-only actions use their own validated parameters; the legacy
                 // EXECUTE_PLAN validator intentionally does not accept these actions.
-                if (java.util.Set.of("COLLECT_AND_STORE", "STOP", "TPA_REQUEST", "TPA_ACCEPT",
+                if (java.util.Set.of("COLLECT_AND_STORE", "STOP", "SLEEP_IN_BED", "TPA_REQUEST", "TPA_ACCEPT",
                         "TPA_REQUEST_TO", "CRAFT_OPEN", "CHEST_OPEN", "CHEST_PUT_ALL",
                         "CHEST_TAKE_ALL", "DROP_ALL", "DROP_ITEM_ALL", "DROP",
                         "PICKUP", "PICKUP_ALL").contains(special)) {
