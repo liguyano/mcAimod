@@ -98,6 +98,25 @@ class KurumiExpressionsTest {
         assertTrue(KurumiScriptParser.parse("sleep_in_bed(2)").isEmpty());
     }
 
+    @Test void miningSandAndOtherValidBlocksIsAllowedInScripts() {
+        String sand = """
+                count = check_inventory("minecraft:sand")
+                while count < 128:
+                    mine("minecraft:sand")
+                    sleep(8)
+                    pickup_all()
+                    count = check_inventory("minecraft:sand")
+                if count >= 128:
+                    talk("已经收到沙子")
+                else:
+                    talk("还没有收够")
+                """;
+        assertTrue(KurumiScriptParser.parse(sand).isPresent(), KurumiScriptParser.lastError());
+        assertTrue(KurumiScriptParser.parse("mine(\"minecraft:stone\")").isPresent());
+        assertTrue(KurumiScriptParser.parse("mine(\"minecraft:diamond_ore\")").isPresent());
+        assertTrue(KurumiScriptParser.parse("mine(\"invalid id\")").isEmpty());
+    }
+
     @Test void dictionaryFieldsAndArguments() {
         Map<String, JsonElement> vars = new HashMap<>();
         JsonObject target = new JsonObject();
