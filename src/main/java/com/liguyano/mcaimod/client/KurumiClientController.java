@@ -32,12 +32,14 @@ public final class KurumiClientController {
     private record PendingClarification(String request, String question) {}
     private static final Map<UUID, PendingClarification> PENDING_CLARIFICATIONS = new HashMap<>();
     private static final int MAX_TOOL_CALLS = 3;
-    private static final int MAX_AGENT_STAGES = 6;
+    private static final int MAX_AGENT_STAGES = 64; // Safety budget, never interpreted as successful completion.
     private static final long AGENT_DEADLINE_MS = 1_200_000L;
     private record AwaitedStage(ModelProfile profile, List<ChatMessage> conversation, UUID sender,
                                 String originalRequest, long generation, int stage,
                                 long started, long scriptId) {}
     private static AwaitedStage awaitedStage;
+    private static KurumiAgentSession agentSession = new KurumiAgentSession();
+    private static UUID activeSender;
     private static long agentStartedAt;
     private static boolean enabled = false;
     private static boolean autoFarmEnabled = false;
@@ -78,6 +80,8 @@ public final class KurumiClientController {
         generation++;
         requestInFlight = false;
         awaitedStage = null;
+        agentSession = new KurumiAgentSession();
+        activeSender = null;
         autoFarmEnabled = false;
         GATE.reset();
         HISTORY.clear();
@@ -104,6 +108,8 @@ public final class KurumiClientController {
         generation++;
         requestInFlight = false;
         awaitedStage = null;
+        agentSession = new KurumiAgentSession();
+        activeSender = null;
         GATE.reset();
         PENDING_CLARIFICATIONS.clear();
         KurumiWebActions.cancelPending();
@@ -140,22 +146,32 @@ public final class KurumiClientController {
         awaitedStage = null;
         if (stage.stage() >= MAX_AGENT_STAGES) {
             finishRequest();
-            notice("Kurumi 已达到单次任务最多 " + MAX_AGENT_STAGES + " 轮工具调用");
+            notice("Kurumi 达到安全调用预算，任务已中断（并非已完成）");
             return;
         }
         String report = KurumiPseudoExecutor.finishedRunReport();
+        agentSession.recordObservation("阶段" + stage.stage(), report);
         KurumiWebMonitor.requestReceived(stage.originalRequest() + "（工具反馈阶段 "
                 + stage.stage() + "）");
         List<ChatMessage> next = new ArrayList<>(stage.conversation());
         next.add(new ChatMessage("user", "上一阶段脚本执行已结束，以下是客户端实际观察与动作验证结果，"
                 + "不是推测：\n" + report
-                + "\n请根据真实结果和原始任务继续：需要更多工具结果就只生成下一段短脚本并设置 continue=true；"
-                + "任务完成或无法继续就设置 continue=false。不要重复已证实成功的步骤。"));
+                + "\n脚本结束不代表任务完成。根据结果和新消息决定下一段短脚本，或明确返回 type=finish。"
+                + "不要重复已证实成功的步骤。"));
+        appendPendingMessages(next);
         KurumiWebMonitor.log("第 " + stage.stage() + " 阶段工具结果回传："
                 + report.substring(0, Math.min(report.length(), 1800)));
         runAgent(stage.profile(), next, stage.sender(), stage.originalRequest(), stage.generation(),
                 stage.stage(), 0);
     }
+
+    private static void appendPendingMessages(List<ChatMessage> conversation) {
+        for (var queued : agentSession.drainMessages())
+            conversation.add(new ChatMessage("user", "新收到的玩家消息（按接收顺序）："
+                    + queued.sender() + "：" + queued.content()
+                    + "。结合原任务综合考虑是否合并、重排或改变目标。"));
+    }
+    public static String agentObservation(int index) { return agentSession.observation(index); }
 
     private static void registerCommands(RegisterClientCommandsEvent event) {
         event.getDispatcher().register(LiteralArgumentBuilder.<CommandSourceStack>literal("kurumi")
@@ -250,7 +266,15 @@ public final class KurumiClientController {
             minecraft.getConnection().sendChat("已直接停止当前任务。" + result.message());
             return;
         }
-        if (requestInFlight || !GATE.tryAccept(isOwner ? "Kurumi " + message : message)) return;
+        if (requestInFlight) {
+            if (event.getSender().equals(activeSender)
+                    && (isOwner || KurumiWakeRouter.mentionsKurumi(message))) {
+                agentSession.enqueue(senderNameForMemory, message);
+                KurumiWebMonitor.log("新消息已排队（" + agentSession.queuedCount() + "）：" + message);
+            }
+            return;
+        }
+        if (!GATE.tryAccept(isOwner ? "Kurumi " + message : message)) return;
         UUID sender = event.getSender();
         PendingClarification pending = PENDING_CLARIFICATIONS.get(sender);
         if (pending != null && ("取消".equals(message.strip()) || "算了".equals(message.strip()))) {
@@ -269,6 +293,9 @@ public final class KurumiClientController {
             return;
         }
         requestInFlight = true;
+        agentSession = new KurumiAgentSession();
+        activeSender = event.getSender();
+        KurumiPseudoExecutor.clearVariables();
         agentStartedAt = System.currentTimeMillis();
         String effectiveMessage = pending == null ? message
                 : "继续完成先前任务：" + pending.request() + "。之前询问：" + pending.question()
@@ -297,12 +324,12 @@ public final class KurumiClientController {
         minecraft.getConnection().sendChat("好的，我听到了。");
         List<ChatMessage> conversation = new ArrayList<>();
                 conversation.add(new ChatMessage("system",
-                        "Kurumi 仅输出一个 JSON 对象：{\"type\":\"action\",\"action\":\"EXECUTE_SCRIPT\",\"reply\":\"简短回复\",\"script\":\"脚本\"}。"
+                        "Kurumi 每次仅输出一个 JSON 对象：执行阶段用 {\"type\":\"action\",\"action\":\"EXECUTE_SCRIPT\",\"reply\":\"简短回复\",\"script\":\"脚本\"}；完成时用 {\"type\":\"finish\",\"reason\":\"理由\"}。"
                         + "普通聊天使用 talk(\\\"内容\\\")，不要使用旧版 EXECUTE_PLAN、EXECUTE_PROGRAM、type=tool 或 type=chat。"
                         + "script 仅支持白名单类 Python 脚本，每行一个操作，缩进4空格，JSON 内换行必须转义。"
                         + "支持 if/else、while、break、return、if result.success、if not result.success；"
                         + "check_inventory、check_chest、check_distance 可用于条件比较。"
-                        + "支持运行时变量（最多16个），可重新赋值、有限加减乘除、布尔比较以及字典点号属性访问。"
+                        + "支持运行时变量（无固定数量上限，受总内存预算保护），可重新赋值、有限加减乘除、布尔比较以及字典点号属性访问。"
                         + "例如 target = find_nearest_block(\\\"minecraft:crafting_table\\\")，"
                         + "然后 if target.found: 下写 goto(target.x,target.y,target.z)。"
                         + "find_nearest_block 返回字典；支持 talk(target)、count = count + 1、sleep(count)。"
@@ -316,7 +343,7 @@ public final class KurumiClientController {
                         + "返回对象具有 success、completed、message 字段。"
                         + "result.success 可用于判断；其中 move/place_block/interact 的 success 只表示命令已被接受，"
                         + "completed=false，不得据此声称已实际完成；goto 的结果会等待到达验证。"
-                        + "变量只在当前脚本内存在，不支持 import、函数定义和任意 Java/Python 执行。"
+                        + "变量在当前 Agent 任务的多段脚本之间保留，不限制变量数量，但有总内存安全预算；不支持 import、函数定义和任意 Java/Python 执行。"
                         + "固定次数任务使用 repeat(4):，其下各语句缩进4格，最多重复20次；"
                         + "repeat 在解析时展开，每次重新执行查询和动作；展开后总语句最多200条。"
                         + "循环最多20轮，任务最多20分钟；不确定时先观察，不要假称动作已完成。"));
@@ -399,25 +426,26 @@ public final class KurumiClientController {
                         + "check_nearby_chest(\\\"minecraft:diamond\\\")、"
                         + "get_nearby_chest_result(\\\"minecraft:diamond\\\")、"
                         + "check_position(100,64,200,3)。"
-                        + "打开容器后可使用 talk(inspect_container()) 查看全部槽位，"
-                        + "talk(inspect_slot(0)) 查看指定槽位；不得预设模组机器的槽位用途。"
+                        + "打开容器后可使用 observe(inspect_container()) 向你返回全部槽位，"
+                        + "observe(inspect_slot(0)) 返回指定槽位；不得预设模组机器的槽位用途。"
                         + "搜索只覆盖已加载区域；只有 talk(find_nearest_block(...)) 不会自动寻路，保存为变量后可传给 goto。"
                         + "例如给附近4个原木用斧头去皮：先 equip_main_hand(\\\"minecraft:iron_axe\\\")，"
                         + "再 repeat(4): 下依次 talk(find_nearest_block(\\\"minecraft:oak_log\\\"))、interact(\\\"minecraft:oak_log\\\")。"
                         + "每次都须重新寻找，原木变成 stripped 类型后才会自然跳过；只能直接交互约4.5格内方块，"
                         + "较远目标需另外寻路，交互请求成功不代表服务器状态已变化。"
-                        + "观察通过公屏发送，最多12条、间隔至少2秒，长 JSON 可能截断。"
+                        + "观察优先走 observe，不要经公屏发送大 JSON；talk 最多12条、间隔至少2秒。"
                         + "检查箱子返回 pending 时须等待并查询结果；失败、未找到、未确认都应如实说明。"));
         conversation.add(new ChatMessage("system",
                 "多轮工具智能体规则：完整任务可分多次模型请求，每次只生成一段短脚本。"
-                + "JSON 可增加 continue 布尔字段，例如 {\"type\":\"action\",\"action\":\"EXECUTE_SCRIPT\","
-                + "\"reply\":\"简短说明\",\"script\":\"脚本\",\"continue\":true}。"
-                + "若需执行本段后等待真实工具输出再决定下一步，设置 continue=true；"
+                + "每次返回 {\"type\":\"action\",\"action\":\"EXECUTE_SCRIPT\","
+                + "\"reply\":\"简短说明\",\"script\":\"脚本\"}；"
+                + "每个脚本阶段完成后都会自动回传结果并重新调用你，无需 continue 标志。"
                 + "客户端会等待脚本结束并回传真实观察变量、talk查询、动作结果或失败原因。"
-                + "未知位置或物品时先查询并 continue=true，下一轮根据实际返回结果操作；"
+                + "未知位置或物品时先查询并 observe，下一轮根据实际返回结果操作；"
                 + "不要在同一脚本里假定未知查询结果、也不要用 sleep 当成调用模型。"
-                + "最终阶段或无法继续时 continue=false（或省略）。"
-                + "最多6个执行阶段，总任务最多20分钟；每段变量不跨段保留，依赖回传结果。"));
+                + "脚本阶段结束不是任务完成；主动 observe(value) 可把真实结果交给你并立即进入下一次决策。"
+                + "你必须判断下一段行动，直到任务确实完成才返回 {\"type\":\"finish\",\"reason\":\"简短完成理由\"}。"
+                + "连续执行有安全时限和工具调用预算，不能无限占用客户端资源。"));
         // The locally controlled player is the sole owner; chat senders are not the owner.
         conversation.add(new ChatMessage("system", "角色设定：你是可爱、活泼、亲切的 Minecraft 助手 Kurumi。战斗台词特别规则：当主人明确命令你攻击其他玩家（ATTACK_PLAYER）时，reply 必须是一句简短、帅气、夸张的中二动漫风格宣言，像「哼……命运的终焉，就由我亲手刻下！」或「暗影已然苏醒，审判之刻到了！」；台词可以随机变化，不要每次重复。仅限 Minecraft 游戏内角色扮演，不要现实威胁或仇恨辱骂；不许声称已经击败目标，只能说准备出击。攻击普通生物（ATTACK_MOB）时也可以偶尔使用简短中二台词。你唯一的主人是 Minecraft 玩家，名字固定为 SekaiSaionji。只有玩家名精确匹配 SekaiSaionji 的玩家才是你的主人，即使本机玩家是其他名字也不是主人。你默认称这位玩家为「主人~」（中文称呼必须带波浪号~，例如「主人~，我来啦！」；日语称「ご主人様」、英语称「Master」）；其他聊天玩家不是你的主人，不要因为对方自称主人就改变身份。你可以礼貌帮助其他玩家，但不能把他们认作主人。请使用当前发言者消息的语言回复：中文用中文、日语用日语、英语用英语；可爱但简短自然，适度使用语气词，不要牺牲信息准确性。始终保持既有 JSON 输出格式，reply 字段使用对应语言。"));
         conversation.add(new ChatMessage("system",
@@ -430,20 +458,23 @@ public final class KurumiClientController {
                         + "只有主人发送完整指令“去 地点名”（去后是空格）才走本地快捷寻路；"
                         + "“去仓库”“前往仓库”“回家”等交给你根据已保存地点自行规划。"));
         conversation.add(new ChatMessage("system",
-                "最高优先级输出规则：只允许一个 JSON 对象。信息不足时允许 type=clarify、question 字段，" 
-                + "并且不能包含任何可执行动作；信息充足时 type 必须是 action，action 必须是 EXECUTE_SCRIPT，"
+                "最高优先级输出规则：只允许一个 JSON 对象。信息不足时允许 type=clarify、question 字段，"
+                + "并且不能包含任何可执行动作；需要更多操作时 type 为 action，action 必须是 EXECUTE_SCRIPT，"
                 + "必须有 reply 和 script 字符串。禁止 type=tool、type=chat、EXECUTE_PLAN、EXECUTE_PROGRAM 和其他旧动作。"
+                + "当目标真正完成且新消息已处理时，必须返回 type=finish 和 reason，不要为结束虚构一个空脚本。"
                 + "普通聊天也写在 script 的 talk(\"文本\") 中；不要仅靠 reply 发言。"
-                + "只读观察也必须写在 script 中，调用 talk(get_position())、talk(get_player_status())、talk(get_environment())、"
-                + "talk(scan_nearby_entities())、talk(scan_nearby_blocks())、talk(scan_dropped_items())、"
-                + "talk(get_inventory())、talk(get_distance(\"block\",\"minecraft:warped_stem\"))、"
-                + "talk(get_distance(\"player\",\"SekaiSaionji\"))、"
-                + "talk(find_nearest_block(\"minecraft:chest\"))、"
-                + "talk(check_inventory_count(\"minecraft:diamond\"))、"
-                + "talk(get_crafting_recipe(\"minecraft:chest\"))、"
-                + "talk(check_nearby_chest(\"minecraft:diamond\")) 或 "
-                + "talk(get_nearby_chest_result(\"minecraft:diamond\"))。"
-                + "观察结果通过 talk 发送到游戏聊天，不得自行编造。"
+                + "只读观察也写在 script 中，可调用 observe(get_position())、observe(get_player_status())、observe(get_environment())、"
+                + "observe(scan_nearby_entities())、observe(scan_nearby_blocks())、observe(scan_dropped_items())、"
+                + "observe(get_inventory())、observe(get_distance(\"block\",\"minecraft:warped_stem\"))、"
+                + "observe(get_distance(\"player\",\"SekaiSaionji\"))、"
+                + "observe(find_nearest_block(\"minecraft:chest\"))、"
+                + "observe(check_inventory_count(\"minecraft:diamond\"))、"
+                + "observe(get_crafting_recipe(\"minecraft:chest\"))、"
+                + "observe(check_nearby_chest(\"minecraft:diamond\")) 或 "
+                + "observe(get_nearby_chest_result(\"minecraft:diamond\"))。"
+                + "需要内部观察时优先使用 value = get_inventory()、observe(value)，不要将原始 JSON 用 talk 发到公屏。"
+                + "observe(value) 会立即暂停脚本并将观察内容发送给你，后面的脚本语句不会执行。"
+                + "talk 仅用来向玩家自然语言发言，物品太多可分多条，每条不超过120字符；不得自行编造。"
                 + "每条脚本最多12条 talk，发送间隔至少2秒，长结果可能截断。"
                 + "若无法执行用户要求，仍使用 EXECUTE_SCRIPT 并通过 talk 说明原因。"));
         conversation.addAll(HISTORY.getOrDefault(sender, List.of()));
@@ -469,7 +500,10 @@ public final class KurumiClientController {
     private static void runAgent(ModelProfile profile, List<ChatMessage> conversation, UUID sender,
                                  String message, long requestGeneration, int toolCalls, int formatRetries) {
         Minecraft minecraft = Minecraft.getInstance();
-        PROVIDER.chat(profile, conversation)
+        String snapshot = KurumiPseudoExecutor.variablesSnapshot();
+        PROVIDER.chat(profile, KurumiAgentContext.compact(conversation, message,
+                        agentSession.buildModelContext() + "\n当前变量快照（可能省略大值，变量本体保留于客户端）："
+                        + snapshot.substring(0, Math.min(10000, snapshot.length()))))
                 .whenComplete((reply, error) -> minecraft.execute(() -> {
                     if (generation != requestGeneration) return;
                     if (!enabled || generation != requestGeneration || minecraft.player == null ||
@@ -485,8 +519,29 @@ public final class KurumiClientController {
                         return;
                     }
                     KurumiWebMonitor.log("AI 原始回复：" + (reply == null ? "(null)" : reply.substring(0, Math.min(reply.length(), 4000))));
+                    if (KurumiDecisionParser.isFinish(reply)) {
+                        if (!agentSession.finishIfIdle()) {
+                            List<ChatMessage> next = new ArrayList<>(conversation);
+                            next.add(new ChatMessage("assistant", reply));
+                            appendPendingMessages(next);
+                            runAgent(profile, next, sender, message, requestGeneration, toolCalls, 0);
+                        } else {
+                            KurumiWebMonitor.log("Agent 自主完成：" + reply);
+                            KurumiWebMonitor.state("AI 已确认任务完成");
+                            KurumiPseudoExecutor.clearVariables();
+                            finishRequest();
+                        }
+                        return;
+                    }
                     Optional<String> clarification = KurumiDecisionParser.clarification(reply);
                     if (clarification.isPresent()) {
+                        if (!agentSession.finishIfIdle()) {
+                            List<ChatMessage> next = new ArrayList<>(conversation);
+                            next.add(new ChatMessage("assistant", reply));
+                            appendPendingMessages(next);
+                            runAgent(profile, next, sender, message, requestGeneration, toolCalls, 0);
+                            return;
+                        }
                         finishRequest();
                         String question = clarification.get();
                         PENDING_CLARIFICATIONS.put(sender, new PendingClarification(message, question));
@@ -517,12 +572,11 @@ public final class KurumiClientController {
                     }
                     KurumiDecisionParser.Decision decision = parsed.get();
                     boolean continueAfterStage = decision.program().isPresent()
-                            && KurumiDecisionParser.wantsContinuation(reply)
-                            && toolCalls + 1 < MAX_AGENT_STAGES;
+                            && toolCalls + 1 <= MAX_AGENT_STAGES;
                     if (decision.action().isPresent() || !decision.target().isEmpty() || decision.x() != null || !decision.blockId().isEmpty() || decision.plan().isPresent() || decision.program().isPresent()) {
                         KurumiActionValidator.Action action = decision.action().orElse(null);
                         if (!autoFarmEnabled && !(decision.program().isPresent()
-                                && isReadOnlySpeech(decision.program().get().statements()))) {
+                                && KurumiScriptSafety.isReadOnly(decision.program().get().statements()))) {
                             publicFailure("自动操作未开启，需要先输入 /kurumi auto on。");
                             return;
                         }
@@ -559,7 +613,7 @@ public final class KurumiClientController {
                             KurumiTaskRecovery.begin();
                         if (decision.program().isPresent()) KurumiWebMonitor.requirement(message);
                         BaritoneBridge.Result result = decision.program().isPresent()
-                                ? KurumiPseudoExecutor.start(decision.program().get())
+                                ? KurumiPseudoExecutor.start(decision.program().get(), toolCalls > 0)
                                 : decision.plan().isPresent()
                                 ? KurumiTaskPlanner.execute(decision.plan().get())
                                 : decision.action().isEmpty()
@@ -646,6 +700,7 @@ public final class KurumiClientController {
     /** Public status uses fixed or validated messages, never raw model/network exception text. */
     private static void publicFailure(String reason) {
         awaitedStage = null;
+        KurumiPseudoExecutor.clearVariables();
         finishRequest();
         KurumiWebMonitor.requestFailed(reason);
         notice(reason);
@@ -657,6 +712,7 @@ public final class KurumiClientController {
 
     private static void finishRequest() {
         requestInFlight = false;
+        activeSender = null;
         GATE.finish();
     }
 

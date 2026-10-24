@@ -200,6 +200,10 @@ public final class KurumiExpressions {
         }
     }
     private JsonElement call(String name,java.util.List<JsonElement> args) {
+        if ("get_agent_observation".equals(name)) {
+            if (args.size() != 1) throw new IllegalArgumentException("需要一个观察记录索引");
+            return new JsonPrimitive(KurumiClientController.agentObservation(integer(args.get(0))));
+        }
         if ("len".equals(name)) {
             if (args.size()!=1 || !args.get(0).isJsonArray())
                 throw new IllegalArgumentException("len 需要一个数组变量");
@@ -254,7 +258,8 @@ public final class KurumiExpressions {
         }
         String tool;
         switch(name) {
-            case "find_nearest_block", "check_inventory_count", "get_crafting_recipe" -> {
+            case "find_nearest_block", "check_inventory_count", "get_crafting_recipe",
+                    "check_nearby_chest", "get_nearby_chest_result" -> {
                 if (args.size()!=1) throw new IllegalArgumentException("工具参数数量错误");
                 tool=name+":"+string(args.get(0));
             }

@@ -8,6 +8,18 @@ import java.util.Optional;
 public final class KurumiDecisionParser {
     public record Decision(String reply, Optional<KurumiActionValidator.Action> action, String target, Integer x, Integer y, Integer z, String blockId, Optional<KurumiTaskPlanner.Plan> plan, Optional<KurumiTaskPlanner.Program> program) {}
 
+    /** Completion requires an explicit model decision, never merely end-of-script. */
+    public static boolean isFinish(String raw) {
+        if (raw == null || raw.length() > 8192) return false;
+        try {
+            JsonObject object = JsonParser.parseString(raw.strip()).getAsJsonObject();
+            return object.has("type") && "finish".equals(object.get("type").getAsString())
+                    && !object.has("script") && !object.has("action")
+                    && object.has("reason") && object.get("reason").isJsonPrimitive()
+                    && !object.get("reason").getAsString().isBlank();
+        } catch (RuntimeException ex) { return false; }
+    }
+
     /** A clarification is a conversational question, never an executable script. */
     public static Optional<String> clarification(String raw) {
         if (raw == null || raw.length() > 8192) return Optional.empty();
