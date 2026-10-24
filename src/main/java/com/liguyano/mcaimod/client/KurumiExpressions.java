@@ -311,7 +311,9 @@ public final class KurumiExpressions {
         return value;
     }
     private static JsonElement numeric(double value) {
-        if (!Double.isFinite(value) || Math.abs(value)>30000000)
+        // Expression intermediates include squared distances and large sentinels.
+        // Keep action arguments independently bounded by integer() at 30 million.
+        if (!Double.isFinite(value) || Math.abs(value) > 9_007_199_254_740_991d)
             throw new IllegalArgumentException("数值越界");
         return new JsonPrimitive(value);
     }

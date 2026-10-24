@@ -9,6 +9,17 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class KurumiExpressionsTest {
+    @Test void nearestChestDistanceSentinelIsAllowedButUnsafeMagnitudeIsRejected() {
+        Map<String, JsonElement> vars = new HashMap<>();
+        vars.put("best_d", KurumiExpressions.evaluate("999999999", vars));
+        assertEquals(999999999d, vars.get("best_d").getAsDouble());
+        assertTrue(KurumiExpressions.truth(KurumiExpressions.evaluate("best_d > 100", vars)));
+        assertThrows(IllegalArgumentException.class,
+                () -> KurumiExpressions.evaluate("9999999999999999", vars));
+        assertThrows(IllegalArgumentException.class,
+                () -> KurumiExpressions.integer(vars.get("best_d")));
+    }
+
     @Test void acceptsTwoHundredStatementsButNotMore() {
         String twoHundred = "sleep(1)\n".repeat(200);
         String twoHundredOne = "sleep(1)\n".repeat(201);
