@@ -175,7 +175,7 @@ public final class KurumiWebActions {
                         if (script.isBlank()) reason = "script 字段为空";
                         else if (script.length() > 8192) reason = "script 超过8192字限制";
                         else if (KurumiScriptParser.parse(script).isEmpty())
-                            reason = "script 不符合当前白名单伪代码语法或安全限制";
+                            reason = "script 校验失败：" + KurumiScriptParser.lastError();
                         else {
                             boolean wantsChain = requirement.contains("连锁")
                                     || requirement.toLowerCase(java.util.Locale.ROOT).contains("vein mine");
