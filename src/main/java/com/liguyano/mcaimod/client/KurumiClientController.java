@@ -330,7 +330,8 @@ public final class KurumiClientController {
                         + "只有主人发送完整指令“去 地点名”（去后是空格）才走本地快捷寻路；"
                         + "“去仓库”“前往仓库”“回家”等交给你根据已保存地点自行规划。"));
         conversation.add(new ChatMessage("system",
-                "最高优先级输出规则：只允许一个 JSON 对象，type 必须是 action，action 必须是 EXECUTE_SCRIPT，"
+                "最高优先级输出规则：只允许一个 JSON 对象。信息不足时允许 type=clarify、question 字段，" 
+                + "并且不能包含任何可执行动作；信息充足时 type 必须是 action，action 必须是 EXECUTE_SCRIPT，"
                 + "必须有 reply 和 script 字符串。禁止 type=tool、type=chat、EXECUTE_PLAN、EXECUTE_PROGRAM 和其他旧动作。"
                 + "普通聊天也写在 script 的 talk(\"文本\") 中；不要仅靠 reply 发言。"
                 + "只读观察也必须写在 script 中，调用 talk(get_position())、talk(get_player_status())、talk(get_environment())、"
