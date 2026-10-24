@@ -17,10 +17,13 @@ public final class KurumiBedShortcut {
     private static BlockPos bed;
     private static BlockPos approach;
     private static long since;
+    private static boolean lastInteractionAccepted;
     private static final long TIMEOUT_MS = 75_000;
 
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiBedShortcut::tick); }
     public static boolean busy() { return bed != null; }
+    /** Whether the last bed interaction was accepted for processing; not a confirmed sleep. */
+    public static boolean lastInteractionAccepted() { return lastInteractionAccepted; }
 
     public static void cancel() {
         if (busy()) BaritoneBridge.stop();
@@ -29,6 +32,7 @@ public final class KurumiBedShortcut {
     }
 
     public static BaritoneBridge.Result start() {
+        lastInteractionAccepted = false;
         Minecraft mc = Minecraft.getInstance();
         if (busy()) return new BaritoneBridge.Result(false, "正在前往床");
         if (mc.player == null || mc.level == null || mc.gameMode == null)
@@ -85,6 +89,7 @@ public final class KurumiBedShortcut {
         cancel();
         var result=mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND,
                 new BlockHitResult(Vec3.atCenterOf(target), Direction.UP, target, false));
+        lastInteractionAccepted = result.consumesAction();
         report(result.consumesAction() ? "已尝试与床互动，是否能睡觉由服务器判断"
                 : "床互动未被接受（可能不是夜晚、床被占用或距离不足）");
     }
