@@ -55,6 +55,23 @@ class KurumiExpressionsTest {
                 """).isPresent());
     }
 
+    @Test void acceptsBareReturnAndReportsUnsupportedLine() {
+        assertTrue(KurumiScriptParser.parse("""
+                blocks = search_all_block("minecraft:grass_block")
+                if len(blocks) == 0:
+                    talk("附近没有草地")
+                    return
+                i = 0
+                while i < len(blocks):
+                    block = blocks[i]
+                    goto(block.x,block.y,block.z)
+                    i = i + 1
+                """).isPresent());
+        assertTrue(KurumiScriptParser.parse("go_anywhere(1)").isEmpty());
+        assertTrue(KurumiScriptParser.lastError().contains("第 1 行"));
+        assertTrue(KurumiScriptParser.parse("return").isPresent());
+    }
+
     @Test void dictionaryFieldsAndArguments() {
         Map<String, JsonElement> vars = new HashMap<>();
         JsonObject target = new JsonObject();
