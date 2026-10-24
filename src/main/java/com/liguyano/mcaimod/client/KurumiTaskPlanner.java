@@ -270,6 +270,21 @@ public final class KurumiTaskPlanner {
                     if (node.has("line")) KurumiWebMonitor.registerLine(statements.get(statements.size() - 1), node.get("line").getAsInt());
                     continue;
                 }
+                // Script mine() supports any valid block ID. The older structured Plan
+                // validator restricts MINE to logs, but that restriction is not
+                // appropriate for scripts requesting sand, stone, ores, etc.
+                if ("MINE".equals(special)) {
+                    String item = stepNode.get("item_id").getAsString();
+                    if (!item.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+                        throw new IllegalArgumentException("invalid mine block id");
+                    statements.add(new Statement(op,
+                            new Step("MINE", item, 1, null, null, null, ""),
+                            null, List.of(), List.of()));
+                    if (node.has("line"))
+                        KurumiWebMonitor.registerLine(statements.get(statements.size() - 1),
+                                node.get("line").getAsInt());
+                    continue;
+                }
                 JsonObject single = new JsonObject();
                 JsonArray steps = new JsonArray();
                 steps.add(node.getAsJsonObject("step"));
