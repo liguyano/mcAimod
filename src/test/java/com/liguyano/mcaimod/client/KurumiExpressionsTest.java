@@ -88,6 +88,16 @@ class KurumiExpressionsTest {
         assertTrue(KurumiScriptParser.parse(bread).isPresent(), KurumiScriptParser.lastError());
     }
 
+    @Test void gameSleepActionIsDistinctFromWaiting() {
+        assertTrue(KurumiScriptParser.parse("""
+                goto(-110,70,61)
+                sleep_in_bed()
+                talk("已尝试和床互动，实际入睡由服务器确认")
+                """).isPresent(), KurumiScriptParser.lastError());
+        assertTrue(KurumiScriptParser.parse("sleep(2)").isPresent());
+        assertTrue(KurumiScriptParser.parse("sleep_in_bed(2)").isEmpty());
+    }
+
     @Test void dictionaryFieldsAndArguments() {
         Map<String, JsonElement> vars = new HashMap<>();
         JsonObject target = new JsonObject();
