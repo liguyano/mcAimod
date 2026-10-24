@@ -82,7 +82,7 @@ public final class KurumiWebActions {
                 从记忆位置取物：take_from_memory("chest_1","minecraft:diamond",4)，
                 只打开记忆中的指定箱子，核对服务端菜单后取物，绝不改选附近其他箱子。
                 搜索和取物可分成两次任务完成，不能虚构箱子内容及取物数量。
-                常用动作：sleep(2)、talk("你好")、equip_main_hand("minecraft:iron_axe")、
+                睡觉与等待必须区分：sleep(2) 仅暂停脚本2秒，不会和床互动。\n                sleep_in_bed() 才是游戏里睡觉：自动寻找24格内的床，身边的床直接右键，远处寻路后右键。\n                “回家睡觉”“睡觉”“睡一晚”必须先按需回家，再调用 sleep_in_bed()；不可只等待或发言。\n                床右键发起不代表服务器已经确认入睡，失败时不可假称睡着。\n                常用动作：sleep(2)、talk("你好")、equip_main_hand("minecraft:iron_axe")、
                 破坏指定方块：break_block("minecraft:stone") 破坏4.5格内最近的石头；
                 break_block(100,64,200) 按坐标破坏，或 break_block(target.x,target.y,target.z)，
                 也可 break_block("minecraft:stone",100,64,200) 验证方块类型。
