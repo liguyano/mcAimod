@@ -11,6 +11,16 @@ class KurumiDecisionParserTest {
                 + "\"reply\":\"主人~\",\"script\":\"" + escaped + "\"}";
     }
 
+    @Test void clarificationIsValidatedAndNotExecuted() {
+        String question = "{\"type\":\"clarify\",\"question\":\"主人~，你要哪种原木？\"}";
+        assertEquals("主人~，你要哪种原木？", KurumiDecisionParser.clarification(question).orElseThrow());
+        assertTrue(KurumiDecisionParser.parse(question).isEmpty());
+        assertTrue(KurumiDecisionParser.clarification(
+                "{\"type\":\"clarify\",\"question\":\"/danger\"}").isEmpty());
+        assertTrue(KurumiDecisionParser.clarification(
+                "{\"type\":\"clarify\",\"question\":\"\"}").isEmpty());
+    }
+
     @Test void acceptsScriptSpeech() {
         var decision = KurumiDecisionParser.parse(request("talk(\"你好，主人~\")")).orElseThrow();
         assertTrue(decision.action().isEmpty());
