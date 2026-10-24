@@ -38,10 +38,16 @@ public final class KurumiScriptParser {
     private static final Pattern GOTO_NAMED = Pattern.compile("goto\\(\"([^\"]{1,24})\"\\)");
     private static final Pattern GOTO = Pattern.compile("goto\\((-?\\d{1,8}),\\s*(-?\\d{1,4}),\\s*(-?\\d{1,8})\\)");
     private static final Pattern RETURN = Pattern.compile("return\\s+\"[^\"\\r\\n]{0,100}\"");
+    private static final ThreadLocal<String> LAST_ERROR = ThreadLocal.withInitial(() -> "");
+    public static String lastError() { return LAST_ERROR.get(); }
     private record Line(int indent, String code, int number) {}
     private static final class Cursor { int at; }
     public static Optional<KurumiTaskPlanner.Program> parse(String source) {
-        if (source == null || source.length() > 8192) return Optional.empty();
+        LAST_ERROR.set("");
+        if (source == null || source.length() > 8192) {
+            LAST_ERROR.set("脚本为空或超过8192字");
+            return Optional.empty();
+        }
         try {
             var lines = new java.util.ArrayList<Line>();
             int sourceLine = 0;
@@ -50,21 +56,33 @@ public final class KurumiScriptParser {
                 if (raw.isBlank() || raw.stripLeading().startsWith("#")) continue;
                 int n = 0;
                 while (n < raw.length() && raw.charAt(n) == ' ') n++;
-                if (n % 4 != 0 || raw.indexOf('\t') >= 0) return Optional.empty();
+                if (n % 4 != 0 || raw.indexOf('\t') >= 0) {
+                    LAST_ERROR.set("第 " + sourceLine + " 行缩进错误：只能使用4个空格，禁止Tab");
+                    return Optional.empty();
+                }
                 String code = raw.substring(n).stripTrailing();
                 lines.add(new Line(n / 4, code, sourceLine));
             }
-            if (lines.isEmpty() || lines.size() > 200 || lines.get(0).indent() != 0)
+            if (lines.isEmpty() || lines.size() > 200 || lines.get(0).indent() != 0) {
+                LAST_ERROR.set("脚本为空、超过200条或首行缩进不为零");
                 return Optional.empty();
+            }
             Cursor cursor = new Cursor();
             JsonArray body = block(lines, cursor, 0, 0);
-            if (cursor.at != lines.size()) return Optional.empty();
+            if (cursor.at != lines.size()) {
+                LAST_ERROR.set("第 " + lines.get(cursor.at).number() + " 行缩进或结构错误");
+                return Optional.empty();
+            }
             JsonObject obj = new JsonObject();
             obj.add("program", body);
             var parsed = KurumiTaskPlanner.parseProgram(obj);
+            if (parsed.isEmpty()) LAST_ERROR.set("指令结构校验未通过，请检查动作参数及条件");
             parsed.ifPresent(program -> KurumiWebMonitor.register(program, source));
             return parsed;
-        } catch (RuntimeException e) { return Optional.empty(); }
+        } catch (RuntimeException e) {
+            LAST_ERROR.set(e.getMessage() == null ? "未知解析错误" : e.getMessage());
+            return Optional.empty();
+        }
     }
     private static JsonArray block(List<Line> lines, Cursor cursor, int indent, int depth) {
         if (depth > 3) throw new IllegalArgumentException("nesting");
@@ -253,11 +271,11 @@ public final class KurumiScriptParser {
                 node.addProperty("message", TALK.matcher(code).replaceFirst("$1"));
             } else if (code.equals("break")) {
                 node.addProperty("op", "BREAK");
-            } else if (RETURN.matcher(code).matches()) {
+            } else if (code.equals("return") || RETURN.matcher(code).matches()) {
                 node.addProperty("op", "RETURN");
             } else {
                 Matcher m = CALL.matcher(code);
-                if (!m.matches()) throw new IllegalArgumentException("unknown command");
+                if (!m.matches()) throw new IllegalArgumentException("第 " + lines.get(cursor.at - 1).number() + " 行不支持的语句：" + code.substring(0, Math.min(code.length(), 100)));
                 String action = switch (m.group(2)) {
                     case "attack" -> m.group(3).contains(":") ? "ATTACK_MOB" : "ATTACK_PLAYER";
                     case "attack_mob" -> "ATTACK_MOB";
