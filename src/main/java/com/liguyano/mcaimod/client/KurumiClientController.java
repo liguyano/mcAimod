@@ -29,6 +29,8 @@ public final class KurumiClientController {
             new KurumiWakeRouter(Clock.systemUTC(), Duration.ofSeconds(5));
     private static final OpenAiCompatibleProvider PROVIDER = new OpenAiCompatibleProvider();
     private static final Map<UUID, List<ChatMessage>> HISTORY = new HashMap<>();
+    private record PendingClarification(String request, String question) {}
+    private static final Map<UUID, PendingClarification> PENDING_CLARIFICATIONS = new HashMap<>();
     private static final int MAX_TOOL_CALLS = 3;
     private static boolean enabled = false;
     private static boolean autoFarmEnabled = false;
@@ -70,6 +72,7 @@ public final class KurumiClientController {
         autoFarmEnabled = false;
         GATE.reset();
         HISTORY.clear();
+        PENDING_CLARIFICATIONS.clear();
         KurumiChainBridge.release();
         KurumiBedShortcut.cancel();
         KurumiChestBridge.cancel();
@@ -180,16 +183,30 @@ public final class KurumiClientController {
                 ? "" : minecraft.getConnection().getPlayerInfo(event.getSender()).getProfile().name();
         boolean isOwner = "SekaiSaionji".equals(senderNameForMemory);
         if (requestInFlight || !GATE.tryAccept(isOwner ? "Kurumi " + message : message)) return;
-        if (isOwner && handleExactShortcut(message, senderNameForMemory)) {
+        UUID sender = event.getSender();
+        PendingClarification pending = PENDING_CLARIFICATIONS.get(sender);
+        if (pending != null && ("取消".equals(message.strip()) || "算了".equals(message.strip()))) {
+            PENDING_CLARIFICATIONS.remove(sender);
+            minecraft.getConnection().sendChat("好的，已取消刚才等待确认的任务。");
             GATE.finish();
             return;
         }
-        if (KurumiLocationMemory.handle(message, senderNameForMemory)) {
+        // The next accepted message answers the question; do not route it as an unrelated shortcut.
+        if (pending == null && isOwner && handleExactShortcut(message, senderNameForMemory)) {
+            GATE.finish();
+            return;
+        }
+        if (pending == null && KurumiLocationMemory.handle(message, senderNameForMemory)) {
             GATE.finish();
             return;
         }
         requestInFlight = true;
-        KurumiWebMonitor.requestReceived(message);
+        String effectiveMessage = pending == null ? message
+                : "继续完成先前任务：" + pending.request() + "。之前询问：" + pending.question()
+                + "。玩家最新回答：" + message
+                + "。根据最新回答重新判断是否还有必须澄清的细节；明确后再规划，不要重新猜测。";
+        if (pending != null) PENDING_CLARIFICATIONS.remove(sender);
+        KurumiWebMonitor.requestReceived(effectiveMessage);
         long requestGeneration = generation;
         // Acknowledgement is public and uses the player's normal chat account.
 
@@ -209,7 +226,6 @@ public final class KurumiClientController {
             return;
         }
         minecraft.getConnection().sendChat("好的，我听到了。");
-        UUID sender = event.getSender();
         List<ChatMessage> conversation = new ArrayList<>();
                 conversation.add(new ChatMessage("system",
                         "Kurumi 仅输出一个 JSON 对象：{\"type\":\"action\",\"action\":\"EXECUTE_SCRIPT\",\"reply\":\"简短回复\",\"script\":\"伪代码\"}。"
@@ -331,8 +347,17 @@ public final class KurumiClientController {
                 + "若无法执行用户要求，仍使用 EXECUTE_SCRIPT 并通过 talk 说明原因。"));
         conversation.addAll(HISTORY.getOrDefault(sender, List.of()));
         String senderName = minecraft.getConnection().getPlayerInfo(sender) == null ? "未知" : minecraft.getConnection().getPlayerInfo(sender).getProfile().name();
-        conversation.add(new ChatMessage("user", "发言者玩家名：" + senderName + "；消息：" + message));
-        runAgent(profile.get(), conversation, sender, message, requestGeneration, 0);
+        conversation.add(new ChatMessage("system",
+                "执行前澄清规则：若原木品种、数量、目标工作台或箱子等关键信息不确定，"
+                + "且不能从本次对话历史、已保存记忆和游戏观察中唯一确定，"
+                + "不要自行猜测或选择默认值、不要先发出任何执行动作。"
+                + "此时只返回 JSON {\\"type\\":\\"clarify\\",\\"question\\":\\"一条简短具体的问题\\"}，"
+                + "等待玩家回答后再制定和执行脚本；可继续追问，但每次只问一个关键问题。"
+                + "若信息已足够，则直接返回原有的 EXECUTE_SCRIPT JSON，不必多问。"
+                + "在未确认具体木材时，不要把 oak_log、spruce_log 等任一种当成玩家想要的木头。"));
+        conversation.add(new ChatMessage("user", "发言者玩家名：" + senderName + "；消息：" + effectiveMessage));
+        runAgent(profile.get(), conversation, sender, pending == null ? message : pending.request(),
+                requestGeneration, 0);
     }
 
     private static void runAgent(ModelProfile profile, List<ChatMessage> conversation, UUID sender,
@@ -359,13 +384,28 @@ public final class KurumiClientController {
                         return;
                     }
                     KurumiWebMonitor.log("AI 原始回复：" + (reply == null ? "(null)" : reply.substring(0, Math.min(reply.length(), 4000))));
+                    Optional<String> clarification = KurumiDecisionParser.clarification(reply);
+                    if (clarification.isPresent()) {
+                        finishRequest();
+                        String question = clarification.get();
+                        PENDING_CLARIFICATIONS.put(sender, new PendingClarification(message, question));
+                        List<ChatMessage> updated = new ArrayList<>(HISTORY.getOrDefault(sender, List.of()));
+                        updated.add(new ChatMessage("user", message));
+                        updated.add(new ChatMessage("assistant", question));
+                        if (updated.size() > 20)
+                            updated = new ArrayList<>(updated.subList(updated.size() - 20, updated.size()));
+                        HISTORY.put(sender, updated);
+                        KurumiWebMonitor.requestFailed("等待玩家澄清：" + question);
+                        minecraft.getConnection().sendChat(question);
+                        return;
+                    }
                     Optional<KurumiDecisionParser.Decision> parsed = KurumiDecisionParser.parse(reply);
                     if (parsed.isEmpty()) {
                         KurumiWebMonitor.log("模型回复解析失败（第 " + (formatRetries + 1) + " 次）");
                         if (formatRetries == 0) {
                             List<ChatMessage> retry = new ArrayList<>(conversation);
                             retry.add(new ChatMessage("assistant", reply == null ? "" : reply));
-                            retry.add(new ChatMessage("user", "上一条回复未通过格式或参数校验。请严格只返回一个有效 JSON 对象，禁止 Markdown 和代码块。仅接受 type=action、action=EXECUTE_SCRIPT、reply 和 script 字段。聊天和查询都写入 script，通过 talk() 发送；不要返回 type=tool 或 type=chat。"));
+                            retry.add(new ChatMessage("user", "上一条回复未通过格式或参数校验。请严格只返回一个有效 JSON 对象，禁止 Markdown 和代码块。需要澄清才返回 type=clarify 和 question 字段，否则返回 type=action、action=EXECUTE_SCRIPT、reply 和 script 字段。聊天和查询都写入 script，通过 talk() 发送；不要返回 type=tool 或 type=chat。"));
                             runAgent(profile, retry, sender, message, requestGeneration, toolCalls, 1);
                             return;
                         }
