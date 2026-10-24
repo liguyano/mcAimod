@@ -72,6 +72,22 @@ class KurumiExpressionsTest {
         assertTrue(KurumiScriptParser.parse("return").isPresent());
     }
 
+    @Test void craftingGridPutItemPassesBothValidationLayers() {
+        String bread = """
+                target = find_nearest_block("minecraft:crafting_table")
+                if target.found:
+                    goto(target.x, target.y, target.z)
+                    interact("minecraft:crafting_table")
+                    put_item("minecraft:wheat",1,"grid_1")
+                    put_item("minecraft:wheat",1,"grid_2")
+                    put_item("minecraft:wheat",1,"grid_3")
+                    take_item("minecraft:bread",1)
+                else:
+                    talk("附近没有找到工作台")
+                """;
+        assertTrue(KurumiScriptParser.parse(bread).isPresent(), KurumiScriptParser.lastError());
+    }
+
     @Test void dictionaryFieldsAndArguments() {
         Map<String, JsonElement> vars = new HashMap<>();
         JsonObject target = new JsonObject();
