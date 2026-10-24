@@ -242,7 +242,8 @@ public final class KurumiTaskPlanner {
                     if (!item.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
                             || quantity < 1 || quantity > 64
                             || "PUT_ITEM".equals(special)
-                            && !java.util.Set.of("input", "fuel", "auto").contains(slot))
+                            && !java.util.Set.of("input", "fuel", "auto", "grid_1", "grid_2", "grid_3",
+                                    "grid_4", "grid_5", "grid_6", "grid_7", "grid_8", "grid_9").contains(slot))
                         throw new IllegalArgumentException("invalid interaction");
                     statements.add(new Statement(op, new Step(special, item, quantity,
                             null, null, null, slot), null, List.of(), List.of()));
