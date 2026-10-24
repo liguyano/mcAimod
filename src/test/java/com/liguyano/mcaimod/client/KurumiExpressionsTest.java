@@ -117,6 +117,33 @@ class KurumiExpressionsTest {
         assertTrue(KurumiScriptParser.parse("mine(\"invalid id\")").isEmpty());
     }
 
+    @Test void actionReturnAssignmentsParseAsActionsNotPureExpressions() {
+        String script = """
+                count = check_inventory("minecraft:cobblestone")
+                if count == 0:
+                    return
+                equip_main_hand("minecraft:cobblestone")
+                moved = move("back",2)
+                if not moved.success:
+                    talk("移动请求未接受")
+                    return
+                placed = place_block("minecraft:cobblestone")
+                if placed.success:
+                    talk("放置请求已接受")
+                else:
+                    talk(placed.message)
+                """;
+        assertTrue(KurumiScriptParser.parse(script).isPresent(), KurumiScriptParser.lastError());
+        assertTrue(KurumiScriptParser.parse("""
+                result = goto(1,64,2)
+                if result.success:
+                    talk("到达")
+                """).isPresent(), KurumiScriptParser.lastError());
+        assertTrue(KurumiScriptParser.parse("broken = break_block(\"minecraft:stone\")")
+                .isPresent(), KurumiScriptParser.lastError());
+        assertTrue(KurumiScriptParser.parse("result = something_unsafe(\"x\")").isEmpty());
+    }
+
     @Test void dictionaryFieldsAndArguments() {
         Map<String, JsonElement> vars = new HashMap<>();
         JsonObject target = new JsonObject();

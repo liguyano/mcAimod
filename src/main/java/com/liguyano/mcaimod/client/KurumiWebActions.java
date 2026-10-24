@@ -59,7 +59,12 @@ public final class KurumiWebActions {
                 每行一个命令，嵌套缩进四个空格。支持 repeat(4): 固定次数循环（1-20次，展开最多200语句）；
                 支持 while/if/else、break、return "完成"、if result.success:，
                 以及 check_inventory、check_chest、check_distance 的条件比较。
-                允许通用变量赋值、变量重新赋值、加减乘除、布尔条件和 JSON 字典点号访问；禁止 for/range、函数定义、import。\n                例如 target = find_nearest_block("minecraft:crafting_table")，\n                if target.found: 下一行缩进四格 goto(target.x,target.y,target.z)。\n                数量比较优先使用 check_inventory("minecraft:cherry_log")，它直接返回数字；
+                允许通用变量赋值、变量重新赋值、加减乘除、布尔条件和 JSON 字典点号访问；禁止 for/range、函数定义、import。
+                动作允许赋值：moved = move("back",2)，placed = place_block("minecraft:cobblestone")；
+                结果提供 success、completed、message。if moved.success: 可以判断是否接受命令，
+                但 move/place_block/interact 的 completed=false，success 不等于服务器确认动作完成；
+                goto() 的赋值会在到达后完成验证；不要虚报放置、移动已成功。
+\n                例如 target = find_nearest_block("minecraft:crafting_table")，\n                if target.found: 下一行缩进四格 goto(target.x,target.y,target.z)。\n                数量比较优先使用 check_inventory("minecraft:cherry_log")，它直接返回数字；
                 check_inventory_count("minecraft:cherry_log") 返回包含 count 字段的对象，
                 可写 status = check_inventory_count("minecraft:cherry_log")，然后 if status.count >= 256:，
                 也兼容 if status >= 256:。支持小数变量和运算，例如 rate = 1.5、rate = rate + 0.5，
