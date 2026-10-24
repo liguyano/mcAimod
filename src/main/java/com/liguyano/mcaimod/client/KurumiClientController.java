@@ -140,7 +140,7 @@ public final class KurumiClientController {
                     return 1;
                 }))
                 .then(LiteralArgumentBuilder.<CommandSourceStack>literal("status").executes(context -> {
-                    notice("自由任务：" + KurumiPlanExecutor.status() + "；伪代码：" + KurumiPseudoExecutor.status() + "；恢复状态：" + KurumiTaskRecovery.status() + "；取物合成：" + KurumiChestCraftTask.status() + "；长任务：" + KurumiLongTaskBridge.status() + "；聊天监听：" + (enabled ? "开启" : "关闭") + "；自动农作：" + (autoFarmEnabled ? "开启" : "关闭") + "；Baritone：" + (BaritoneBridge.available() ? "已检测到" : "未检测到") + "；动作识别：大模型");
+                    notice("自由任务：" + KurumiPlanExecutor.status() + "；脚本：" + KurumiPseudoExecutor.status() + "；恢复状态：" + KurumiTaskRecovery.status() + "；取物合成：" + KurumiChestCraftTask.status() + "；长任务：" + KurumiLongTaskBridge.status() + "；聊天监听：" + (enabled ? "开启" : "关闭") + "；自动农作：" + (autoFarmEnabled ? "开启" : "关闭") + "；Baritone：" + (BaritoneBridge.available() ? "已检测到" : "未检测到") + "；动作识别：大模型");
                     return 1;
                 })));
     }
@@ -228,9 +228,9 @@ public final class KurumiClientController {
         minecraft.getConnection().sendChat("好的，我听到了。");
         List<ChatMessage> conversation = new ArrayList<>();
                 conversation.add(new ChatMessage("system",
-                        "Kurumi 仅输出一个 JSON 对象：{\"type\":\"action\",\"action\":\"EXECUTE_SCRIPT\",\"reply\":\"简短回复\",\"script\":\"伪代码\"}。"
+                        "Kurumi 仅输出一个 JSON 对象：{\"type\":\"action\",\"action\":\"EXECUTE_SCRIPT\",\"reply\":\"简短回复\",\"script\":\"脚本\"}。"
                         + "普通聊天使用 talk(\\\"内容\\\")，不要使用旧版 EXECUTE_PLAN、EXECUTE_PROGRAM、type=tool 或 type=chat。"
-                        + "script 仅支持白名单类 Python 伪代码，每行一个操作，缩进4空格，JSON 内换行必须转义。"
+                        + "script 仅支持白名单类 Python 脚本，每行一个操作，缩进4空格，JSON 内换行必须转义。"
                         + "支持 if/else、while、break、return、if result.success、if not result.success；"
                         + "check_inventory、check_chest、check_distance 可用于条件比较。"
                         + "支持运行时变量（最多16个），可重新赋值、有限加减乘除、布尔比较以及字典点号属性访问。"
