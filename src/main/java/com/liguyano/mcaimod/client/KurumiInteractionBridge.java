@@ -67,9 +67,9 @@ public final class KurumiInteractionBridge {
             return transfer(menu, itemId, quantity, "auto".equals(slot) ? "input" : slot);
         }
         if (mc.player.containerMenu instanceof CraftingMenu menu) {
-            if ("input".equals(slot) || "fuel".equals(slot))
-                return new BaritoneBridge.Result(false, "工作台请使用 grid_1 至 grid_9 或 auto，不能使用熔炉 input/fuel");
-            int targetSlot = "auto".equals(slot) ? -1 : Integer.parseInt(slot.substring(5));
+            if ("fuel".equals(slot))
+                return new BaritoneBridge.Result(false, "工作台没有燃料槽 fuel，请使用 input、auto 或 grid_1 至 grid_9");
+            int targetSlot = KurumiCraftingSlotRules.index(slot);
             return craftingTransfer(menu, itemId, quantity, targetSlot);
         }
         if (!"auto".equals(slot))
