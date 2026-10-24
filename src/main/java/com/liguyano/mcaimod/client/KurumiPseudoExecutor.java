@@ -47,7 +47,24 @@ public final class KurumiPseudoExecutor {
     private static long lastPublicMessageAt;
     private static boolean lastResultSuccess;
     private static boolean assignedResult;
+    /** Deferred result variable for a script action awaiting postflight verification. */
+    private static String pendingActionVariable;
     private static final java.util.Map<String, com.google.gson.JsonElement> variables = new java.util.HashMap<>();
+
+    private static void assignActionResult(String name, boolean success, boolean completed, String message) {
+        if (name == null) return;
+        com.google.gson.JsonObject result = new com.google.gson.JsonObject();
+        result.addProperty("success", success);
+        result.addProperty("completed", completed);
+        result.addProperty("message", message);
+        variables.put(name, result);
+        KurumiWebMonitor.log("动作结果 " + name + " = " + result);
+    }
+    private static void finishPendingAction(boolean succeeded, String message) {
+        if (pendingActionVariable == null) return;
+        assignActionResult(pendingActionVariable, succeeded, true, message);
+        pendingActionVariable = null;
+    }
 
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiPseudoExecutor::tick); }
     public static boolean busy() { return running; }
@@ -73,6 +90,7 @@ public final class KurumiPseudoExecutor {
         awaitingChestSearch = false;
         awaitingBlockBreak = false;
         variables.clear();
+        pendingActionVariable = null;
         KurumiChestInspector.cancel();
         KurumiPlanExecutor.cancel();
     }
@@ -99,6 +117,7 @@ public final class KurumiPseudoExecutor {
         lastResultSuccess = false;
         assignedResult = false;
         variables.clear();
+        pendingActionVariable = null;
         awaitingAction = false;
         awaitingChest = false;
         awaitingCome = false;
@@ -235,7 +254,9 @@ public final class KurumiPseudoExecutor {
             awaitingChestSearch = false;
             lastResultSuccess = KurumiChestSearch.lastSucceeded();
             KurumiWebMonitor.log("箱子任务结果：" + KurumiChestSearch.status());
-            if (!lastResultSuccess) {
+            boolean assigned = pendingActionVariable != null;
+            finishPendingAction(lastResultSuccess, KurumiChestSearch.status());
+            if (!lastResultSuccess && !assigned) {
                 say("箱子搜索或按记忆取物失败，请查看 Web 日志");
                 cancel();
             }
@@ -246,7 +267,9 @@ public final class KurumiPseudoExecutor {
             awaitingBlockBreak = false;
             lastResultSuccess = KurumiBlockBreakingBridge.lastSucceeded();
             KurumiWebMonitor.log("破坏方块验证：" + lastResultSuccess);
-            if (!lastResultSuccess) {
+            boolean assigned = pendingActionVariable != null;
+            finishPendingAction(lastResultSuccess, "方块破坏验证：" + lastResultSuccess);
+            if (!lastResultSuccess && !assigned) {
                 say("破坏方块失败，已停止");
                 cancel();
             }
@@ -257,7 +280,9 @@ public final class KurumiPseudoExecutor {
             awaitingAction = false;
             lastResultSuccess = KurumiPlanExecutor.lastSucceeded();
             KurumiWebMonitor.log("动作结束，验证结果：" + lastResultSuccess);
-            if (!lastResultSuccess && !assignedResult) {
+            boolean assigned = pendingActionVariable != null;
+            finishPendingAction(lastResultSuccess, "动作完成验证：" + lastResultSuccess);
+            if (!lastResultSuccess && !assignedResult && !assigned) {
                 say("脚本动作失败，已停止");
                 cancel();
             }
@@ -317,9 +342,13 @@ public final class KurumiPseudoExecutor {
                     cancel();
                 }
             }
-            case "EXPR_CALL" -> {
+            case "EXPR_CALL", "EXPR_ACTION_ASSIGN" -> {
+                boolean assign = "EXPR_ACTION_ASSIGN".equals(stmt.op());
+                String resultVariable = assign ? stmt.step().target() : null;
                 try {
                     String name = stmt.step().action();
+                    if (assign && variables.size() >= 16 && !variables.containsKey(resultVariable))
+                        throw new IllegalArgumentException("最多保存16个变量");
                     var args = KurumiExpressions.arguments(stmt.step().itemId(), variables);
                     if ("talk".equals(name)) {
                         if (args.size()!=1) throw new IllegalArgumentException("talk 需要一个参数");
@@ -429,7 +458,16 @@ public final class KurumiPseudoExecutor {
                     } else throw new IllegalArgumentException("函数不在动作白名单");
                     KurumiWebMonitor.log(name + "(变量): " + outcome.message());
                     lastResultSuccess=outcome.success();
-                    if (!outcome.success()) { cancel(); return; }
+                    if (assign) {
+                        if (outcome.success() && (awaitingAction || awaitingBlockBreak || awaitingChestSearch)) {
+                            pendingActionVariable = resultVariable;
+                        } else {
+                            // For move()/place_block()/interact() the bridge only confirms that
+                            // a command was accepted, not the final server-side world state.
+                            boolean complete = "equip_main_hand".equals(name) && outcome.success();
+                            assignActionResult(resultVariable, outcome.success(), complete, outcome.message());
+                        }
+                    } else if (!outcome.success()) { cancel(); return; }
                     frame.index++;
                 } catch (RuntimeException ex) {
                     KurumiWebMonitor.log("变量参数执行失败：" + ex.getMessage());
