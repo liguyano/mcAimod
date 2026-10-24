@@ -38,13 +38,20 @@ public final class KurumiBedShortcut {
         if (mc.player == null || mc.level == null || mc.gameMode == null)
             return new BaritoneBridge.Result(false, "没有进入游戏世界");
         BlockPos origin = mc.player.blockPosition();
-        BlockPos bestBed = null, bestApproach = null;
-        double closest = Double.POSITIVE_INFINITY;
+        BlockPos bestBed = null, bestApproach = null, directlyReachableBed = null;
+        double closest = Double.POSITIVE_INFINITY, closestDirect = Double.POSITIVE_INFINITY;
+        int detectedBeds = 0;
         for (BlockPos search : BlockPos.betweenClosed(
                 origin.offset(-24,-6,-24), origin.offset(24,6,24))) {
             if (!mc.level.hasChunkAt(search)) continue;
             BlockState state = mc.level.getBlockState(search);
             if (!(state.getBlock() instanceof BedBlock)) continue;
+            detectedBeds++;
+            double directDistance = mc.player.getEyePosition().distanceToSqr(Vec3.atCenterOf(search));
+            if (directDistance <= 4.5 * 4.5 && directDistance < closestDirect) {
+                closestDirect = directDistance;
+                directlyReachableBed = search.immutable();
+            }
             for (Direction facing : Direction.Plane.HORIZONTAL) {
                 BlockPos next = search.relative(facing);
                 if (!mc.level.hasChunkAt(next) || !mc.level.hasChunkAt(next.above())
@@ -57,7 +64,13 @@ public final class KurumiBedShortcut {
                 if (d<closest) {closest=d;bestBed=search.immutable();bestApproach=next.immutable();}
             }
         }
-        if (bestBed == null) return new BaritoneBridge.Result(false, "附近24格已加载区域没有可接近的床");
+        // A bed already within interaction reach does not need a navigable adjacent floor.
+        // This also handles beds against walls or with decorative blocks surrounding them.
+        if (directlyReachableBed != null)
+            return interactDirectly(mc, directlyReachableBed);
+        if (bestBed == null) return new BaritoneBridge.Result(false,
+                detectedBeds == 0 ? "附近24格已加载区域没有发现床"
+                        : "发现 " + detectedBeds + " 个床方块，但没有可接近的落脚点");
         var navigation = BaritoneBridge.gotoCoordinates(
                 bestApproach.getX(), bestApproach.getY(), bestApproach.getZ());
         if (!navigation.success()) return navigation;
@@ -87,11 +100,18 @@ public final class KurumiBedShortcut {
         BlockPos target = bed;
         // Release our navigation before attempting the interaction.
         cancel();
-        var result=mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND,
+        interactDirectly(mc, target);
+    }
+
+    private static BaritoneBridge.Result interactDirectly(Minecraft mc, BlockPos target) {
+        var result = mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND,
                 new BlockHitResult(Vec3.atCenterOf(target), Direction.UP, target, false));
         lastInteractionAccepted = result.consumesAction();
-        report(result.consumesAction() ? "已尝试与床互动，是否能睡觉由服务器判断"
-                : "床互动未被接受（可能不是夜晚、床被占用或距离不足）");
+        String message = result.consumesAction()
+                ? "已尝试与床互动，是否能睡觉由服务器判断"
+                : "床互动未被接受（可能不是夜晚、床被占用或距离不足）";
+        report(message);
+        return new BaritoneBridge.Result(result.consumesAction(), message);
     }
 
     private static void report(String value) {
