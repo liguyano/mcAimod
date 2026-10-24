@@ -9,7 +9,7 @@ import net.neoforged.neoforge.common.NeoForge;
 
 /** Tick-driven interpreter for a bounded, declarative pseudocode AST. */
 public final class KurumiPseudoExecutor {
-    private static final long TIMEOUT = 300_000L;
+    private static final long TIMEOUT = 1_200_000L;
     private static final int MAX_ITERATIONS = 20;
     private static final int MAX_ACTIONS = 200;
     private static final class Frame {
@@ -147,7 +147,7 @@ public final class KurumiPseudoExecutor {
         var mc = Minecraft.getInstance();
         if (mc.player == null || mc.getConnection() == null) { cancel(); return; }
         if (System.currentTimeMillis() - started > TIMEOUT) {
-            say("脚本超过5分钟，已停止");
+            say("脚本超过20分钟，已停止");
             cancel();
             return;
         }
