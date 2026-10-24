@@ -124,7 +124,7 @@ class OpenAiCompatibleProviderTest {
         ModelProvider withSecret = new OpenAiCompatibleProvider(HttpClient.newHttpClient(), key -> "fake");
         Throwable error = assertThrows(CompletionException.class,
                 () -> withSecret.chat(profile(Duration.ofSeconds(2)), List.of(new ChatMessage("user", "hi"))).join());
-        assertTrue(error.getCause().getMessage().contains("Invalid or empty"));
+        assertTrue(error.getCause().getMessage().contains("Invalid model response JSON"));
 
         ModelProvider missingSecret = new OpenAiCompatibleProvider(HttpClient.newHttpClient(), key -> null);
         error = assertThrows(CompletionException.class,
@@ -149,6 +149,6 @@ class OpenAiCompatibleProviderTest {
         ModelProvider provider = new OpenAiCompatibleProvider(HttpClient.newHttpClient(), key -> "fake");
         Throwable error = assertThrows(CompletionException.class,
                 () -> provider.chat(profile(Duration.ofSeconds(1)), List.of(new ChatMessage("user", "hi"))).join());
-        assertTrue(error.getCause().getMessage().contains("timeout"));
+        assertTrue(error.getCause().getMessage().contains("timed out"));
     }
 }

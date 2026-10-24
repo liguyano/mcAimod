@@ -70,7 +70,17 @@ public final class DashscopeMultimodalProvider implements ModelProvider {
                 System.err.println("[mcaimod/DashScope] " + detail);
                 throw new CompletionException(new ModelException(detail));
             }
-        }).orTimeout(profile.timeout().toMillis(), TimeUnit.MILLISECONDS);
+        }).orTimeout(profile.timeout().toMillis(), TimeUnit.MILLISECONDS)
+                .exceptionally(error -> {
+                    Throwable root = error;
+                    for (int i = 0; i < 8 && root.getCause() != null && root.getCause() != root; i++)
+                        root = root.getCause();
+                    if (root instanceof java.util.concurrent.TimeoutException)
+                        throw new CompletionException(new ModelException(
+                                "DashScope SDK request timed out after " + profile.timeout().toSeconds()
+                                + "s; complex generation may exceed the configured timeout"));
+                    throw new CompletionException(root);
+                });
     }
 
     /**
