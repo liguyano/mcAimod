@@ -30,6 +30,7 @@ public final class KurumiPseudoExecutor {
     private static boolean awaitingChestSearch;
     private static boolean awaitingChest;
     private static boolean awaitingCome;
+    private static boolean awaitingBed;
     private static boolean awaitingExternal;
     private static boolean awaitingCraft;
     private static boolean awaitingMenu;
@@ -60,6 +61,8 @@ public final class KurumiPseudoExecutor {
         awaitingBlockBreak = false;
         awaitingChest = false;
         awaitingCome = false;
+        if (awaitingBed) KurumiBedShortcut.cancel();
+        awaitingBed = false;
         sleepUntil = 0;
         awaitingExternal = false;
         awaitingCraft = false;
@@ -99,6 +102,7 @@ public final class KurumiPseudoExecutor {
         awaitingAction = false;
         awaitingChest = false;
         awaitingCome = false;
+        awaitingBed = false;
         awaitingExternal = false;
         awaitingCraft = false;
         awaitingMenu = false;
@@ -188,6 +192,18 @@ public final class KurumiPseudoExecutor {
                 }
             } else {
                 KurumiWebMonitor.log("异步操作已结束；结果可能仍需服务器确认");
+            }
+            return;
+        }
+        if (awaitingBed) {
+            if (KurumiBedShortcut.busy()) return;
+            awaitingBed = false;
+            lastResultSuccess = KurumiBedShortcut.lastInteractionAccepted();
+            KurumiWebMonitor.log("sleep_in_bed(): 床右键交互"
+                    + (lastResultSuccess ? "已被接受，实际入睡由服务器决定" : "未成功"));
+            if (!lastResultSuccess && !assignedResult) {
+                say("未能与床交互，停止后续脚本");
+                cancel();
             }
             return;
         }
@@ -485,13 +501,14 @@ public final class KurumiPseudoExecutor {
             }
             case "ACTION", "ACTION_RESULT" -> {
                 if (java.util.Set.of("STOP", "TPA_REQUEST", "TPA_ACCEPT", "TPA_REQUEST_TO",
-                        "CRAFT_OPEN", "CHEST_OPEN", "CHEST_PUT_ALL", "CHEST_TAKE_ALL", "DROP_ALL",
+                        "CRAFT_OPEN", "CHEST_OPEN", "SLEEP_IN_BED", "CHEST_PUT_ALL", "CHEST_TAKE_ALL", "DROP_ALL",
                         "DROP_ITEM_ALL", "DROP", "PICKUP", "PICKUP_ALL", "CRAFT_ITEM",
                         "CHEST_TAKE", "CHEST_PUT", "COLLECT_AND_STORE").contains(stmt.step().action())) {
                     if (++actions > MAX_ACTIONS) { cancel(); return; }
                     var step = stmt.step();
                     BaritoneBridge.Result result = switch (step.action()) {
                         case "STOP" -> BaritoneBridge.stop();
+                        case "SLEEP_IN_BED" -> KurumiBedShortcut.start();
                         case "TPA_REQUEST" -> KurumiTpaBridge.request();
                         case "TPA_ACCEPT" -> KurumiTpaBridge.accept();
                         case "TPA_REQUEST_TO" -> KurumiTpaBridge.requestTo(step.target());
@@ -515,6 +532,7 @@ public final class KurumiPseudoExecutor {
                     KurumiWebMonitor.log(step.action() + ": " + result.message());
                     frame.index++;
                     if (!result.success() && !assignedResult) { cancel(); return; }
+                    if (result.success() && "SLEEP_IN_BED".equals(step.action())) awaitingBed = true;
                     if (result.success() && "CRAFT_ITEM".equals(step.action())) awaitingCraft = true;
                     if (result.success() && "CRAFT_OPEN".equals(step.action())) {
                         awaitingMenu = true;
