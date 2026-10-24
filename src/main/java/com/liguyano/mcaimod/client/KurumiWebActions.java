@@ -249,7 +249,7 @@ public final class KurumiWebActions {
                 error = "已有任务在执行";
             else {
                 Optional<KurumiTaskPlanner.Program> program = KurumiScriptParser.parse(source);
-                if (program.isEmpty()) error = "脚本不符合当前解释器语法或安全限制";
+                if (program.isEmpty()) error = "脚本校验失败：" + KurumiScriptParser.lastError();
                 else if (ownerOnly(program.get().statements())
                         && !"SekaiSaionji".equals(mc.player.getName().getString()))
                     error = "该任务包含仅主人可以执行的操作";
