@@ -18,6 +18,17 @@ public final class KurumiWebActions {
     private static boolean generating, runQueued;
     private static long generationId;
 
+    /** Invalidate Web preview callbacks as part of an immediate stop. */
+    public static synchronized void cancelPending() {
+        generationId++;
+        generating = false;
+        previewStatus = "已取消";
+        previewError = "";
+        runQueued = false;
+        runStatus = "已取消";
+        runError = "";
+    }
+
     public static synchronized String submitGenerate(String requirement) {
         if (requirement == null || requirement.isBlank() || requirement.length() > 2000)
             return "需求不能为空且最多2000字";
