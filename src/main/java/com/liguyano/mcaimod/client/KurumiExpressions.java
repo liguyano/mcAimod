@@ -200,6 +200,10 @@ public final class KurumiExpressions {
         }
     }
     private JsonElement call(String name,java.util.List<JsonElement> args) {
+        if ("get_fishing_status".equals(name)) {
+            if (!args.isEmpty()) throw new IllegalArgumentException("get_fishing_status 不接受参数");
+            return new JsonPrimitive(KurumiFishingBridge.status());
+        }
         if ("get_agent_observation".equals(name)) {
             if (args.size() != 1) throw new IllegalArgumentException("需要一个观察记录索引");
             return new JsonPrimitive(KurumiClientController.agentObservation(integer(args.get(0))));

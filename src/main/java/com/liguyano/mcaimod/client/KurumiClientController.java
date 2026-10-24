@@ -74,6 +74,7 @@ public final class KurumiClientController {
         KurumiWebMonitor.install();
         KurumiChestInspector.install();
         KurumiChestSearch.install();
+        KurumiFishingBridge.install();
     }
 
     private static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
@@ -100,6 +101,7 @@ public final class KurumiClientController {
         KurumiChestInspector.cancel();
         KurumiChestSearch.cancel();
         KurumiTaskRecovery.cancel();
+        KurumiFishingBridge.cancel();
     }
 
     /** Immediate local emergency stop; never invokes or waits for the language model. */
@@ -118,6 +120,7 @@ public final class KurumiClientController {
         KurumiLongTaskBridge.cancel();
         KurumiChestCraftTask.cancel();
         KurumiTaskRecovery.cancel();
+        KurumiFishingBridge.cancel();
         KurumiBedShortcut.cancel();
         KurumiChestBridge.cancel();
         KurumiInteractionBridge.cancel();
@@ -193,6 +196,7 @@ public final class KurumiClientController {
                     KurumiChestCraftTask.cancel();
                     KurumiTaskRecovery.cancel();
                     KurumiPlanExecutor.cancel();
+                    KurumiFishingBridge.cancel();
                     notice("已关闭聊天监听。");
                     return 1;
                 }))
@@ -208,7 +212,9 @@ public final class KurumiClientController {
                             return 1;
                         })))
                 .then(LiteralArgumentBuilder.<CommandSourceStack>literal("farm").executes(context -> {
-                    BaritoneBridge.Result result = BaritoneBridge.farm(16);
+                    BaritoneBridge.Result result = KurumiFishingBridge.busy()
+                            ? new BaritoneBridge.Result(false, "正在钓鱼，请先 /kurumi stop")
+                            : BaritoneBridge.farm(16);
                     notice(result.message());
                     return result.success() ? 1 : 0;
                 }))
@@ -218,7 +224,7 @@ public final class KurumiClientController {
                     return 1;
                 }))
                 .then(LiteralArgumentBuilder.<CommandSourceStack>literal("status").executes(context -> {
-                    notice("自由任务：" + KurumiPlanExecutor.status() + "；脚本：" + KurumiPseudoExecutor.status() + "；恢复状态：" + KurumiTaskRecovery.status() + "；取物合成：" + KurumiChestCraftTask.status() + "；长任务：" + KurumiLongTaskBridge.status() + "；聊天监听：" + (enabled ? "开启" : "关闭") + "；自动农作：" + (autoFarmEnabled ? "开启" : "关闭") + "；Baritone：" + (BaritoneBridge.available() ? "已检测到" : "未检测到") + "；动作识别：大模型");
+                    notice("自由任务：" + KurumiPlanExecutor.status() + "；脚本：" + KurumiPseudoExecutor.status() + "；钓鱼：" + KurumiFishingBridge.status() + "；恢复状态：" + KurumiTaskRecovery.status() + "；取物合成：" + KurumiChestCraftTask.status() + "；长任务：" + KurumiLongTaskBridge.status() + "；聊天监听：" + (enabled ? "开启" : "关闭") + "；自动农作：" + (autoFarmEnabled ? "开启" : "关闭") + "；Baritone：" + (BaritoneBridge.available() ? "已检测到" : "未检测到") + "；动作识别：大模型");
                     return 1;
                 })));
     }
@@ -231,7 +237,7 @@ public final class KurumiClientController {
         BaritoneBridge.Result result;
         if (requestInFlight || KurumiPseudoExecutor.busy() || KurumiPlanExecutor.busy()
                 || KurumiLongTaskBridge.busy() || KurumiChestCraftTask.busy()
-                || KurumiBedShortcut.busy()) {
+                || KurumiBedShortcut.busy() || KurumiFishingBridge.busy()) {
             result = new BaritoneBridge.Result(false, "还有任务正在执行，请先停止");
         } else {
             result = switch (message) {
@@ -288,7 +294,8 @@ public final class KurumiClientController {
             GATE.finish();
             return;
         }
-        if (pending == null && KurumiLocationMemory.handle(message, senderNameForMemory)) {
+        if (pending == null && !KurumiFishingBridge.busy()
+                && KurumiLocationMemory.handle(message, senderNameForMemory)) {
             GATE.finish();
             return;
         }
@@ -352,6 +359,10 @@ public final class KurumiClientController {
                         + "goto(x,y,z) 坐标寻路；move(\\\"forward\\\",n)、move(\\\"back\\\",n)、"
                         + "move(\\\"left\\\",n)、move(\\\"right\\\",n) 相对朝向移动1至16格；"
                         + "stop() 停止；sleep(5) 只是等待5秒（1至120秒），不代表睡觉；"
+                        + "fish() 开始持续自动钓鱼：从背包装备鱼竿、前往附近至少5×5开放水面的安全岸边、抛竿、检测咬钩并反复收竿；"
+                        + "fish() 是后台任务，调用成功不代表已钓到鱼；"
+                        + "stop_fishing() 停止钓鱼，observe(get_fishing_status()) 查询实际状态。"
+                        + "持续钓鱼直到停止或安全条件触发；改为其他移动/采集任务前必须先 stop_fishing()。"
                         + "sleep_in_bed() 才是游戏里睡觉：自动寻找附近24格的床，近处直接右键，远处先寻路再右键。"
                         + "用户说睡觉、回家睡觉、上床休息或睡到天亮时，必须调用 sleep_in_bed()；"
                         + "泛指查找床可用 find_nearest_block(\\\"minecraft:bed\\\") 匹配任意颜色；"

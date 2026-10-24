@@ -368,6 +368,19 @@ public final class KurumiPseudoExecutor {
             return;
         }
         var stmt = frame.statements.get(frame.index);
+        if (KurumiFishingBridge.busy() && ("ACTION".equals(stmt.op())
+                || "ACTION_RESULT".equals(stmt.op()) || "FARM".equals(stmt.op())
+                || "FARM_RESULT".equals(stmt.op())
+                || ("EXPR_CALL".equals(stmt.op())
+                    && !java.util.Set.of("talk", "observe", "sleep", "fish", "stop_fishing")
+                            .contains(stmt.step().action()))
+                || "EXPR_ACTION_ASSIGN".equals(stmt.op()))) {
+            KurumiWebMonitor.log("钓鱼仍在进行，请先 stop_fishing() 再执行其他世界操作");
+            finishRun(false, "钓鱼与其他世界操作冲突，请先 stop_fishing()");
+            running = false;
+            frames.clear();
+            return;
+        }
         KurumiWebMonitor.step(stmt, actions, frame.iterations, lastResultSuccess);
         switch (stmt.op()) {
             case "EXPR_ASSIGN" -> {
@@ -441,6 +454,22 @@ public final class KurumiPseudoExecutor {
                         if (secs < 1 || secs > 120) throw new IllegalArgumentException("sleep 仅支持1到120秒");
                         sleepUntil = System.currentTimeMillis() + secs * 1000L;
                         frame.index++;
+                        return;
+                    }
+                    if ("fish".equals(name) || "stop_fishing".equals(name)) {
+                        if (!args.isEmpty()) throw new IllegalArgumentException(name + " 不接受参数");
+                        if (++actions > MAX_ACTIONS) throw new IllegalArgumentException("动作次数达到上限");
+                        BaritoneBridge.Result fishing = "fish".equals(name)
+                                ? KurumiFishingBridge.start() : KurumiFishingBridge.stop();
+                        lastResultSuccess = fishing.success();
+                        observe("钓鱼动作 " + name, fishing.message());
+                        KurumiWebMonitor.log("钓鱼指令 " + name + "：" + fishing.message());
+                        frame.index++;
+                        if (!fishing.success()) {
+                            finishRun(false, fishing.message());
+                            running = false;
+                            frames.clear();
+                        }
                         return;
                     }
                     if (++actions > MAX_ACTIONS) throw new IllegalArgumentException("动作次数达到上限");
