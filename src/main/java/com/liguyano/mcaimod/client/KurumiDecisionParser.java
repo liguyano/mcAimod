@@ -8,6 +8,24 @@ import java.util.Optional;
 public final class KurumiDecisionParser {
     public record Decision(String reply, Optional<KurumiActionValidator.Action> action, String target, Integer x, Integer y, Integer z, String blockId, Optional<KurumiTaskPlanner.Plan> plan, Optional<KurumiTaskPlanner.Program> program) {}
 
+    /** A clarification is a conversational question, never an executable script. */
+    public static Optional<String> clarification(String raw) {
+        if (raw == null || raw.length() > 8192) return Optional.empty();
+        try {
+            JsonObject object = JsonParser.parseString(raw.strip()).getAsJsonObject();
+            if (!object.has("type") || !"clarify".equals(object.get("type").getAsString())
+                    || !object.has("question") || !object.get("question").isJsonPrimitive())
+                return Optional.empty();
+            String question = object.get("question").getAsString().strip();
+            if (question.isBlank() || question.length() > 160 || question.contains("\\n")
+                    || question.contains("\\r") || question.startsWith("/"))
+                return Optional.empty();
+            return Optional.of(question);
+        } catch (RuntimeException exception) {
+            return Optional.empty();
+        }
+    }
+
     public static Optional<Decision> parse(String raw) {
         if (raw == null || raw.length() > 8192) return Optional.empty();
         try {
