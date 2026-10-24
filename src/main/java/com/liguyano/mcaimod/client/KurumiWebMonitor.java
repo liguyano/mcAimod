@@ -77,7 +77,7 @@ public final class KurumiWebMonitor {
         if (pending != null) finishPending("已中断");
         pending = new Task(message == null || message.isBlank() ? "未记录原始需求" : message.strip(), "");
         pending.state = "生成中";
-        addEvent(pending, "收到需求，正在请求 AI 生成伪代码");
+        addEvent(pending, "收到需求，正在请求 AI 生成脚本");
     }
     /** Record a successfully dispatched non-script action, including long-task launches. */
     public static synchronized void requestDispatched(String operation) {
@@ -105,10 +105,10 @@ public final class KurumiWebMonitor {
         if (pending != null) {
             current = pending;
             pending = null;
-            current.script = source == null ? "(结构化任务，无原始伪代码)" : source;
+            current.script = source == null ? "(结构化任务，无原始脚本)" : source;
         } else {
             current = new Task(nextRequirement.isBlank() ? "未记录原始需求" : nextRequirement,
-                    source == null ? "(结构化任务，无原始伪代码)" : source);
+                    source == null ? "(结构化任务，无原始脚本)" : source);
         }
         current.state = "执行中";
         nextRequirement = "";
@@ -267,17 +267,17 @@ public final class KurumiWebMonitor {
         <header><h1>Kurumi · 任务监测</h1><span class="muted" id="connection">连接中…</span></header>
         <div class="cols">
           <section class="card">
-            <h2>生成伪代码 · 仅测试</h2>
+            <h2>生成脚本 · 仅测试</h2>
             <p class="muted">输入自然语言需求，调用已配置的 AI 生成和校验脚本。不会在游戏里执行。</p>
             <textarea id="requirement" placeholder="例如：用铁斧给附近4个橡木原木去皮"></textarea>
-            <div class="controls"><button id="generateBtn">生成伪代码（不执行）</button><span id="previewStatus" class="feedback">空闲</span></div>
+            <div class="controls"><button id="generateBtn">生成脚本（不执行）</button><span id="previewStatus" class="feedback">空闲</span></div>
             <h3>生成结果</h3>
             <textarea id="previewScript" readonly placeholder="生成结果会显示在这里"></textarea>
             <div class="controls"><button class="secondary" id="copyPreviewBtn">复制到执行区</button></div>
           </section>
           <section class="card">
-            <h2>直接执行伪代码</h2>
-            <p class="muted">编辑或粘贴受支持的伪代码，然后手动确认执行；会在当前游戏世界中进行真实操作。</p>
+            <h2>直接执行脚本</h2>
+            <p class="muted">编辑或粘贴受支持的脚本，然后手动确认执行；会在当前游戏世界中进行真实操作。</p>
             <textarea id="runScript" placeholder="talk(get_player_status())"></textarea>
             <div class="controls"><button id="runBtn">确认并执行</button><span id="runStatus" class="feedback">空闲</span></div>
             <p class="muted">通过原有解释器校验；执行后可在下方当前任务查看进度。</p>
@@ -309,9 +309,9 @@ public final class KurumiWebMonitor {
           [['当前行',t.line||'-'],['步骤',t.operation||'-'],['动作数',t.actions||0],['循环次数',t.iteration||0]].forEach(([k,v])=>{
             const x=el('span','',k+'：');x.append(el('strong','',v));stats.append(x);
           });
-          card.append(stats,el('h3','','伪代码'));
+          card.append(stats,el('h3','','脚本'));
           const code=el('div','code');
-          (t.script||'（无伪代码）').split('\\n').forEach((line,i)=>{
+          (t.script||'（无脚本）').split('\\n').forEach((line,i)=>{
             const row=el('div','code-line'+(active&&i+1===t.line?' active':''));
             row.append(el('span','number',i+1),document.createTextNode(line));code.append(row);
           });card.append(code);
@@ -384,7 +384,7 @@ public final class KurumiWebMonitor {
         document.getElementById('runBtn').addEventListener('click',()=>{
           const script=document.getElementById('runScript').value;
           if(!script.trim())return;
-          if(!confirm('这段伪代码会在当前 Minecraft 世界中执行真实操作。确定执行吗？'))return;
+          if(!confirm('这段脚本会在当前 Minecraft 世界中执行真实操作。确定执行吗？'))return;
           submit('/api/run',{script},document.getElementById('runStatus'));
         });
         refresh();setInterval(refresh,1000);
