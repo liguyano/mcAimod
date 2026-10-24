@@ -34,6 +34,7 @@ public final class KurumiScriptParser {
     private static final Pattern PUT_ITEM = Pattern.compile("put_item\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})(?:,\\s*\"(input|fuel|auto|grid_[1-9])\")?\\)");
     private static final Pattern MOVE = Pattern.compile("move\\(\\\"(forward|back|left|right)\\\",\\s*(\\d{1,2})\\)");
     private static final Pattern VARIABLE_ASSIGN = Pattern.compile("([a-z][a-z0-9_]{0,23})\\s*=\\s*(.+)");
+    private static final Pattern ACTION_ASSIGN = Pattern.compile("([a-z][a-z0-9_]{0,23})\\s*=\\s*(goto|move|interact|equip_main_hand|place_block|break_block|search_chests|take_from_memory)\\((.*)\\)");
     private static final Pattern VARIABLE_CALL = Pattern.compile("(goto|talk|sleep|move|interact|equip_main_hand|place_block|break_block|search_chests|take_from_memory)\\((.*)\\)");
     private static final Pattern GOTO_NAMED = Pattern.compile("goto\\(\"([^\"]{1,24})\"\\)");
     private static final Pattern GOTO = Pattern.compile("goto\\((-?\\d{1,8}),\\s*(-?\\d{1,4}),\\s*(-?\\d{1,8})\\)");
@@ -127,6 +128,12 @@ public final class KurumiScriptParser {
                         throw new IllegalArgumentException("empty else");
                     node.add("else", block(lines, cursor, indent + 1, depth + 1));
                 }
+            } else if (ACTION_ASSIGN.matcher(code).matches()) {
+                Matcher m = ACTION_ASSIGN.matcher(code); m.matches();
+                node.addProperty("op", "EXPR_ACTION_ASSIGN");
+                node.addProperty("name", m.group(1));
+                node.addProperty("method", m.group(2));
+                node.addProperty("expression", m.group(3));
             } else if (VARIABLE_ASSIGN.matcher(code).matches() && !code.startsWith("result = ")) {
                 Matcher m = VARIABLE_ASSIGN.matcher(code); m.matches();
 
