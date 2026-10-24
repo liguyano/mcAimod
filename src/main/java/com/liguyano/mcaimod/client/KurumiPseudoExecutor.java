@@ -378,8 +378,11 @@ public final class KurumiPseudoExecutor {
                         throw new IllegalArgumentException("单个变量超过256KB，需要分批读取");
                     checkMemory(name, value);
                     variables.put(name, value.deepCopy());
-                    KurumiWebMonitor.log("赋值 " + name + " = " + value);
-                    observe("变量 " + name, value.toString());
+                    String summary = value.toString();
+                    KurumiWebMonitor.log("赋值 " + name + " = "
+                            + summary.substring(0, Math.min(400, summary.length())));
+                    observe("变量 " + name, summary.length() <= 200 ? summary
+                            : "已保存结构化数据（" + summary.length() + "字符），使用 observe(" + name + ") 发送完整结果");
                     frame.index++;
                 } catch (RuntimeException ex) {
                     KurumiWebMonitor.log("变量赋值失败：" + ex.getMessage());
