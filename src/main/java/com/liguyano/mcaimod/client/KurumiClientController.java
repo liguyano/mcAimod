@@ -304,6 +304,14 @@ public final class KurumiClientController {
                     && (isOwner || KurumiWakeRouter.mentionsKurumi(message))) {
                 agentSession.enqueue(senderNameForMemory, message);
                 KurumiWebMonitor.log("新消息已排队（" + agentSession.queuedCount() + "）：" + message);
+                // A player's updated instructions must not sit behind a stale navigation
+                // goal. Keep the queued message for the next agent turn, but end this
+                // script stage now so its real cancellation result is observed first.
+                if (isOwner && awaitedStage != null && KurumiPseudoExecutor.busy()) {
+                    KurumiWebMonitor.log("主人提供新指令：中断当前脚本并重新规划");
+                    KurumiPlanExecutor.cancel();
+                    KurumiPseudoExecutor.cancel();
+                }
             }
             return;
         }
@@ -423,6 +431,10 @@ public final class KurumiClientController {
                         + "绝不可用猜测交互来代替明确授权。"
                         + "interact(\\\"minecraft:oak_boat\\\") 尝试与附近船实体交互上船；"
                         + "interact(\\\"minecraft:villager\\\") 尝试与村民实体交互。"
+                        + "scan_nearby_entities() 返回每个实体的 uuid，可用 interact(\"corpse:corpse\",\"UUID\") 精确交互尸体。"
+                        + "找尸体等可能消失或有多个同类的目标时：先扫描得到坐标和UUID，goto 到附近后必须重新"
+                        + "observe(scan_nearby_entities()) 让你验证原 UUID 是否还存在；若消失则重新选择目标，"
+                        + "不得用旧坐标盲目交互，也不得交互另一具同类尸体冒充成功。"
                         + "interact 的响应只是尝试结果，必须再次观察是否真正乘坐或打开菜单。"
                         + "使用食物或药水先 equip_main_hand(\\\"minecraft:apple\\\")，等待装备完成，"
                         + "再 use_item(\\\"minecraft:apple\\\") 持续使用，直到观察到消耗或超时。"

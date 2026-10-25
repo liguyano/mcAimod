@@ -199,6 +199,7 @@ public final class KurumiToolbox {
                             JsonObject item = new JsonObject();
                             item.addProperty("type", BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).toString());
                             item.addProperty("name", e.getName().getString());
+                            item.addProperty("uuid", e.getUUID().toString());
                             item.addProperty("x", e.getBlockX());
                             item.addProperty("y", e.getBlockY());
                             item.addProperty("z", e.getBlockZ());

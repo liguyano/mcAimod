@@ -29,15 +29,27 @@ public final class KurumiInteractionBridge {
 
 
     public static BaritoneBridge.Result interact(String blockId) {
+        return interact(blockId, null);
+    }
+
+    /** Optionally pin an entity interaction to the UUID returned by scan_nearby_entities. */
+    public static BaritoneBridge.Result interact(String blockId, String entityUuid) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null || mc.gameMode == null)
             return new BaritoneBridge.Result(false, "尚未进入游戏");
         if (!blockId.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
             return new BaritoneBridge.Result(false, "方块 ID 无效");
+        java.util.UUID parsedUuid = null;
+        if (entityUuid != null) {
+            try { parsedUuid = java.util.UUID.fromString(entityUuid); }
+            catch (IllegalArgumentException ex) { return new BaritoneBridge.Result(false, "实体 UUID 无效"); }
+        }
+        final java.util.UUID targetUuid = parsedUuid;
         BlockPos nearest = null;
         double best = 4.5 * 4.5;
         BlockPos origin = mc.player.blockPosition();
         for (BlockPos pos : BlockPos.betweenClosed(origin.offset(-4, -2, -4), origin.offset(4, 2, 4))) {
+            if (targetUuid != null) break;
             if (!mc.level.hasChunkAt(pos)) continue;
             String id = BuiltInRegistries.BLOCK.getKey(mc.level.getBlockState(pos).getBlock()).toString();
             if (!blockId.equals(id)) continue;
@@ -50,11 +62,16 @@ public final class KurumiInteractionBridge {
             for (var entity : mc.level.getEntities(mc.player,
                     mc.player.getBoundingBox().inflate(5.0), e -> e.isAlive() && e.isPickable())) {
                 String id = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
-                if (!KurumiEntityMatcher.matches(blockId, id) || !mc.player.isWithinEntityInteractionRange(entity, 0.0)) continue;
+                if (!KurumiEntityMatcher.matches(blockId, id)
+                        || (targetUuid != null && !targetUuid.equals(entity.getUUID()))
+                        || !mc.player.isWithinEntityInteractionRange(entity, 0.0)) continue;
                 double distance = mc.player.getEyePosition().distanceToSqr(entity.getBoundingBox().getCenter());
                 if (distance < entityDistance) { entityDistance = distance; target = entity; }
             }
-            if (target == null) return new BaritoneBridge.Result(false, "交互距离内找不到方块或实体 " + blockId);
+            if (target == null) return new BaritoneBridge.Result(false,
+                    "交互距离内找不到指定实体 " + blockId
+                            + (entityUuid == null ? "" : " UUID=" + entityUuid)
+                            + "；请重新扫描，不要交互其他同类实体");
             var result = mc.gameMode.interact(mc.player, target,
                     new EntityHitResult(target), InteractionHand.MAIN_HAND);
             return new BaritoneBridge.Result(result.consumesAction(),

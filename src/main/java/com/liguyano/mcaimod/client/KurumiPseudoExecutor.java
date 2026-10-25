@@ -542,11 +542,13 @@ public final class KurumiPseudoExecutor {
                                 || blocks < 1 || blocks > 16) throw new IllegalArgumentException("move 参数无效");
                         outcome=BaritoneBridge.moveRelative(direction,blocks);
                     } else if ("interact".equals(name) || "use_item".equals(name) || "equip_main_hand".equals(name)) {
-                        if (args.size()!=1) throw new IllegalArgumentException("指令需要一个物品ID");
+                        if (args.size()!=1 && !("interact".equals(name) && args.size()==2))
+                            throw new IllegalArgumentException("指令参数错误；interact 可传实体ID和UUID");
                         String id=KurumiExpressions.text(args.get(0));
                         if (!id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
                             throw new IllegalArgumentException("方块或物品ID无效");
-                        outcome="interact".equals(name) ? KurumiInteractionBridge.interact(id)
+                        outcome="interact".equals(name) ? KurumiInteractionBridge.interact(id,
+                                args.size()==2 ? KurumiExpressions.text(args.get(1)) : null)
                                 : "use_item".equals(name) ? KurumiItemUseBridge.use(id)
                                 : KurumiEquipBridge.mainHand(id);
                         if (outcome.success() && "use_item".equals(name)) awaitingItemUse = true;

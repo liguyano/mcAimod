@@ -7,6 +7,12 @@
 
 ### 新增
 
+- 主人执行中的新消息现在会暂停当前脚本与 Baritone 寻路，并在下一次 Agent 决策中结合
+  取消原因和排队消息重新规划，避免继续追逐已经消失的旧目标；普通玩家消息仍按原队列处理。
+- `scan_nearby_entities()` 增加 UUID，`interact("实体ID", "UUID")` 支持精确交互指定实体；
+  若该实体消失或超出交互距离，会明确报错而不会误开另一具同类型尸体。
+  AI 提示要求寻路后重新扫描、验证实体 UUID，再决定是否交互。
+- 本轮仅完成代码静态检查，尚未本地编译或游戏内验证（由使用者在 Windows 上构建）。
 - 修复 Minecraft 26.2 的 JourneyMap 地点编译错误：`ResourceKey<Level>` 使用
   `identifier()` 获取维度 ID（替代已不存在的 `location()`），涵盖保存、读取、导航及 JourneyMap 插件。
 - 安装脚本在 JAR 早于任一源码或构建配置时直接拒绝安装，避免 Gradle 编译失败后把旧 JAR
