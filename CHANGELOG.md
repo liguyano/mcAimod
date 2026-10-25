@@ -7,6 +7,8 @@
 
 ### 新增
 
+- 修复 `hold_use_item()` 解析测试失败：脚本语法已经支持，但 `KurumiTaskPlanner`
+  的动态调用与赋值动作白名单漏掉了新方法；现在两处均允许调用。
 - 修复 Minecraft 26.2 编译错误：`KurumiItemUseBridge` 不再读取当前映射中不存在的 `Minecraft.screen` 字段，
   继续通过容器状态取消使用操作。`install-mod.ps1` 增加 UTF-8 BOM，兼容 Windows PowerShell 5.1
   对脚本中中文提示与中文 mods 路径的解码，避免字符串解析错误。
