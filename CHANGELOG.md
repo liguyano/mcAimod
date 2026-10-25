@@ -7,6 +7,8 @@
 
 ### 新增
 
+- 修复 `hold_use_item()` 无参数时仍被脚本解析器接受的问题：普通调用与赋值调用
+  都必须提供非空物品ID参数和持续秒数参数；补充无参数及缺少秒数的拒绝测试。
 - 修复 `hold_use_item()` 解析测试失败：脚本语法已经支持，但 `KurumiTaskPlanner`
   的动态调用与赋值动作白名单漏掉了新方法；现在两处均允许调用。
 - 修复 Minecraft 26.2 编译错误：`KurumiItemUseBridge` 不再读取当前映射中不存在的 `Minecraft.screen` 字段，

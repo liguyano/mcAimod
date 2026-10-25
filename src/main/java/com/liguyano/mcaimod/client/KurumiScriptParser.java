@@ -41,6 +41,10 @@ public final class KurumiScriptParser {
     private static final Pattern RETURN = Pattern.compile("return\\s+\"[^\"\\r\\n]{0,100}\"");
     private static final ThreadLocal<String> LAST_ERROR = ThreadLocal.withInitial(() -> "");
     public static String lastError() { return LAST_ERROR.get(); }
+    /** Dynamic arguments may be variables, but a hold always needs two nonempty arguments. */
+    private static boolean validHoldArgs(String args) {
+        return args != null && args.matches("(?s)\\s*\\S[^,]*,\\s*\\S[^,]*\\s*");
+    }
     private record Line(int indent, String code, int number) {}
     private static final class Cursor { int at; }
     public static Optional<KurumiTaskPlanner.Program> parse(String source) {
@@ -130,6 +134,8 @@ public final class KurumiScriptParser {
                 }
             } else if (ACTION_ASSIGN.matcher(code).matches()) {
                 Matcher m = ACTION_ASSIGN.matcher(code); m.matches();
+                if ("hold_use_item".equals(m.group(2)) && !validHoldArgs(m.group(3)))
+                    throw new IllegalArgumentException("hold_use_item requires item ID and seconds");
                 node.addProperty("op", "EXPR_ACTION_ASSIGN");
                 node.addProperty("name", m.group(1));
                 node.addProperty("method", m.group(2));
@@ -270,6 +276,8 @@ public final class KurumiScriptParser {
                 node.addProperty("tool", tool);
             } else if (VARIABLE_CALL.matcher(code).matches()) {
                 Matcher m = VARIABLE_CALL.matcher(code); m.matches();
+                if ("hold_use_item".equals(m.group(1)) && !validHoldArgs(m.group(2)))
+                    throw new IllegalArgumentException("hold_use_item requires item ID and seconds");
                 node.addProperty("op", "EXPR_CALL");
                 node.addProperty("method", m.group(1));
                 node.addProperty("expression", m.group(2));

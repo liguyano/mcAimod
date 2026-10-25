@@ -13,5 +13,7 @@ class KurumiHoldUseScriptTest {
 
     @Test void rejectsMalformedHoldUse() {
         assertTrue(KurumiScriptParser.parse("hold_use_item()").isEmpty());
+        assertTrue(KurumiScriptParser.parse("hold_use_item(\"minecraft:carrot\")").isEmpty());
+        assertTrue(KurumiScriptParser.parse("used = hold_use_item()").isEmpty());
     }
 }
