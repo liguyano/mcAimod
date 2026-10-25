@@ -140,7 +140,7 @@ public final class KurumiTaskPlanner {
                 String method = node.get("method").getAsString();
                 String args = node.get("expression").getAsString();
                 if (!name.matches("[a-z][a-z0-9_]{0,23}")
-                        || !java.util.Set.of("goto", "move", "interact", "use_item", "equip_main_hand",
+                        || !java.util.Set.of("goto", "move", "look", "look_at", "interact", "use_item", "equip_main_hand",
                                 "place_block", "break_block", "search_chests", "take_from_memory").contains(method)
                         || args.length() > 500)
                     throw new IllegalArgumentException("invalid assigned action");
@@ -149,7 +149,7 @@ public final class KurumiTaskPlanner {
             } else if ("EXPR_CALL".equals(op)) {
                 String method = node.get("method").getAsString();
                 String args = node.get("expression").getAsString();
-                if (!java.util.Set.of("goto", "talk", "observe", "fish", "stop_fishing", "sleep", "move", "interact", "use_item",
+                if (!java.util.Set.of("goto", "talk", "observe", "fish", "stop_fishing", "sleep", "move", "look", "look_at", "interact", "use_item",
                         "equip_main_hand", "place_block", "break_block", "search_chests", "take_from_memory").contains(method) || args.length() > 500)
                     throw new IllegalArgumentException("invalid dynamic call");
                 statements.add(new Statement(op, new Step(method, args, 1,

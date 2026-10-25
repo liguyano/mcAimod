@@ -521,6 +521,19 @@ public final class KurumiPseudoExecutor {
                         var plan=new KurumiTaskPlanner.Plan(List.of(step),1,1,1,List.of());
                         outcome=KurumiPlanExecutor.start(plan);
                         if (outcome.success()) awaitingAction=true;
+                    } else if ("look".equals(name)) {
+                        if (args.size()!=2) throw new IllegalArgumentException("look 需要 yaw 和 pitch 两个角度");
+                        outcome=KurumiLookBridge.look(args.get(0).getAsDouble(),args.get(1).getAsDouble());
+                    } else if ("look_at".equals(name)) {
+                        if (args.size()==1) {
+                            outcome=KurumiLookBridge.lookAtId(KurumiExpressions.text(args.get(0)));
+                        } else if (args.size()==3) {
+                            // User-facing XYZ denotes a block position; look at its center.
+                            outcome=KurumiLookBridge.lookAt(
+                                    KurumiExpressions.integer(args.get(0))+0.5,
+                                    KurumiExpressions.integer(args.get(1))+0.5,
+                                    KurumiExpressions.integer(args.get(2))+0.5);
+                        } else throw new IllegalArgumentException("look_at 需要方块/实体ID或三个整数坐标");
                     } else if ("move".equals(name)) {
                         if (args.size()!=2) throw new IllegalArgumentException("move 需要两个参数");
                         String direction=KurumiExpressions.text(args.get(0));
@@ -579,7 +592,8 @@ public final class KurumiPseudoExecutor {
                         } else {
                             // For move()/place_block()/interact() the bridge only confirms that
                             // a command was accepted, not the final server-side world state.
-                            boolean complete = "equip_main_hand".equals(name) && outcome.success();
+                            boolean complete = java.util.Set.of("equip_main_hand", "look", "look_at").contains(name)
+                                    && outcome.success();
                             assignActionResult(resultVariable, outcome.success(), complete, outcome.message());
                         }
                     } else if (!outcome.success()) { cancel(); return; }
