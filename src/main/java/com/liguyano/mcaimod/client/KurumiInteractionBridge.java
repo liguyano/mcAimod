@@ -78,6 +78,9 @@ public final class KurumiInteractionBridge {
                     result.consumesAction() ? "已尝试与实体 " + blockId + " 交互（需再次观察是否成功上船或打开界面）"
                             : "实体未接受交互 " + blockId);
         }
+        if (mc.level.getBlockState(nearest).getBlock() instanceof net.minecraft.world.level.block.BedBlock
+                && (mc.player.isSleeping() || KurumiBedShortcut.sleptRecently()))
+            return new BaritoneBridge.Result(true, "玩家已经完成本次睡觉，跳过重复床交互");
         var result = mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND,
                 new BlockHitResult(Vec3.atCenterOf(nearest), Direction.UP, nearest, false));
         return new BaritoneBridge.Result(result.consumesAction(),
