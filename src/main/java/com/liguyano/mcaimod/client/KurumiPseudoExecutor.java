@@ -136,6 +136,7 @@ public final class KurumiPseudoExecutor {
         frames.clear();
         KurumiBlockBreakingBridge.cancel();
         KurumiChestSearch.cancel();
+        KurumiTakeAllBridge.cancel();
         awaitingChestSearch = false;
         awaitingBlockBreak = false;
         variables.clear();
@@ -260,6 +261,7 @@ public final class KurumiPseudoExecutor {
         }
         if (awaitingExternal) {
             if (KurumiLongTaskBridge.busy() || KurumiAutoCraftBridge.busy()
+                    || KurumiTakeAllBridge.busy()
                     || KurumiChestBridge.busy() || KurumiPickupBridge.busy()) {
                 if (System.currentTimeMillis() - externalStarted > (KurumiLongTaskBridge.busy() ? 300000L : 90000L)) {
                     KurumiWebMonitor.log("异步操作等待超时，停止脚本");
@@ -672,7 +674,7 @@ public final class KurumiPseudoExecutor {
             }
             case "ACTION", "ACTION_RESULT" -> {
                 if (java.util.Set.of("STOP", "TPA_REQUEST", "TPA_ACCEPT", "TPA_REQUEST_TO",
-                        "CRAFT_OPEN", "CHEST_OPEN", "SLEEP_IN_BED", "CHEST_PUT_ALL", "CHEST_TAKE_ALL", "DROP_ALL",
+                        "CRAFT_OPEN", "CHEST_OPEN", "SLEEP_IN_BED", "CHEST_PUT_ALL", "CHEST_TAKE_ALL", "TAKE_ALL_ITEMS", "DROP_ALL",
                         "DROP_ITEM_ALL", "DROP", "PICKUP", "PICKUP_ALL", "CRAFT_ITEM",
                         "CHEST_TAKE", "CHEST_PUT", "COLLECT_AND_STORE").contains(stmt.step().action())) {
                     if (++actions > MAX_ACTIONS) { cancel(); return; }
@@ -687,6 +689,7 @@ public final class KurumiPseudoExecutor {
                         case "CHEST_OPEN" -> KurumiChestBridge.open();
                         case "CHEST_PUT_ALL" -> KurumiChestBridge.putAll();
                         case "CHEST_TAKE_ALL" -> KurumiChestBridge.takeAll();
+                        case "TAKE_ALL_ITEMS" -> KurumiTakeAllBridge.start();
                         case "DROP_ALL" -> KurumiDropBridge.dropAll();
                         case "DROP_ITEM_ALL" -> KurumiDropBridge.dropItemAll(step.itemId());
                         case "DROP" -> KurumiDropBridge.drop(step.itemId(), step.quantity());
@@ -710,6 +713,7 @@ public final class KurumiPseudoExecutor {
                         menuStarted = System.currentTimeMillis();
                     }
                     if (result.success() && (KurumiLongTaskBridge.busy() || KurumiAutoCraftBridge.busy()
+                            || KurumiTakeAllBridge.busy()
                             || KurumiChestBridge.busy() || KurumiPickupBridge.busy())) {
                         awaitingExternal = true;
                         externalStarted = System.currentTimeMillis();

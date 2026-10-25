@@ -223,7 +223,7 @@ public final class KurumiTaskPlanner {
                 // EXECUTE_PLAN validator intentionally does not accept these actions.
                 if (java.util.Set.of("COLLECT_AND_STORE", "STOP", "SLEEP_IN_BED", "TPA_REQUEST", "TPA_ACCEPT",
                         "TPA_REQUEST_TO", "CRAFT_OPEN", "CHEST_OPEN", "CHEST_PUT_ALL",
-                        "CHEST_TAKE_ALL", "DROP_ALL", "DROP_ITEM_ALL", "DROP",
+                        "CHEST_TAKE_ALL", "TAKE_ALL_ITEMS", "DROP_ALL", "DROP_ITEM_ALL", "DROP",
                         "PICKUP", "PICKUP_ALL").contains(special)) {
                     String item = stepNode.has("item_id") ? stepNode.get("item_id").getAsString() : "";
                     String target = stepNode.has("target") ? stepNode.get("target").getAsString() : "";

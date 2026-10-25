@@ -25,7 +25,7 @@ public final class KurumiScriptParser {
     private static final Pattern OBSERVE_POSITION = Pattern.compile("talk\\(check_position\\(\\s*(-?\\d{1,8})\\s*,\\s*(-?\\d{1,4})\\s*,\\s*(-?\\d{1,8})\\s*,\\s*(\\d{1,2})\\s*\\)\\)");
     private static final Pattern TALK = Pattern.compile("talk\\(\"([^\"\\r\\n]{1,120})\"\\)");
 
-    private static final Pattern ZERO = Pattern.compile("(stop|sleep_in_bed|tpa_request|tpa_accept|craft_open|chest_open|chest_put_all|chest_take_all|drop_all|pickup_all)\\(\\)");
+    private static final Pattern ZERO = Pattern.compile("(stop|sleep_in_bed|tpa_request|tpa_accept|craft_open|chest_open|chest_put_all|chest_take_all|take_all_items|drop_all|pickup_all)\\(\\)");
     private static final Pattern ONE = Pattern.compile("(tpa_request_to|drop_item_all|pickup_item_all|chest_put_item_all|equip_main_hand|equip_armor)\\(\"([A-Za-z0-9_.:-]+)\"\\)");
     private static final Pattern TWO = Pattern.compile("(drop|pickup|chest_take|chest_put|craft_item|collect_and_store)\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})\\)");
     private static final Pattern PLACE_BLOCK = Pattern.compile("place_block\\(\"([a-z0-9_.:-]+)\"(?:,\\s*(-?\\d{1,8}),\\s*(-?\\d{1,4}),\\s*(-?\\d{1,8}))?\\)");

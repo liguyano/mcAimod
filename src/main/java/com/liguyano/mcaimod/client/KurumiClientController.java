@@ -77,6 +77,7 @@ public final class KurumiClientController {
         KurumiChestSearch.install();
         KurumiFishingBridge.install();
         KurumiItemUseBridge.install();
+        KurumiTakeAllBridge.install();
         restoreSavedSwitches();
     }
 
@@ -124,6 +125,7 @@ public final class KurumiClientController {
         KurumiTaskRecovery.cancel();
         KurumiFishingBridge.cancel();
         KurumiItemUseBridge.cancel();
+        KurumiTakeAllBridge.cancel();
     }
 
     /** Immediate local emergency stop; never invokes or waits for the language model. */
@@ -144,6 +146,7 @@ public final class KurumiClientController {
         KurumiTaskRecovery.cancel();
         KurumiFishingBridge.cancel();
         KurumiItemUseBridge.cancel();
+        KurumiTakeAllBridge.cancel();
         KurumiBedShortcut.cancel();
         KurumiChestBridge.cancel();
         KurumiInteractionBridge.cancel();
@@ -435,6 +438,8 @@ public final class KurumiClientController {
                         + "找尸体等可能消失或有多个同类的目标时：先扫描得到坐标和UUID，goto 到附近后必须重新"
                         + "observe(scan_nearby_entities()) 让你验证原 UUID 是否还存在；若消失则重新选择目标，"
                         + "不得用旧坐标盲目交互，也不得交互另一具同类尸体冒充成功。"
+                        + "打开尸体、箱子、熔炉或任意有槽位的容器后，可调用 take_all_items() 取出当前界面"
+                        + "所有可取物品，不切换其他页面；背包满或槽位拒绝移动时留下剩余物品。"
                         + "interact 的响应只是尝试结果，必须再次观察是否真正乘坐或打开菜单。"
                         + "使用食物或药水先 equip_main_hand(\\\"minecraft:apple\\\")，等待装备完成，"
                         + "再 use_item(\\\"minecraft:apple\\\") 持续使用，直到观察到消耗或超时。"
