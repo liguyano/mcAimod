@@ -540,7 +540,8 @@ public final class KurumiClientController {
         String snapshot = KurumiPseudoExecutor.variablesSnapshot();
         PROVIDER.chat(profile, KurumiAgentContext.compact(conversation, message,
                         agentSession.buildModelContext() + "\n当前变量快照（可能省略大值，变量本体保留于客户端）："
-                        + snapshot.substring(0, Math.min(10000, snapshot.length()))))
+                        + snapshot.substring(0, Math.min(10000, snapshot.length()))
+                        + "\n" + KurumiPlayerDirectory.modelContext()))
                 .whenComplete((reply, error) -> minecraft.execute(() -> {
                     if (generation != requestGeneration) return;
                     if (!enabled || generation != requestGeneration || minecraft.player == null ||

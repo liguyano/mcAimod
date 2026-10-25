@@ -785,7 +785,8 @@ public final class KurumiPseudoExecutor {
                     frame.index++;
                     if (!result.success() && !assignedResult) { cancel(); return; }
                     if (result.success() && oneShotCome) {
-                        comeTarget = stmt.step().target();
+                        comeTarget = KurumiPlayerResolver.resolve(stmt.step().target(),
+                                KurumiPlayerDirectory.onlineNames()).name();
                         comeStarted = System.currentTimeMillis();
                         comeFollowing = true;
                         awaitingCome = true;

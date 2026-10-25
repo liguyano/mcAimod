@@ -61,6 +61,16 @@ public final class KurumiToolbox {
             out.addProperty("target", target);
             out.addProperty("unit", "blocks");
             out.addProperty("search_radius", 48);
+            if ("player".equals(kind)) {
+                var match = KurumiPlayerResolver.resolve(target, KurumiPlayerDirectory.onlineNames());
+                if (!match.found()) {
+                    out.addProperty("found", false);
+                    out.addProperty("note", match.failure(target));
+                    return out.toString();
+                }
+                target = match.name();
+                out.addProperty("resolved_player", target);
+            }
             net.minecraft.world.phys.Vec3 eye = mc.player.position();
             net.minecraft.world.phys.Vec3 nearest = null;
             if ("block".equals(kind)) {

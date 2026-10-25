@@ -75,18 +75,20 @@ public final class KurumiCombatBridge {
     }
 
     public static BaritoneBridge.Result attackPlayer(String name) {
-        if (name == null || !name.matches("[A-Za-z0-9_]{3,16}"))
-            return new BaritoneBridge.Result(false, "玩家名不合法");
-        if ("SekaiSaionji".equals(name))
-            return new BaritoneBridge.Result(false, "不能攻击主人");
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || mc.player == null)
             return new BaritoneBridge.Result(false, "尚未进入游戏");
+        var match = KurumiPlayerResolver.resolve(name, KurumiPlayerDirectory.onlineNames());
+        if (!match.found()) return new BaritoneBridge.Result(false, match.failure(name));
+        String canonical = match.name();
+        if ("SekaiSaionji".equals(canonical))
+            return new BaritoneBridge.Result(false, "不能攻击主人");
         for (Player player : mc.level.players()) {
-            if (name.equals(player.getName().getString()) && player != mc.player)
+            if (canonical.equals(player.getName().getString()) && player != mc.player)
                 return begin(player);
         }
-        return new BaritoneBridge.Result(false, "当前视野内找不到指定玩家");
+        return new BaritoneBridge.Result(false, "玩家 " + canonical
+                + " 在线，但实体不在客户端已加载范围内；需要先靠近");
     }
 
     public static BaritoneBridge.Result attackMob(String id) {

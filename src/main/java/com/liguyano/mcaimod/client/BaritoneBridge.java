@@ -90,20 +90,21 @@ public final class BaritoneBridge {
 
     /** One-shot approach: navigate to the player's current position, without enabling follow. */
     public static Result comeToPlayer(String name) {
-        if (name == null || !name.matches("[A-Za-z0-9_]{3,16}"))
-            return new Result(false, "玩家名称不合法");
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || mc.player == null)
             return new Result(false, "当前不在游戏世界");
+        var match = KurumiPlayerResolver.resolve(name, KurumiPlayerDirectory.onlineNames());
+        if (!match.found()) return new Result(false, match.failure(name));
+        String canonical = match.name();
         Player target = null;
         for (Player player : mc.level.players()) {
-            if (name.equalsIgnoreCase(player.getName().getString())) {
+            if (canonical.equals(player.getName().getString())) {
                 target = player;
                 break;
             }
         }
         if (target == null)
-            return new Result(false, "目标玩家不在客户端可见范围内");
+            return new Result(false, "玩家 " + canonical + " 在线但不在客户端可见范围内");
         // Stop any persistent follow first, then issue a finite coordinate goal.
         Result stopped = stop();
         if (!stopped.success()) return stopped;
@@ -111,8 +112,9 @@ public final class BaritoneBridge {
     }
 
     public static Result followPlayer(String name) {
-        if (name == null || !name.matches("[A-Za-z0-9_]{3,16}"))
-            return new Result(false, "玩家名称不合法");
+        var match = KurumiPlayerResolver.resolve(name, KurumiPlayerDirectory.onlineNames());
+        if (!match.found()) return new Result(false, match.failure(name));
+        String canonical = match.name();
         Result policy = setBreakPolicy(true);
         if (!policy.success()) return policy;
         try {
@@ -120,17 +122,17 @@ public final class BaritoneBridge {
             if (baritone == null) return unavailable();
             Object process = invoke(baritone, "getFollowProcess");
             if (process == null) return unavailable();
-            Predicate<Object> match = entity -> {
+            Predicate<Object> playerPredicate = entity -> {
                 try {
                     Object component = entity.getClass().getMethod("getName").invoke(entity);
                     Object text = component.getClass().getMethod("getString").invoke(component);
-                    return name.equalsIgnoreCase(String.valueOf(text));
+                    return canonical.equals(String.valueOf(text));
                 } catch (ReflectiveOperationException | RuntimeException ex) {
                     return false;
                 }
             };
-            process.getClass().getMethod("follow", Predicate.class).invoke(process, match);
-            return new Result(true, "已请求 Baritone 跟随玩家 " + name);
+            process.getClass().getMethod("follow", Predicate.class).invoke(process, playerPredicate);
+            return new Result(true, "已请求 Baritone 跟随玩家 " + canonical);
         } catch (ReflectiveOperationException | LinkageError | RuntimeException ex) {
             return new Result(false, "Baritone 跟随接口不可用，未开始跟随");
         }

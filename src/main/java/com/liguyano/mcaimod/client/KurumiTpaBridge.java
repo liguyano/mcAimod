@@ -63,14 +63,12 @@ public final class KurumiTpaBridge {
 
     /** Resolve the datapack's per-player SID from the client scoreboard. */
     public static BaritoneBridge.Result requestTo(String playerName) {
-        if (playerName == null || !playerName.matches("[A-Za-z0-9_]{3,16}"))
-            return new BaritoneBridge.Result(false, "玩家名称不合法");
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null || mc.getConnection() == null)
             return new BaritoneBridge.Result(false, "尚未进入游戏");
-        boolean online = mc.getConnection().getOnlinePlayers().stream()
-                .anyMatch(info -> playerName.equals(info.getProfile().name()));
-        if (!online) return new BaritoneBridge.Result(false, "该玩家当前不在线：" + playerName);
+        var match = KurumiPlayerResolver.resolve(playerName, KurumiPlayerDirectory.onlineNames());
+        if (!match.found()) return new BaritoneBridge.Result(false, match.failure(playerName));
+        playerName = match.name();
         if (playerName.equals(mc.player.getName().getString()))
             return new BaritoneBridge.Result(false, "不能向自己申请传送");
         pendingTarget = playerName;
