@@ -23,6 +23,14 @@ $source = Join-Path $jarFolder $jarName
 if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
     throw "找不到编译后的 $jarName，请先执行 .\gradlew.bat build"
 }
+$builtAt = (Get-Item -LiteralPath $source).LastWriteTimeUtc
+$inputs = @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'src\main') -File -Recurse)
+$inputs += Get-Item -LiteralPath (Join-Path $PSScriptRoot 'build.gradle')
+$inputs += Get-Item -LiteralPath $properties
+$newerInput = $inputs | Where-Object { $_.LastWriteTimeUtc -gt $builtAt } | Select-Object -First 1
+if ($newerInput) {
+    throw "当前 JAR 比源码旧（$($newerInput.FullName)），可能上次编译失败。请成功执行 .\gradlew.bat build 后再安装。"
+}
 $destination = Join-Path $modsFolder $jarName
 Move-Item -LiteralPath $source -Destination $destination -Force -ErrorAction Stop
 if (-not (Test-Path -LiteralPath $destination -PathType Leaf)) {

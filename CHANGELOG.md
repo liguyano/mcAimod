@@ -7,6 +7,10 @@
 
 ### 新增
 
+- 修复 Minecraft 26.2 的 JourneyMap 地点编译错误：`ResourceKey<Level>` 使用
+  `identifier()` 获取维度 ID（替代已不存在的 `location()`），涵盖保存、读取、导航及 JourneyMap 插件。
+- 安装脚本在 JAR 早于任一源码或构建配置时直接拒绝安装，避免 Gradle 编译失败后把旧 JAR
+  误当作新版本移动进 `mods`。
 - 新增客户端开关配置 `config/mcaimod-settings.json`：`kurumi_enabled` 和
   `auto_enabled` 两项均默认为 `false`。启动及进入世界时读取配置，
   `/kurumi on/off`、`/kurumi auto on/off` 立即同步保存；关闭 Kurumi 时一并关闭 auto。

@@ -52,7 +52,7 @@ public final class KurumiLocationMemory {
         if (!save.find() && !go.find() && !where.find() && !list && !delete) return false;
 
         try {
-            String dimension = mc.level.dimension().location().toString();
+            String dimension = mc.level.dimension().identifier().toString();
             if (save.matches()) {
                 String name = clean(save.group(1));
                 if (!validName(name)) { reply("地点名称无效"); return true; }
@@ -106,7 +106,7 @@ public final class KurumiLocationMemory {
         String cleaned = clean(name);
         if (!validName(cleaned)) return new BaritoneBridge.Result(false, "地点名称无效");
         try {
-            String dimension = mc.level.dimension().location().toString();
+            String dimension = mc.level.dimension().identifier().toString();
             List<KurumiJourneyMapBridge.Point> matches = KurumiWaypointSelection.find(
                     KurumiJourneyMapBridge.list(), cleaned, dimension);
             if (matches.isEmpty()) return new BaritoneBridge.Result(false, "JourneyMap 中没有地点：" + cleaned);
@@ -156,7 +156,7 @@ public final class KurumiLocationMemory {
 
     private static BaritoneBridge.Result navigate(KurumiJourneyMapBridge.Point point) {
         Minecraft mc = Minecraft.getInstance();
-        if (!mc.level.dimension().location().toString().equals(point.dimension()))
+        if (!mc.level.dimension().identifier().toString().equals(point.dimension()))
             return new BaritoneBridge.Result(false, point.name() + " 在 " + point.dimension() + "，不能跨维度直接导航");
         return BaritoneBridge.gotoCoordinates(point.x(), point.y(), point.z());
     }

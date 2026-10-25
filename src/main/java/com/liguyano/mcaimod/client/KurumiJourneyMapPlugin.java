@@ -42,7 +42,7 @@ public final class KurumiJourneyMapPlugin implements IClientPlugin {
             @Override
             public void save(String name, String dimension, int x, int y, int z) {
                 var world = requireWorld();
-                if (!dimension.equals(world.dimension().location().toString()))
+                if (!dimension.equals(world.dimension().identifier().toString()))
                     throw new IllegalStateException("不能把路径点保存到未进入的维度");
                 List<? extends Waypoint> old = api.getAllWaypoints().stream()
                         .filter(w -> name.equalsIgnoreCase(w.getName())
