@@ -67,7 +67,9 @@ public final class KurumiItemUseBridge {
         if (!busy) return;
         var mc = Minecraft.getInstance();
         if (mc.player == null || mc.gameMode == null) { cancel(); return; }
-        if (mc.player.containerMenu != mc.player.inventoryMenu || mc.screen != null) { cancel(); return; }
+        // Minecraft 26.2 does not expose a public mc.screen field in this mapping.
+        // Container changes are the relevant blocker for an in-progress item use.
+        if (mc.player.containerMenu != mc.player.inventoryMenu) { cancel(); return; }
         if (mc.player.isUsingItem()) sawUsing = true;
         var current = mc.player.getMainHandItem();
         boolean changed = current.isEmpty()

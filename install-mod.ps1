@@ -1,4 +1,4 @@
-# Build first: .\gradlew.bat build
+﻿# Build first: .\gradlew.bat build
 # Then run:    .\install-mod.ps1
 $ErrorActionPreference = 'Stop'
 

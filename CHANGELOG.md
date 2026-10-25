@@ -7,6 +7,9 @@
 
 ### 新增
 
+- 修复 Minecraft 26.2 编译错误：`KurumiItemUseBridge` 不再读取当前映射中不存在的 `Minecraft.screen` 字段，
+  继续通过容器状态取消使用操作。`install-mod.ps1` 增加 UTF-8 BOM，兼容 Windows PowerShell 5.1
+  对脚本中中文提示与中文 mods 路径的解码，避免字符串解析错误。
 - 按使用者要求简化睡觉判定：`sleep_in_bed()` 只要床右键交互被接受，就立即认定本次
   动作完成，不等待 `isSleeping()` 校验；保留90秒重复交互保护，并统一普通 `interact()`
   的床交互记录，避免 AI 不断重复操作。日志明确注明“动作已执行”而非“已确认入睡”。
