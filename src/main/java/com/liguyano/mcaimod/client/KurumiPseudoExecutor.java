@@ -288,7 +288,7 @@ public final class KurumiPseudoExecutor {
             awaitingBed = false;
             lastResultSuccess = KurumiBedShortcut.lastInteractionAccepted();
             KurumiWebMonitor.log("sleep_in_bed(): "
-                    + (lastResultSuccess ? "已观察到入睡，本次睡觉成功，不应重试" : "未确认入睡"));
+                    + (lastResultSuccess ? "床交互已经执行，本次动作完成，不再校验睡眠" : "未成功交互床"));
             if (!lastResultSuccess && !assignedResult) {
                 say("未能与床交互，停止后续脚本");
                 cancel();

@@ -79,10 +79,13 @@ public final class KurumiInteractionBridge {
                             : "实体未接受交互 " + blockId);
         }
         if (mc.level.getBlockState(nearest).getBlock() instanceof net.minecraft.world.level.block.BedBlock
-                && (mc.player.isSleeping() || KurumiBedShortcut.sleptRecently()))
-            return new BaritoneBridge.Result(true, "玩家已经完成本次睡觉，跳过重复床交互");
+                && (mc.player.isSleeping() || KurumiBedShortcut.interactedRecently()))
+            return new BaritoneBridge.Result(true, "床交互已执行过，跳过重复操作");
         var result = mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND,
                 new BlockHitResult(Vec3.atCenterOf(nearest), Direction.UP, nearest, false));
+        if (result.consumesAction() && mc.level.getBlockState(nearest).getBlock()
+                instanceof net.minecraft.world.level.block.BedBlock)
+            KurumiBedShortcut.recordBedInteraction();
         return new BaritoneBridge.Result(result.consumesAction(),
                 result.consumesAction() ? "已尝试交互 " + blockId + "（等待服务器确认）"
                         : "方块交互未被接受");

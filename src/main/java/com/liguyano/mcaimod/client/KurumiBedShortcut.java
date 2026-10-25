@@ -18,31 +18,31 @@ public final class KurumiBedShortcut {
     private static BlockPos approach;
     private static long since;
     private static boolean lastInteractionAccepted;
-    private static boolean awaitingSleepConfirmation;
-    private static long interactionStarted;
-    private static long lastConfirmedAt;
+    private static long lastInteractedAt;
     private static final long TIMEOUT_MS = 75_000;
-    private static final long CONFIRM_MS = 10_000;
 
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiBedShortcut::tick); }
-    public static boolean busy() { return bed != null || awaitingSleepConfirmation; }
-    /** True only after the client has observed the player sleeping. */
+    public static boolean busy() { return bed != null; }
+    /** Completion means the bed interaction was accepted, not that sleep was verified. */
     public static boolean lastInteractionAccepted() { return lastInteractionAccepted; }
-    public static boolean sleptRecently() {
-        return KurumiSleepCompletionRules.recentlyConfirmed(System.currentTimeMillis(), lastConfirmedAt);
+    public static boolean interactedRecently() {
+        return KurumiSleepCompletionRules.recentlyInteracted(System.currentTimeMillis(), lastInteractedAt);
+    }
+    public static void recordBedInteraction() {
+        lastInteractionAccepted = true;
+        lastInteractedAt = System.currentTimeMillis();
     }
 
     public static void cancel() {
         if (busy()) BaritoneBridge.stop();
         bed = null;
         approach = null;
-        awaitingSleepConfirmation = false;
     }
 
     public static void resetWorld() {
         cancel();
         lastInteractionAccepted = false;
-        lastConfirmedAt = 0;
+        lastInteractedAt = 0;
     }
 
     public static BaritoneBridge.Result start() {
@@ -50,9 +50,9 @@ public final class KurumiBedShortcut {
         if (busy()) return new BaritoneBridge.Result(false, "正在前往床");
         if (mc.player == null || mc.level == null || mc.gameMode == null)
             return new BaritoneBridge.Result(false, "没有进入游戏世界");
-        if (mc.player.isSleeping() || sleptRecently()) {
+        if (mc.player.isSleeping() || interactedRecently()) {
             lastInteractionAccepted = true;
-            return new BaritoneBridge.Result(true, "已经确认睡过，无需再次与床交互");
+            return new BaritoneBridge.Result(true, "本次床交互已经执行过，无需重复");
         }
         lastInteractionAccepted = false;
         BlockPos origin = mc.player.blockPosition();
@@ -102,19 +102,6 @@ public final class KurumiBedShortcut {
         if (!busy()) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null || mc.gameMode == null) { cancel(); return; }
-        if (awaitingSleepConfirmation) {
-            if (mc.player.isSleeping()) {
-                awaitingSleepConfirmation = false;
-                lastInteractionAccepted = true;
-                lastConfirmedAt = System.currentTimeMillis();
-                report("已确认玩家进入睡眠状态；本次睡觉已完成，不要再次右键床");
-            } else if (System.currentTimeMillis() - interactionStarted > CONFIRM_MS) {
-                awaitingSleepConfirmation = false;
-                lastInteractionAccepted = false;
-                report("右键床后10秒内没有观察到入睡；请检查游戏时间、床是否被占用及服务器提示");
-            }
-            return;
-        }
         if (System.currentTimeMillis()-since > TIMEOUT_MS) {
             report("前往床超时，已停止");
             cancel();
@@ -139,13 +126,10 @@ public final class KurumiBedShortcut {
     private static BaritoneBridge.Result interactDirectly(Minecraft mc, BlockPos target) {
         var result = mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND,
                 new BlockHitResult(Vec3.atCenterOf(target), Direction.UP, target, false));
-        lastInteractionAccepted = false;
-        if (result.consumesAction()) {
-            awaitingSleepConfirmation = true;
-            interactionStarted = System.currentTimeMillis();
-        }
+        lastInteractionAccepted = result.consumesAction();
+        if (lastInteractionAccepted) recordBedInteraction();
         String message = result.consumesAction()
-                ? "已发送床交互请求，等待玩家实际入睡确认（最多10秒）"
+                ? "床交互已执行，本次动作完成（不再校验入睡状态）"
                 : "床互动未被接受（可能不是夜晚、床被占用或距离不足）";
         report(message);
         return new BaritoneBridge.Result(result.consumesAction(), message);
