@@ -40,6 +40,18 @@ public final class KurumiLookBridge {
     public static BaritoneBridge.Result lookAtId(String id) {
         var mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return new BaritoneBridge.Result(false, "尚未进入世界");
+        String playerName = KurumiLookPlayerTarget.playerName(id);
+        if (playerName != null) {
+            for (var player : mc.level.players()) {
+                if (!playerName.equals(player.getName().getString())) continue;
+                if (player == mc.player) return new BaritoneBridge.Result(false, "不能看向自己眼睛的位置");
+                if (mc.player.distanceToSqr(player) > 64 * 64)
+                    return new BaritoneBridge.Result(false, "玩家 " + playerName + " 距离超过64格");
+                Vec3 targetEyes = player.getEyePosition();
+                return lookAt(targetEyes.x, targetEyes.y, targetEyes.z);
+            }
+            return new BaritoneBridge.Result(false, "附近没有找到在线玩家 " + playerName);
+        }
         if (id == null || !id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
             return new BaritoneBridge.Result(false, "视角目标ID无效");
         Vec3 eye = mc.player.getEyePosition();

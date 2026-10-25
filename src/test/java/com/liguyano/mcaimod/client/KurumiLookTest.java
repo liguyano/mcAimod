@@ -11,6 +11,17 @@ class KurumiLookTest {
         assertTrue(KurumiScriptParser.parse("look_at(\"minecraft:zombie\")").isPresent());
         assertTrue(KurumiScriptParser.parse("target = find_nearest_block(\"minecraft:chest\")\nlook_at(target.x,target.y,target.z)").isPresent());
         assertTrue(KurumiScriptParser.parse("aimed = look_at(1,65,2)").isPresent());
+        assertTrue(KurumiScriptParser.parse("look_at(\"SekaiSaionji\")").isPresent());
+        assertTrue(KurumiScriptParser.parse("look_at(\"主人\")").isPresent());
+    }
+
+    @Test void resolvesOwnerAliasAndKeepsExplicitPlayerName() {
+        assertEquals("SekaiSaionji", KurumiLookPlayerTarget.playerName("主人"));
+        assertEquals("SekaiSaionji", KurumiLookPlayerTarget.playerName("ご主人様"));
+        assertEquals("SekaiSaionji", KurumiLookPlayerTarget.playerName("SekaiSaionji"));
+        assertEquals("OtherPlayer", KurumiLookPlayerTarget.playerName("OtherPlayer"));
+        assertNull(KurumiLookPlayerTarget.playerName("minecraft:zombie"));
+        assertNull(KurumiLookPlayerTarget.playerName("???"));
     }
 
     @Test void computesExpectedYawPitchAndRejectsInvalidAngles() {
