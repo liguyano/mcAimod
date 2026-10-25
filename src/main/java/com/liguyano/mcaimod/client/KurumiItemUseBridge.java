@@ -14,6 +14,8 @@ public final class KurumiItemUseBridge {
     private static String itemId;
     private static int initialCount;
     private static boolean sawUsing;
+    private static boolean timedHold;
+    private static long holdUntil;
 
     private KurumiItemUseBridge() {}
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiItemUseBridge::tick); }
@@ -21,6 +23,17 @@ public final class KurumiItemUseBridge {
     public static boolean lastSucceeded() { return succeeded; }
 
     public static BaritoneBridge.Result use(String id) {
+        return begin(id, 0);
+    }
+
+    /** Hold the player's use key for a bounded duration in seconds. */
+    public static BaritoneBridge.Result hold(String id, int seconds) {
+        if (seconds < 1 || seconds > 30)
+            return new BaritoneBridge.Result(false, "持续使用时间必须为1至30秒");
+        return begin(id, seconds);
+    }
+
+    private static BaritoneBridge.Result begin(String id, int seconds) {
         var mc = Minecraft.getInstance();
         if (mc.player == null || mc.gameMode == null) return new BaritoneBridge.Result(false, "尚未进入游戏");
         if (busy) return new BaritoneBridge.Result(false, "仍在使用上一件物品");
@@ -34,33 +47,56 @@ public final class KurumiItemUseBridge {
         if (mc.player.isUsingItem()) return new BaritoneBridge.Result(false, "玩家正在使用其他物品");
         var response = mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND);
         if (!response.consumesAction()) return new BaritoneBridge.Result(false, "服务器未接受物品使用请求");
+        // Minecraft's normal tick logic releases a use action when the use key is
+        // no longer down. Keep the actual key mapping held for the entire action.
+        mc.options.keyUse.setDown(true);
         busy = true;
         succeeded = false;
         sawUsing = mc.player.isUsingItem();
         started = System.currentTimeMillis();
+        timedHold = seconds > 0;
+        holdUntil = started + seconds * 1000L;
         itemId = id;
         initialCount = held.getCount();
-        return new BaritoneBridge.Result(true, "开始持续使用 " + id + "，等待完成确认");
+        return new BaritoneBridge.Result(true, seconds > 0
+                ? "开始持续按住使用键 " + seconds + " 秒：" + id
+                : "开始持续使用 " + id + "，等待物品使用完成确认");
     }
 
     private static void tick(ClientTickEvent.Post event) {
         if (!busy) return;
         var mc = Minecraft.getInstance();
         if (mc.player == null || mc.gameMode == null) { cancel(); return; }
-        if (mc.player.isUsingItem()) { sawUsing = true; return; }
+        if (mc.player.containerMenu != mc.player.inventoryMenu || mc.screen != null) { cancel(); return; }
+        if (mc.player.isUsingItem()) sawUsing = true;
         var current = mc.player.getMainHandItem();
         boolean changed = current.isEmpty()
                 || !itemId.equals(BuiltInRegistries.ITEM.getKey(current.getItem()).toString())
                 || current.getCount() < initialCount;
-        if (sawUsing && changed) { busy = false; succeeded = true; return; }
-        if (System.currentTimeMillis() - started > MAX_USE_MS) cancel();
+        if (sawUsing && changed) {
+            release();
+            succeeded = true;
+            return;
+        }
+        if (timedHold && System.currentTimeMillis() >= holdUntil) {
+            release();
+            // A duration is a key hold, not proof of successful consumption.
+            succeeded = sawUsing;
+            return;
+        }
+        if (System.currentTimeMillis() - started > MAX_USE_MS && !timedHold) cancel();
     }
 
     public static void cancel() {
+        release();
+        succeeded = false;
+    }
+
+    private static void release() {
         var mc = Minecraft.getInstance();
+        mc.options.keyUse.setDown(false);
         if (busy && mc.player != null && mc.gameMode != null && mc.player.isUsingItem())
             mc.gameMode.releaseUsingItem(mc.player);
         busy = false;
-        succeeded = false;
     }
 }
