@@ -7,6 +7,10 @@
 
 ### 新增
 
+- 新增客户端开关配置 `config/mcaimod-settings.json`：`kurumi_enabled` 和
+  `auto_enabled` 两项均默认为 `false`。启动及进入世界时读取配置，
+  `/kurumi on/off`、`/kurumi auto on/off` 立即同步保存；关闭 Kurumi 时一并关闭 auto。
+  保存与加载结果显示在 Kurumi 日志；设置文件无效时安全关闭，不覆盖损坏的内容。
 - 地点记忆现统一使用 JourneyMap 6.0 API v2：保留原来的“记住 / 地点列表 / 在哪里 / 去 / 忘记”
   语句和 `gotoNamed` 导航，但读取的都是 JourneyMap 路径点（包括玩家手动创建的）。
   Kurumi 新增的路径点持久保存在 JourneyMap；“忘记”仅能删除当前维度由 mcaimod 创建的路径点。

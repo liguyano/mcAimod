@@ -57,6 +57,7 @@ public final class KurumiClientController {
     public static void install() {
         NeoForge.EVENT_BUS.addListener(KurumiClientController::onPlayerChat);
         NeoForge.EVENT_BUS.addListener(KurumiClientController::registerCommands);
+        NeoForge.EVENT_BUS.addListener(KurumiClientController::onLogin);
         NeoForge.EVENT_BUS.addListener(KurumiClientController::onLogout);
         NeoForge.EVENT_BUS.addListener(KurumiClientController::onAgentTick);
         KurumiTpaBridge.install();
@@ -76,6 +77,25 @@ public final class KurumiClientController {
         KurumiChestSearch.install();
         KurumiFishingBridge.install();
         KurumiItemUseBridge.install();
+        restoreSavedSwitches();
+    }
+
+    private static void restoreSavedSwitches() {
+        KurumiSwitchSettings values = KurumiSwitchSettingsStore.load();
+        enabled = values.kurumiEnabled();
+        autoFarmEnabled = values.autoEnabled();
+        KurumiWebMonitor.log("从 mcaimod-settings.json 恢复开关：kurumi=" + enabled
+                + "，auto=" + autoFarmEnabled);
+    }
+
+    private static void persistSwitches() {
+        if (!KurumiSwitchSettingsStore.save(new KurumiSwitchSettings(enabled, autoFarmEnabled)))
+            notice("警告：开关已在本次游戏生效，但保存到 mcaimod-settings.json 失败");
+        else KurumiWebMonitor.log("已保存 Kurumi 开关：kurumi=" + enabled + "，auto=" + autoFarmEnabled);
+    }
+
+    private static void onLogin(ClientPlayerNetworkEvent.LoggingIn event) {
+        restoreSavedSwitches();
     }
 
     private static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
@@ -183,12 +203,14 @@ public final class KurumiClientController {
         event.getDispatcher().register(LiteralArgumentBuilder.<CommandSourceStack>literal("kurumi")
                 .then(LiteralArgumentBuilder.<CommandSourceStack>literal("on").executes(context -> {
                     enabled = true;
+                    persistSwitches();
                     notice("已启用聊天监听（仅本机）。");
                     return 1;
                 }))
                 .then(LiteralArgumentBuilder.<CommandSourceStack>literal("off").executes(context -> {
                     enabled = false;
                     autoFarmEnabled = false;
+                    persistSwitches();
                     generation++;
                     requestInFlight = false;
                     GATE.reset();
@@ -206,11 +228,13 @@ public final class KurumiClientController {
                 .then(LiteralArgumentBuilder.<CommandSourceStack>literal("auto")
                         .then(LiteralArgumentBuilder.<CommandSourceStack>literal("on").executes(context -> {
                             autoFarmEnabled = true;
+                            persistSwitches();
                             notice("已允许公共聊天触发 Baritone 农作（任何玩家均可触发）。");
                             return 1;
                         }))
                         .then(LiteralArgumentBuilder.<CommandSourceStack>literal("off").executes(context -> {
                             autoFarmEnabled = false;
+                            persistSwitches();
                             notice("已禁止公共聊天触发农作。");
                             return 1;
                         })))
