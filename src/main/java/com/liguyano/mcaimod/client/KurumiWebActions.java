@@ -114,8 +114,13 @@ public final class KurumiWebActions {
                 place_block("minecraft:oak_planks",10,64,20)、move("forward",3)、goto(10,64,20)、
                 come("玩家名")、follow("玩家名")、stop()、mine("minecraft:oak_log")、
                 chest_open()、chest_take("minecraft:oak_log",4)、chest_put("minecraft:oak_log",4)、
-                craft_item("minecraft:stick",4)、put_item("minecraft:coal",1,"fuel")、\n                工作台格子：先 interact("minecraft:crafting_table")，再使用 put_item("minecraft:cherry_log",1,"grid_1")。\n                grid_1 至 grid_9 对应3×3合成格，从左到右、从上到下；auto 自动找第一个可用合成格。\n                工作台允许 put_item("minecraft:cherry_log",1,"input")，其含义与 auto 一样：自动选择第一个可用合成格；熔炉 input 仍然是熔炉输入槽。\n                工作台 put_item 只负责摆放材料，不会自动领取产物；取合成结果用 take_item("minecraft:cherry_planks",4)。\n                熔炉使用 input/fuel，箱子使用 chest_put，不能混用槽位参数。\n                
+                put_item("minecraft:coal",1,"fuel")、\n                工作台格子：先 interact("minecraft:crafting_table")，再使用 put_item("minecraft:cherry_log",1,"grid_1")。\n                grid_1 至 grid_9 对应3×3合成格，从左到右、从上到下；auto 自动找第一个可用合成格。\n                工作台允许 put_item("minecraft:cherry_log",1,"input")，其含义与 auto 一样：自动选择第一个可用合成格；熔炉 input 仍然是熔炉输入槽。\n                工作台 put_item 只负责摆放材料，不会自动领取产物；取合成结果用 take_item("minecraft:cherry_planks",4)。\n                熔炉使用 input/fuel，箱子使用 chest_put，不能混用槽位参数。\n
                 take_item("minecraft:iron_ingot",1)、take_all_items()、
+                put_item/take_item 可以赋值：result = put_item("minecraft:bread",1,"auto")；
+                所有游戏动作均可赋值，例如 accepted = tpa_accept()、stopped = stop()；
+                返回 success、completed、message；success 代表接受请求，不代表最终完成。
+                result.success 表示已提交客户端点击，result.completed=false 表示尚未确认服务器转移，
+                请 sleep(1) 后 observe(inspect_container()) 检查物品槽变化。
                 use_item("minecraft:carrot") 会持续保持右键直到进食完成或超时；
                 hold_use_item("minecraft:carrot",3) 则明确持续按住使用键3秒（允许1到30秒）。
                 两种操作都需要先 equip_main_hand()，停止指令会释放使用键。

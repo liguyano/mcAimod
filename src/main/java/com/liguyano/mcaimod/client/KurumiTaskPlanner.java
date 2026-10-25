@@ -18,9 +18,22 @@ public final class KurumiTaskPlanner {
     public record Statement(String op, Step step, Condition condition, List<Statement> body,
                             List<Statement> otherwise) {}
     public record Program(List<Statement> statements) {}
+    /** The one assignment allowlist for commands with structured action results. */
+    public static boolean assignableAction(String method) {
+        return java.util.Set.of("goto", "move", "look", "look_at", "interact", "use_item",
+                "hold_use_item", "equip_main_hand", "equip_armor", "put_item", "take_item",
+                "place_block", "break_block", "search_chests", "take_from_memory",
+                "stop", "sleep_in_bed", "tpa_request", "tpa_accept", "tpa_request_to",
+                "craft_open", "chest_open", "chest_put_all", "chest_take_all",
+                "take_all_items", "drop_all", "drop_item_all", "drop", "pickup",
+                "pickup_all", "pickup_item_all", "chest_take", "chest_put",
+                "chest_put_item_all", "collect_and_store", "farm", "chain_on", "chain_off",
+                "fish", "stop_fishing", "come", "follow", "mine", "attack", "attack_mob",
+                "attack_player").contains(method);
+    }
     private static final List<String> SUPPORTED = List.of(
             "EQUIP_MAIN_HAND", "EQUIP_ARMOR", "GOTO", "CHEST_TAKE", "CHEST_PUT",
-            "CHEST_PUT_ITEM_ALL", "CRAFT_ITEM", "PICKUP_ITEM_ALL", "MINE",
+            "CHEST_PUT_ITEM_ALL", "PICKUP_ITEM_ALL", "MINE",
             "ATTACK_MOB", "ATTACK_PLAYER");
 
     public static Optional<Plan> parse(JsonObject object) {
@@ -140,8 +153,7 @@ public final class KurumiTaskPlanner {
                 String method = node.get("method").getAsString();
                 String args = node.get("expression").getAsString();
                 if (!name.matches("[a-z][a-z0-9_]{0,23}")
-                        || !java.util.Set.of("goto", "move", "look", "look_at", "interact", "use_item", "hold_use_item", "equip_main_hand",
-                                "place_block", "break_block", "search_chests", "take_from_memory").contains(method)
+                        || !assignableAction(method)
                         || args.length() > 500)
                     throw new IllegalArgumentException("invalid assigned action");
                 statements.add(new Statement(op, new Step(method, args, 1,

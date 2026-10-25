@@ -63,7 +63,6 @@ public final class KurumiPseudoExecutor {
     private static boolean awaitingBed;
     private static boolean awaitingItemUse;
     private static boolean awaitingExternal;
-    private static boolean awaitingCraft;
     private static boolean awaitingMenu;
     private static long menuStarted;
     private static long externalStarted;
@@ -106,8 +105,14 @@ public final class KurumiPseudoExecutor {
     }
     private static void finishPendingAction(boolean succeeded, String message) {
         if (pendingActionVariable == null) return;
-        assignActionResult(pendingActionVariable, succeeded, true, message);
+        assignActionResult(pendingActionVariable, succeeded, succeeded, message);
         pendingActionVariable = null;
+    }
+
+    private static void requireArgumentCount(String method,
+            java.util.List<com.google.gson.JsonElement> args, int count) {
+        if (args.size() != count)
+            throw new IllegalArgumentException(method + " 需要 " + count + " 个参数");
     }
 
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiPseudoExecutor::tick); }
@@ -131,7 +136,6 @@ public final class KurumiPseudoExecutor {
         awaitingItemUse = false;
         sleepUntil = 0;
         awaitingExternal = false;
-        awaitingCraft = false;
         awaitingMenu = false;
         frames.clear();
         KurumiBlockBreakingBridge.cancel();
@@ -181,7 +185,6 @@ public final class KurumiPseudoExecutor {
         awaitingBed = false;
         awaitingItemUse = false;
         awaitingExternal = false;
-        awaitingCraft = false;
         awaitingMenu = false;
         awaitingChestSearch = false;
         pendingCondition = null;
@@ -250,9 +253,11 @@ public final class KurumiPseudoExecutor {
         if (awaitingMenu) {
             if (mc.player.containerMenu != mc.player.inventoryMenu) {
                 awaitingMenu = false;
+                finishPendingAction(true, "已观察到容器界面打开");
                 KurumiWebMonitor.log("容器界面已打开，可以继续放入物品");
             } else if (System.currentTimeMillis() - menuStarted > 5000L) {
                 awaitingMenu = false;
+                finishPendingAction(false, "等待容器界面超时");
                 KurumiWebMonitor.log("等待容器界面超时");
                 lastResultSuccess = false;
                 if (!assignedResult) cancel();
@@ -270,23 +275,22 @@ public final class KurumiPseudoExecutor {
                 return;
             }
             awaitingExternal = false;
-            if (awaitingCraft) {
-                awaitingCraft = false;
-                lastResultSuccess = KurumiAutoCraftBridge.lastSucceeded();
-                KurumiWebMonitor.log("合成完成验证：" + lastResultSuccess);
-                if (!lastResultSuccess && !assignedResult) {
-                    say("合成失败，停止后续取物步骤");
-                    cancel();
-                }
-            } else {
-                KurumiWebMonitor.log("异步操作已结束；结果可能仍需服务器确认");
+            // The bridge may have stopped because of an error; without an explicit verified
+            // outcome we must not turn an accepted command into a completed=true result.
+            if (pendingActionVariable != null) {
+                assignActionResult(pendingActionVariable, true, false,
+                        "异步操作已停止，最终效果需要重新查询确认");
+                pendingActionVariable = null;
             }
+            KurumiWebMonitor.log("异步操作已结束；结果可能仍需服务器确认");
             return;
         }
         if (awaitingBed) {
             if (KurumiBedShortcut.busy()) return;
             awaitingBed = false;
             lastResultSuccess = KurumiBedShortcut.lastInteractionAccepted();
+            finishPendingAction(lastResultSuccess,
+                    lastResultSuccess ? "已尝试床交互，未校验实际睡眠" : "床交互未被接受");
             KurumiWebMonitor.log("sleep_in_bed(): "
                     + (lastResultSuccess ? "床交互已经执行，本次动作完成，不再校验睡眠" : "未成功交互床"));
             if (!lastResultSuccess && !assignedResult) {
@@ -480,8 +484,9 @@ public final class KurumiPseudoExecutor {
                         lastResultSuccess = fishing.success();
                         observe("钓鱼动作 " + name, fishing.message());
                         KurumiWebMonitor.log("钓鱼指令 " + name + "：" + fishing.message());
+                        if (assign) assignActionResult(resultVariable, fishing.success(), false, fishing.message());
                         frame.index++;
-                        if (!fishing.success()) {
+                        if (!fishing.success() && !assign) {
                             finishRun(false, fishing.message());
                             running = false;
                             frames.clear();
@@ -564,6 +569,122 @@ public final class KurumiPseudoExecutor {
                                     : KurumiEquipBridge.mainHand(id);
                             if (outcome.success() && "use_item".equals(name)) awaitingItemUse = true;
                         }
+                    } else if ("put_item".equals(name) || "take_item".equals(name)) {
+                        if ("put_item".equals(name)) {
+                            if (args.size() != 2 && args.size() != 3)
+                                throw new IllegalArgumentException("put_item 需要物品ID、数量及可选的槽位");
+                            outcome = KurumiInteractionBridge.putItem(
+                                    KurumiExpressions.text(args.get(0)),
+                                    KurumiExpressions.integer(args.get(1)),
+                                    args.size() == 3 ? KurumiExpressions.text(args.get(2)) : "auto");
+                        } else {
+                            if (args.size() != 2)
+                                throw new IllegalArgumentException("take_item 需要物品ID和数量");
+                            outcome = KurumiInteractionBridge.takeItem(
+                                    KurumiExpressions.text(args.get(0)),
+                                    KurumiExpressions.integer(args.get(1)));
+                        }
+                    } else if (KurumiTaskPlanner.assignableAction(name)
+                            && !java.util.Set.of("search_chests", "take_from_memory",
+                                    "break_block", "place_block").contains(name)) {
+                        // Remaining game commands use the same structured result contract as
+                        // movement and inventory transfers, including formerly fixed syntax.
+                        outcome = switch (name) {
+                            case "stop" -> {
+                                requireArgumentCount(name, args, 0);
+                                yield BaritoneBridge.stop();
+                            }
+                            case "sleep_in_bed" -> {
+                                requireArgumentCount(name, args, 0);
+                                BaritoneBridge.Result result = KurumiBedShortcut.start();
+                                if (result.success() && KurumiBedShortcut.busy()) awaitingBed = true;
+                                yield result;
+                            }
+                            case "tpa_request", "tpa_accept" -> {
+                                requireArgumentCount(name, args, 0);
+                                yield "tpa_request".equals(name) ? KurumiTpaBridge.request()
+                                        : KurumiTpaBridge.accept();
+                            }
+                            case "tpa_request_to" -> {
+                                requireArgumentCount(name, args, 1);
+                                yield KurumiTpaBridge.requestTo(KurumiExpressions.text(args.get(0)));
+                            }
+                            case "craft_open", "chest_open" -> {
+                                requireArgumentCount(name, args, 0);
+                                yield "craft_open".equals(name)
+                                        ? KurumiCraftingBridge.open() : KurumiChestBridge.open();
+                            }
+                            case "chest_put_all", "chest_take_all", "take_all_items" -> {
+                                requireArgumentCount(name, args, 0);
+                                yield "chest_put_all".equals(name) ? KurumiChestBridge.putAll()
+                                        : "chest_take_all".equals(name) ? KurumiChestBridge.takeAll()
+                                        : KurumiTakeAllBridge.start();
+                            }
+                            case "drop_all", "pickup_all" -> {
+                                requireArgumentCount(name, args, 0);
+                                yield "drop_all".equals(name) ? KurumiDropBridge.dropAll()
+                                        : KurumiPickupBridge.pickupAll(null);
+                            }
+                            case "drop_item_all", "pickup_item_all", "chest_put_item_all" -> {
+                                requireArgumentCount(name, args, 1);
+                                String item = KurumiExpressions.text(args.get(0));
+                                yield "drop_item_all".equals(name) ? KurumiDropBridge.dropItemAll(item)
+                                        : "pickup_item_all".equals(name) ? KurumiPickupBridge.pickupAll(item)
+                                        : KurumiChestBridge.putItemAll(item);
+                            }
+                            case "drop", "pickup", "chest_put", "chest_take", "collect_and_store" -> {
+                                requireArgumentCount(name, args, 2);
+                                String item = KurumiExpressions.text(args.get(0));
+                                int quantity = KurumiExpressions.integer(args.get(1));
+                                yield switch (name) {
+                                    case "drop" -> KurumiDropBridge.drop(item, quantity);
+                                    case "pickup" -> KurumiPickupBridge.pickup(item, quantity);
+                                    case "chest_put" -> KurumiChestBridge.put(item, quantity);
+                                    case "chest_take" -> KurumiChestBridge.takeItem(item, quantity);
+                                    default -> KurumiLongTaskBridge.collectAndStore(item, quantity);
+                                };
+                            }
+                            case "farm" -> {
+                                requireArgumentCount(name, args, 1);
+                                int radius = KurumiExpressions.integer(args.get(0));
+                                if (radius < 4 || radius > 32) throw new IllegalArgumentException("farm 半径只能4到32");
+                                yield BaritoneBridge.farm(radius);
+                            }
+                            case "chain_on", "chain_off" -> {
+                                requireArgumentCount(name, args, 0);
+                                yield KurumiChainBridge.setEnabled("chain_on".equals(name));
+                            }
+                            case "equip_armor" -> {
+                                requireArgumentCount(name, args, 1);
+                                yield KurumiEquipBridge.armor(KurumiExpressions.text(args.get(0)));
+                            }
+                            case "come", "follow", "mine", "attack", "attack_mob", "attack_player" -> {
+                                requireArgumentCount(name, args, 1);
+                                String target = KurumiExpressions.text(args.get(0));
+                                yield switch (name) {
+                                    case "come" -> BaritoneBridge.comeToPlayer(target);
+                                    case "follow" -> BaritoneBridge.followPlayer(target);
+                                    case "mine" -> BaritoneBridge.mineBlock(target);
+                                    case "attack_mob" -> KurumiCombatBridge.attackMob(target);
+                                    case "attack_player" -> KurumiCombatBridge.attackPlayer(target);
+                                    default -> target.contains(":") ? KurumiCombatBridge.attackMob(target)
+                                            : KurumiCombatBridge.attackPlayer(target);
+                                };
+                            }
+                            default -> throw new IllegalArgumentException("动作不在白名单: " + name);
+                        };
+                        if (outcome.success()) {
+                            if ("craft_open".equals(name)) {
+                                awaitingMenu = true;
+                                menuStarted = System.currentTimeMillis();
+                            }
+                            if (KurumiLongTaskBridge.busy() || KurumiAutoCraftBridge.busy()
+                                    || KurumiTakeAllBridge.busy() || KurumiChestBridge.busy()
+                                    || KurumiPickupBridge.busy()) {
+                                awaitingExternal = true;
+                                externalStarted = System.currentTimeMillis();
+                            }
+                        }
                     } else if ("search_chests".equals(name)) {
                         if (args.size()!=1) throw new IllegalArgumentException("search_chests 需要一个物品ID");
                         outcome=KurumiChestSearch.search(KurumiExpressions.text(args.get(0)));
@@ -601,10 +722,11 @@ public final class KurumiPseudoExecutor {
                     observe("动作 " + name, outcome.success() + "; " + outcome.message());
                     lastResultSuccess=outcome.success();
                     if (assign) {
-                        if (outcome.success() && (awaitingAction || awaitingBlockBreak || awaitingChestSearch || awaitingItemUse)) {
+                        if (outcome.success() && (awaitingAction || awaitingBlockBreak || awaitingChestSearch
+                                || awaitingItemUse || awaitingBed || awaitingMenu || awaitingExternal)) {
                             pendingActionVariable = resultVariable;
                         } else {
-                            // For move()/place_block()/interact() the bridge only confirms that
+                            // For move()/place_block()/interact()/put_item()/take_item() the bridge only confirms that
                             // a command was accepted, not the final server-side world state.
                             boolean complete = java.util.Set.of("equip_main_hand", "look", "look_at").contains(name)
                                     && outcome.success();
@@ -685,7 +807,7 @@ public final class KurumiPseudoExecutor {
             case "ACTION", "ACTION_RESULT" -> {
                 if (java.util.Set.of("STOP", "TPA_REQUEST", "TPA_ACCEPT", "TPA_REQUEST_TO",
                         "CRAFT_OPEN", "CHEST_OPEN", "SLEEP_IN_BED", "CHEST_PUT_ALL", "CHEST_TAKE_ALL", "TAKE_ALL_ITEMS", "DROP_ALL",
-                        "DROP_ITEM_ALL", "DROP", "PICKUP", "PICKUP_ALL", "CRAFT_ITEM",
+                        "DROP_ITEM_ALL", "DROP", "PICKUP", "PICKUP_ALL",
                         "CHEST_TAKE", "CHEST_PUT", "COLLECT_AND_STORE").contains(stmt.step().action())) {
                     if (++actions > MAX_ACTIONS) { cancel(); return; }
                     var step = stmt.step();
@@ -705,7 +827,6 @@ public final class KurumiPseudoExecutor {
                         case "DROP" -> KurumiDropBridge.drop(step.itemId(), step.quantity());
                         case "PICKUP" -> KurumiPickupBridge.pickup(step.itemId(), step.quantity());
                         case "PICKUP_ALL" -> KurumiPickupBridge.pickupAll(null);
-                        case "CRAFT_ITEM" -> KurumiAutoCraftBridge.craft(step.itemId(), step.quantity());
                         case "CHEST_TAKE" -> KurumiChestBridge.takeItem(step.itemId(), step.quantity());
                         case "CHEST_PUT" -> KurumiChestBridge.put(step.itemId(), step.quantity());
                         case "COLLECT_AND_STORE" -> KurumiLongTaskBridge.collectAndStore(step.itemId(), step.quantity());
@@ -717,7 +838,6 @@ public final class KurumiPseudoExecutor {
                     frame.index++;
                     if (!result.success() && !assignedResult) { cancel(); return; }
                     if (result.success() && "SLEEP_IN_BED".equals(step.action())) awaitingBed = true;
-                    if (result.success() && "CRAFT_ITEM".equals(step.action())) awaitingCraft = true;
                     if (result.success() && "CRAFT_OPEN".equals(step.action())) {
                         awaitingMenu = true;
                         menuStarted = System.currentTimeMillis();

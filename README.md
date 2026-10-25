@@ -161,7 +161,6 @@ Kurumi 与上面的服务端 `/ai` 问答功能不同，是客户端游戏内助
 | `CHEST_TAKE` | 从附近普通箱子取指定数量物品 |
 | `CHEST_PUT` | 向附近普通箱子放指定数量物品 |
 | `CHEST_PUT_ITEM_ALL` | 将背包中指定类型物品全部存箱 |
-| `CRAFT_ITEM` | 尝试按可用配方合成指定物品 |
 | `ATTACK_MOB` | 攻击 3 格内指定 `entity_id` 生物，最多 10 秒 |
 | `ATTACK_PLAYER` | 仅主人可指定 `target` 玩家名，不能攻击主人，最多 10 秒 |
 

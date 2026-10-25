@@ -49,7 +49,20 @@ public final class KurumiClientController {
     private static boolean containsPlayerAttack(List<KurumiTaskPlanner.Statement> statements) {
         for (var s : statements) {
             if (s.step() != null && "ATTACK_PLAYER".equals(s.step().action())) return true;
+            if (s.step() != null && "EXPR_ACTION_ASSIGN".equals(s.op())
+                    && java.util.Set.of("attack", "attack_player").contains(s.step().action())) return true;
             if (containsPlayerAttack(s.body()) || containsPlayerAttack(s.otherwise())) return true;
+        }
+        return false;
+    }
+
+    private static boolean containsRestrictedAssignedAction(List<KurumiTaskPlanner.Statement> statements) {
+        for (var s : statements) {
+            if (s.step() != null && "EXPR_ACTION_ASSIGN".equals(s.op())
+                    && java.util.Set.of("drop_all", "chest_put_all", "chest_take_all",
+                            "take_all_items", "tpa_accept").contains(s.step().action())) return true;
+            if (containsRestrictedAssignedAction(s.body())
+                    || containsRestrictedAssignedAction(s.otherwise())) return true;
         }
         return false;
     }
@@ -385,10 +398,17 @@ public final class KurumiClientController {
                         + "再用 observed.count >= 256 比较，也兼容 observed >= 256。"
                         + "支持小数例如 rate = 1.5、rate = rate + 0.5，if/while 可直接比较变量。" 
                         + "动作支持变量接收：moved = move(\\\"back\\\",2)、"
-                        + "placed = place_block(\\\"minecraft:cobblestone\\\")；"
-                        + "返回对象具有 success、completed、message 字段。"
+                        + "placed = place_block(\\\"minecraft:cobblestone\\\")、"
+                        + "stored = put_item(\\\"minecraft:bread\\\",1,\\\"auto\\\")、"
+                        + "taken = take_item(\\\"minecraft:bread\\\",1)；"
+                        + "所有游戏动作均支持赋值返回，例如 accepted = tpa_accept()、stopped = stop()。"
+                        + "返回对象统一具有 success、completed、message 字段。"
+                        + "success 表示请求被接受；completed=true 只表示确实确认完成；"
+                        + "服务器未确认的动作 completed=false，不得依据 success 自称完成。"
                         + "result.success 可用于判断；其中 move/place_block/interact 的 success 只表示命令已被接受，"
-                        + "completed=false，不得据此声称已实际完成；goto 的结果会等待到达验证。"
+                        + "completed=false，不得据此声称已实际完成；"
+                        + "put_item/take_item 的 success 只表示客户端提交槽位点击，completed=false，"
+                        + "必须另外 inspect_container() 检查物品是否真的变化；goto 的结果会等待到达验证。"
                         + "变量在当前 Agent 任务的多段脚本之间保留，不限制变量数量，但有总内存安全预算；不支持 import、函数定义和任意 Java/Python 执行。"
                         + "固定次数任务使用 repeat(4):，其下各语句缩进4格，最多重复20次；"
                         + "repeat 在解析时展开，每次重新执行查询和动作；展开后总语句最多200条。"
@@ -415,7 +435,7 @@ public final class KurumiClientController {
                         + "采集/物品：mine、farm、collect_and_store、pickup、pickup_all、pickup_item_all、"
                         + "drop、drop_all、drop_item_all、chest_open、chest_take、chest_put、"
                         + "chest_take_all、chest_put_all、chest_put_item_all、"
-                        + "craft_open、craft_item、equip_armor、equip_main_hand、chain_on、chain_off。"
+                        + "craft_open、equip_armor、equip_main_hand、chain_on、chain_off。"
                         + "连锁砍树或连锁挖矿必须在 mine 前执行 chain_on()，结束时 chain_off()。"
                         + "连锁需要客户端安装兼容 OneKeyMiner；普通 repeat/mine 循环不等于开启连锁。"
                         + "Minecraft 的操作分为方块交互、实体交互、手持物品持续使用、菜单槽位操作等，"
@@ -664,7 +684,9 @@ public final class KurumiClientController {
                             publicFailure("自动操作未开启，需要先输入 /kurumi auto on。");
                             return;
                         }
-                        if (decision.action().isPresent() && (action.type() == KurumiActionValidator.Type.DROP_ALL || action.type() == KurumiActionValidator.Type.CHEST_PUT_ALL || action.type() == KurumiActionValidator.Type.CHEST_TAKE_ALL || action.type() == KurumiActionValidator.Type.TPA_ACCEPT)) {
+                        if ((decision.action().isPresent() && (action.type() == KurumiActionValidator.Type.DROP_ALL || action.type() == KurumiActionValidator.Type.CHEST_PUT_ALL || action.type() == KurumiActionValidator.Type.CHEST_TAKE_ALL || action.type() == KurumiActionValidator.Type.TPA_ACCEPT))
+                                || (decision.program().isPresent()
+                                && containsRestrictedAssignedAction(decision.program().get().statements()))) {
                             String operator = minecraft.getConnection().getPlayerInfo(sender) == null ? "" : minecraft.getConnection().getPlayerInfo(sender).getProfile().name();
                             if (!"SekaiSaionji".equals(operator)) {
                                 publicFailure("只有主人 SekaiSaionji 可以执行清空背包或箱子的批量操作。");
@@ -726,7 +748,6 @@ public final class KurumiClientController {
                             case PICKUP_ALL -> KurumiPickupBridge.pickupAll(null);
                             case PICKUP_ITEM_ALL -> KurumiPickupBridge.pickupAll(action.itemId());
                             case CRAFT_OPEN -> KurumiCraftingBridge.open();
-                            case CRAFT_ITEM -> KurumiAutoCraftBridge.craft(action.itemId(), action.quantity());
                             case EQUIP_MAIN_HAND -> KurumiEquipBridge.mainHand(action.itemId());
                             case CHEST_OPEN -> KurumiChestBridge.open();
                             case CHEST_PUT -> KurumiChestBridge.put(action.itemId(), action.quantity());

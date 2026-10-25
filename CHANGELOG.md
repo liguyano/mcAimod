@@ -7,6 +7,17 @@
 
 ### 新增
 
+- 所有受支持的游戏动作可通过赋值取得 `success`、`completed`、`message`，如
+  `accepted = tpa_accept()`；未确认最终结果的动作保持 `completed=false`。
+  增加解析器测试与受限操作权限校验，Gradle 构建仍由用户本地执行。
+- 允许 `result = put_item("minecraft:bread",1,"auto")` 和
+  `result = take_item("minecraft:bread",1)`，返回 `success`、`completed`、`message`。
+  客户端槽位操作仅表示点击请求已提交，`completed=false`，不冒充服务器已确认转移；
+  `observe(result)` 可回传给模型，必要时再调用 `inspect_container()` 核对槽位。
+  添加赋值调用和非法参数测试，Gradle 构建仍由用户本地执行。
+- 移除自动合成指令 `craft_item()` / `CRAFT_ITEM`：脚本解析、组合计划和旧动作接口均不再接受，
+  同时删除 AI 与 Web 编辑器提示中的该指令；工作台 `interact`、`put_item`、`take_item` 槽位操作保留。
+  添加拒绝自动合成及保留手动槽位合成的测试；实际 Gradle 构建由用户本地执行。
 - 修复 `hold_use_item()` 无参数时仍被脚本解析器接受的问题：普通调用与赋值调用
   都必须提供非空物品ID参数和持续秒数参数；补充无参数及缺少秒数的拒绝测试。
 - 修复 `hold_use_item()` 解析测试失败：脚本语法已经支持，但 `KurumiTaskPlanner`

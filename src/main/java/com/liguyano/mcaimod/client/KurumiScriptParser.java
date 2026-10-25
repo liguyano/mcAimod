@@ -27,14 +27,14 @@ public final class KurumiScriptParser {
 
     private static final Pattern ZERO = Pattern.compile("(stop|sleep_in_bed|tpa_request|tpa_accept|craft_open|chest_open|chest_put_all|chest_take_all|take_all_items|drop_all|pickup_all)\\(\\)");
     private static final Pattern ONE = Pattern.compile("(tpa_request_to|drop_item_all|pickup_item_all|chest_put_item_all|equip_main_hand|equip_armor)\\(\"([A-Za-z0-9_.:-]+)\"\\)");
-    private static final Pattern TWO = Pattern.compile("(drop|pickup|chest_take|chest_put|craft_item|collect_and_store)\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})\\)");
+    private static final Pattern TWO = Pattern.compile("(drop|pickup|chest_take|chest_put|collect_and_store)\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})\\)");
     private static final Pattern PLACE_BLOCK = Pattern.compile("place_block\\(\"([a-z0-9_.:-]+)\"(?:,\\s*(-?\\d{1,8}),\\s*(-?\\d{1,4}),\\s*(-?\\d{1,8}))?\\)");
     private static final Pattern INTERACT = Pattern.compile("interact\\(\"([a-z0-9_.:-]+)\"\\)");
     private static final Pattern TAKE_ITEM = Pattern.compile("take_item\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})\\)");
     private static final Pattern PUT_ITEM = Pattern.compile("put_item\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})(?:,\\s*\"(input|fuel|auto|grid_[1-9])\")?\\)");
     private static final Pattern MOVE = Pattern.compile("move\\(\\\"(forward|back|left|right)\\\",\\s*(\\d{1,2})\\)");
     private static final Pattern VARIABLE_ASSIGN = Pattern.compile("([a-z][a-z0-9_]{0,23})\\s*=\\s*(.+)");
-    private static final Pattern ACTION_ASSIGN = Pattern.compile("([a-z][a-z0-9_]{0,23})\\s*=\\s*(goto|move|look|look_at|interact|use_item|hold_use_item|equip_main_hand|place_block|break_block|search_chests|take_from_memory)\\((.*)\\)");
+    private static final Pattern ACTION_ASSIGN = Pattern.compile("([a-z][a-z0-9_]{0,23})\\s*=\\s*([a-z_]+)\\((.*)\\)");
     private static final Pattern VARIABLE_CALL = Pattern.compile("(goto|talk|observe|fish|stop_fishing|sleep|move|look|look_at|interact|use_item|hold_use_item|equip_main_hand|place_block|break_block|search_chests|take_from_memory)\\((.*)\\)");
     private static final Pattern GOTO_NAMED = Pattern.compile("goto\\(\"([^\"]{1,24})\"\\)");
     private static final Pattern GOTO = Pattern.compile("goto\\((-?\\d{1,8}),\\s*(-?\\d{1,4}),\\s*(-?\\d{1,8})\\)");
@@ -44,6 +44,10 @@ public final class KurumiScriptParser {
     /** Dynamic arguments may be variables, but a hold always needs two nonempty arguments. */
     private static boolean validHoldArgs(String args) {
         return args != null && args.matches("(?s)\\s*\\S[^,]*,\\s*\\S[^,]*\\s*");
+    }
+    private static boolean isActionAssignment(String code) {
+        Matcher match = ACTION_ASSIGN.matcher(code);
+        return match.matches() && KurumiTaskPlanner.assignableAction(match.group(2));
     }
     private record Line(int indent, String code, int number) {}
     private static final class Cursor { int at; }
@@ -132,16 +136,30 @@ public final class KurumiScriptParser {
                         throw new IllegalArgumentException("empty else");
                     node.add("else", block(lines, cursor, indent + 1, depth + 1));
                 }
-            } else if (ACTION_ASSIGN.matcher(code).matches()) {
+            } else if (isActionAssignment(code)) {
                 Matcher m = ACTION_ASSIGN.matcher(code); m.matches();
                 if ("hold_use_item".equals(m.group(2)) && !validHoldArgs(m.group(3)))
                     throw new IllegalArgumentException("hold_use_item requires item ID and seconds");
+                if (("put_item".equals(m.group(2)) || "take_item".equals(m.group(2)))
+                        && !validHoldArgs(m.group(3)))
+                    throw new IllegalArgumentException(m.group(2) + " requires item ID and quantity");
                 node.addProperty("op", "EXPR_ACTION_ASSIGN");
                 node.addProperty("name", m.group(1));
                 node.addProperty("method", m.group(2));
                 node.addProperty("expression", m.group(3));
             } else if (VARIABLE_ASSIGN.matcher(code).matches() && !code.startsWith("result = ")) {
                 Matcher m = VARIABLE_ASSIGN.matcher(code); m.matches();
+                Matcher call = ACTION_ASSIGN.matcher(code);
+                if (call.matches() && !java.util.Set.of("get_fishing_status", "get_agent_observation",
+                        "len", "search_all_block", "check_inventory", "check_distance",
+                        "list_remembered_blocks", "get_remembered_block_at", "get_remembered_block",
+                        "remember_block", "get_chest_search_result", "find_nearest_block",
+                        "check_inventory_count", "get_crafting_recipe", "check_nearby_chest",
+                        "get_nearby_chest_result", "get_position", "get_player_status",
+                        "get_environment", "get_inventory", "scan_nearby_entities",
+                        "scan_nearby_blocks", "scan_dropped_items", "inspect_container",
+                        "inspect_slot", "get_distance").contains(call.group(2)))
+                    throw new IllegalArgumentException("未知的赋值方法: " + call.group(2));
 
                 node.addProperty("op", "EXPR_ASSIGN");
                 node.addProperty("name", m.group(1));

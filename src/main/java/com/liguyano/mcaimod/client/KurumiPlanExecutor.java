@@ -73,7 +73,7 @@ public final class KurumiPlanExecutor {
                 yield mc.player != null && s.itemId().equals(BuiltInRegistries.ITEM.getKey(
                         mc.player.getMainHandItem().getItem()).toString());
             }
-            case "CHEST_TAKE", "CRAFT_ITEM", "PICKUP_ITEM_ALL", "MINE" -> current > before;
+            case "CHEST_TAKE", "PICKUP_ITEM_ALL", "MINE" -> current > before;
             case "CHEST_PUT", "CHEST_PUT_ITEM_ALL" -> current < before;
             default -> false;
         };
@@ -88,7 +88,6 @@ public final class KurumiPlanExecutor {
             case "CHEST_TAKE" -> KurumiChestBridge.takeItem(s.itemId(), s.quantity());
             case "CHEST_PUT" -> KurumiChestBridge.put(s.itemId(), s.quantity());
             case "CHEST_PUT_ITEM_ALL" -> KurumiChestBridge.putItemAll(s.itemId());
-            case "CRAFT_ITEM" -> KurumiAutoCraftBridge.craft(s.itemId(), s.quantity());
             case "PICKUP_ITEM_ALL" -> KurumiPickupBridge.pickupAll(s.itemId());
             case "MINE" -> BaritoneBridge.mineBlock(s.itemId());
             default -> new BaritoneBridge.Result(false, "不支持的步骤");
@@ -247,7 +246,6 @@ public final class KurumiPlanExecutor {
                 }
                 if (!verified(s, r.inventoryBefore())) return;
                 if ((isChest(s.action()) && KurumiChestBridge.busy())
-                        || (s.action().equals("CRAFT_ITEM") && KurumiAutoCraftBridge.busy())
                         || (s.action().equals("PICKUP_ITEM_ALL") && KurumiPickupBridge.busy())) return;
                 if (isChest(s.action())) {
                     String result = KurumiChestInspector.check(s.itemId());
