@@ -1,40 +1,28 @@
 package com.liguyano.mcaimod.client;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
-import net.neoforged.fml.loading.FMLPaths;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Persistent, server-and-dimension-scoped named locations. Only the owner can edit. */
+/** Named locations now live exclusively in JourneyMap; legacy JSON is never read or modified. */
 public final class KurumiLocationMemory {
-    private static final Gson GSON = new Gson();
     private static final Pattern SAVE = Pattern.compile("(?:记住|记下|标记)(?:这里|这个位置|这个地方)?(?:是|叫|为)(.{1,24})");
     private static final Pattern GO = Pattern.compile("去 ([^\\s，,。！？!?；;]{1,24})");
     private static final Pattern WHERE = Pattern.compile("(.{1,24})(?:在哪里|在哪儿|在哪|的坐标)");
-    private record Point(String dimension, int x, int y, int z) {}
 
     public static boolean handle(String message, String senderName) {
         if (!"SekaiSaionji".equals(senderName)) return false;
         String body = message.strip().replaceFirst("(?i)^.*?kurumi[，,：: ]*", "").strip();
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null || mc.getConnection() == null) return false;
-        // Handle standalone location-memory commands deterministically instead of
-        // letting the model claim it saved a place without writing the file.
-        // Compound requests still go to the planner.
+        // Compound requests are delegated to the agent; single commands preserve the old shortcut.
         if (body.contains("然后") || body.contains("之后") || body.contains("再去")
                 || body.contains("并且") || body.contains("接着")
                 || body.contains("，") || body.contains(",") || body.contains("；")
-                || body.contains(";") || body.contains("。") || body.contains("\\n"))
+                || body.contains(";") || body.contains("。") || body.contains("\n"))
             return false;
         boolean locationIntent = body.startsWith("去 ") || body.startsWith("记住")
                 || body.startsWith("记下") || body.startsWith("标记")
@@ -44,166 +32,151 @@ public final class KurumiLocationMemory {
                 || body.contains("记住了哪些") || body.contains("地点列表")
                 || body.contains("记忆的地点");
         if (!locationIntent) return false;
-        // The direct navigation shortcut is opt-in: exactly "去 <地点>" or "去 <x> <y> <z>".
-        // Other phrasings, including "去仓库", "前往仓库", and "Kurumi 去 仓库", go to the AI.
         if (body.startsWith("去 ") && !message.strip().equals(body)) return false;
-        Matcher coordinates = Pattern.compile(
-                "去 (-?[0-9]+) +(-?[0-9]+) +(-?[0-9]+)").matcher(body);
+
+        Matcher coordinates = Pattern.compile("去 (-?[0-9]+) +(-?[0-9]+) +(-?[0-9]+)").matcher(body);
         if (coordinates.matches()) {
             try {
-                int x = Integer.parseInt(coordinates.group(1));
-                int y = Integer.parseInt(coordinates.group(2));
-                int z = Integer.parseInt(coordinates.group(3));
-                reply(BaritoneBridge.gotoCoordinates(x, y, z).message());
+                reply(BaritoneBridge.gotoCoordinates(Integer.parseInt(coordinates.group(1)),
+                        Integer.parseInt(coordinates.group(2)), Integer.parseInt(coordinates.group(3))).message());
             } catch (NumberFormatException ex) {
                 reply("坐标超出允许范围");
             }
             return true;
         }
-        if (body.matches(".*-?[0-9]+[ ]+-?[0-9]+[ ]+-?[0-9]+.*"))
-            return false;
+        if (body.matches(".*-?[0-9]+[ ]+-?[0-9]+[ ]+-?[0-9]+.*")) return false;
+
         Matcher save = SAVE.matcher(body), go = GO.matcher(body), where = WHERE.matcher(body);
         boolean list = body.contains("记住了哪些") || body.contains("地点列表") || body.contains("记忆的地点");
         boolean delete = body.startsWith("忘记") || body.startsWith("删除地点");
         if (!save.find() && !go.find() && !where.find() && !list && !delete) return false;
+
         try {
-            String scope = mc.getCurrentServer() == null ? "singleplayer" : mc.getCurrentServer().ip;
-            Path path = FMLPaths.CONFIGDIR.get().resolve("mcaimod-locations.json");
-            JsonObject root = Files.exists(path)
-                    ? JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject()
-                    : new JsonObject();
-            String key = scope.replaceAll("[^a-zA-Z0-9_.:-]", "_");
-            JsonObject locations = root.has(key) && root.get(key).isJsonObject()
-                    ? root.getAsJsonObject(key) : new JsonObject();
-            String dimension = mc.level.dimension().toString();
+            String dimension = mc.level.dimension().location().toString();
             if (save.matches()) {
                 String name = clean(save.group(1));
-                Player owner = null;
-                for (Player p : mc.level.players()) {
-                    if ("SekaiSaionji".equals(p.getName().getString())) { owner = p; break; }
-                }
+                if (!validName(name)) { reply("地点名称无效"); return true; }
+                Player owner = owner(mc);
                 if (owner == null) { reply("主人不在可见范围内，无法确认位置"); return true; }
-                JsonObject point = new JsonObject();
-                point.addProperty("dimension", dimension);
-                point.addProperty("x", owner.getBlockX());
-                point.addProperty("y", owner.getBlockY());
-                point.addProperty("z", owner.getBlockZ());
-                locations.add(name, point);
-                root.add(key, locations);
-                Files.writeString(path, GSON.toJson(root), StandardCharsets.UTF_8);
-                reply("记住啦！" + name + "：" + dimension + " (" + owner.getBlockX() + ", " + owner.getBlockY() + ", " + owner.getBlockZ() + ")");
+                KurumiJourneyMapBridge.save(name, dimension,
+                        owner.getBlockX(), owner.getBlockY(), owner.getBlockZ());
+                reply("已保存到 JourneyMap：" + name + " (" + owner.getBlockX() + ", "
+                        + owner.getBlockY() + ", " + owner.getBlockZ() + ")");
                 return true;
             }
+            List<KurumiJourneyMapBridge.Point> points = KurumiJourneyMapBridge.list();
             if (list) {
-                reply("已记住的地点：" + (locations.size() == 0 ? "暂无" : String.join("、", locations.keySet())));
+                String names = points.stream().map(KurumiJourneyMapBridge.Point::name).distinct()
+                        .reduce((a, b) -> a + "、" + b).orElse("暂无");
+                reply("JourneyMap 路径点：" + names);
                 return true;
             }
             if (delete) {
                 String name = clean(body.replaceFirst("^(忘记|删除地点)", ""));
-                if (locations.remove(name) == null) reply("没有找到地点：" + name);
-                else {
-                    root.add(key, locations);
-                    Files.writeString(path, GSON.toJson(root), StandardCharsets.UTF_8);
-                    reply("已忘记地点：" + name);
-                }
+                if (!validName(name)) { reply("地点名称无效"); return true; }
+                if (KurumiJourneyMapBridge.deleteOwned(name, dimension)) reply("已从 JourneyMap 删除地点：" + name);
+                else reply("没有找到本维度由 Kurumi 创建的地点：" + name
+                        + "（不会删除你手动创建的路径点）");
                 return true;
             }
             String name = clean(go.matches() ? go.group(1) : where.matches() ? where.group(1) : "");
-            if (!locations.has(name)) { reply("还没有记住地点：" + name); return true; }
-            JsonObject point = locations.getAsJsonObject(name);
-            String targetDimension = point.get("dimension").getAsString();
-            int x = point.get("x").getAsInt(), y = point.get("y").getAsInt(), z = point.get("z").getAsInt();
-            if (go.matches()) {
-                if (!dimension.equals(targetDimension)) reply(name + " 位于 " + targetDimension + "，不能直接跨维度导航");
-                else reply(BaritoneBridge.gotoCoordinates(x, y, z).message());
-            } else reply(name + " 在 " + targetDimension + " (" + x + ", " + y + ", " + z + ")");
+            if (!validName(name)) { reply("地点名称无效"); return true; }
+            List<KurumiJourneyMapBridge.Point> matches = KurumiWaypointSelection.find(points, name, dimension);
+            if (matches.isEmpty()) { reply("JourneyMap 中没有地点：" + name); return true; }
+            if (matches.size() != 1) { reply("有多个同名路径点“" + name + "”，请在 JourneyMap 中区分名称"); return true; }
+            var point = matches.get(0);
+            if (go.matches()) reply(navigate(point).message());
+            else reply(name + " 在 " + point.dimension() + " (" + point.x() + ", "
+                    + point.y() + ", " + point.z() + ")");
             return true;
-        } catch (Exception ex) {
-            reply("地点记忆读取或保存失败");
+        } catch (IllegalStateException | LinkageError ex) {
+            reply("JourneyMap 地点操作失败：" + ex.getMessage());
+            return true;
+        } catch (RuntimeException ex) {
+            reply("JourneyMap 地点操作失败，请检查该 Mod 是否正确加载");
             return true;
         }
     }
 
-    /** Resolve a saved name in the current server and dimension and start navigation. */
+    /** Resolve a name from JourneyMap for the agent's existing gotoNamed action. */
     public static BaritoneBridge.Result gotoNamed(String name) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null || mc.getConnection() == null)
             return new BaritoneBridge.Result(false, "游戏世界尚未就绪");
         String cleaned = clean(name);
-        if (cleaned.isEmpty() || cleaned.length() > 24)
-            return new BaritoneBridge.Result(false, "地点名称无效");
+        if (!validName(cleaned)) return new BaritoneBridge.Result(false, "地点名称无效");
         try {
-            String scope = mc.getCurrentServer() == null ? "singleplayer" : mc.getCurrentServer().ip;
-            String key = scope.replaceAll("[^a-zA-Z0-9_.:-]", "_");
-            Path path = FMLPaths.CONFIGDIR.get().resolve("mcaimod-locations.json");
-            if (!Files.exists(path)) return new BaritoneBridge.Result(false, "还没有记住地点：" + cleaned);
-            JsonObject root = JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject();
-            if (!root.has(key) || !root.get(key).isJsonObject()
-                    || !root.getAsJsonObject(key).has(cleaned))
-                return new BaritoneBridge.Result(false, "还没有记住地点：" + cleaned);
-            JsonObject point = root.getAsJsonObject(key).getAsJsonObject(cleaned);
-            if (!mc.level.dimension().toString().equals(point.get("dimension").getAsString()))
-                return new BaritoneBridge.Result(false, "地点位于其他维度，无法直接寻路：" + cleaned);
-            return BaritoneBridge.gotoCoordinates(point.get("x").getAsInt(),
-                    point.get("y").getAsInt(), point.get("z").getAsInt());
-        } catch (RuntimeException | java.io.IOException ex) {
-            return new BaritoneBridge.Result(false, "地点数据读取失败");
+            String dimension = mc.level.dimension().location().toString();
+            List<KurumiJourneyMapBridge.Point> matches = KurumiWaypointSelection.find(
+                    KurumiJourneyMapBridge.list(), cleaned, dimension);
+            if (matches.isEmpty()) return new BaritoneBridge.Result(false, "JourneyMap 中没有地点：" + cleaned);
+            if (matches.size() != 1)
+                return new BaritoneBridge.Result(false, "同名 JourneyMap 路径点不止一个，请使用不同名称区分");
+            return navigate(matches.get(0));
+        } catch (IllegalStateException | LinkageError ex) {
+            return new BaritoneBridge.Result(false, "JourneyMap 地点不可用：" + ex.getMessage());
+        } catch (RuntimeException ex) {
+            return new BaritoneBridge.Result(false, "JourneyMap 地点读取失败");
         }
     }
 
-    /** Read-only grounded location context for the model; never infer coordinates. */
+    /** Read-only world and waypoint context for the model. */
     public static String contextForModel() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return "世界尚未加载";
-        StringBuilder context = new StringBuilder();
-        context.append("Kurumi当前位置：")
+        StringBuilder context = new StringBuilder("Kurumi当前位置：")
                 .append(mc.player.getBlockX()).append(", ")
                 .append(mc.player.getBlockY()).append(", ")
                 .append(mc.player.getBlockZ()).append("；维度：")
                 .append(mc.level.dimension()).append("。");
-        Player owner = null;
-        for (Player p : mc.level.players()) {
-            if ("SekaiSaionji".equals(p.getName().getString())) { owner = p; break; }
-        }
+        Player owner = owner(mc);
         if (owner == null) context.append("主人当前坐标不可见；不要猜测。");
         else context.append("主人当前位置：")
                 .append(owner.getBlockX()).append(", ")
                 .append(owner.getBlockY()).append(", ")
                 .append(owner.getBlockZ()).append("。");
         try {
-            String scope = mc.getCurrentServer() == null ? "singleplayer" : mc.getCurrentServer().ip;
-            String key = scope.replaceAll("[^a-zA-Z0-9_.:-]", "_");
-            Path path = FMLPaths.CONFIGDIR.get().resolve("mcaimod-locations.json");
-            if (!Files.exists(path)) return context.append("尚无已保存地点。").toString();
-            JsonObject root = JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject();
-            if (!root.has(key) || !root.get(key).isJsonObject())
-                return context.append("尚无当前服务器已保存地点。").toString();
-            JsonObject locations = root.getAsJsonObject(key);
-            context.append("当前服务器已保存地点（仅供查询或规划，不能跨维度直接寻路）：");
+            List<KurumiJourneyMapBridge.Point> points = KurumiJourneyMapBridge.list();
+            if (points.isEmpty()) return context.append("JourneyMap 尚无已保存路径点。").toString();
+            context.append("JourneyMap 已保存路径点（包括主人手动添加的；不能跨维度直接寻路）：");
             int count = 0;
-            for (Map.Entry<String, com.google.gson.JsonElement> entry : locations.entrySet()) {
-                if (count++ >= 20) { context.append("其余地点省略；"); break; }
-                if (!entry.getValue().isJsonObject()) continue;
-                JsonObject point = entry.getValue().getAsJsonObject();
-                if (!point.has("dimension") || !point.has("x") || !point.has("y") || !point.has("z")) continue;
-                context.append(entry.getKey()).append("=")
-                        .append(point.get("dimension").getAsString()).append(" (")
-                        .append(point.get("x").getAsInt()).append(",")
-                        .append(point.get("y").getAsInt()).append(",")
-                        .append(point.get("z").getAsInt()).append("); ");
+            for (var point : points) {
+                if (count++ >= 40) { context.append("其余路径点省略；"); break; }
+                context.append(point.name()).append("=").append(point.dimension()).append(" (")
+                        .append(point.x()).append(",").append(point.y()).append(",")
+                        .append(point.z()).append("); ");
             }
-        } catch (RuntimeException | java.io.IOException ex) {
-            context.append("地点文件暂时无法读取；");
+        } catch (IllegalStateException | LinkageError ex) {
+            context.append("JourneyMap 尚未就绪，地点记忆不可用；");
+        } catch (RuntimeException ex) {
+            context.append("JourneyMap 路径点暂时无法读取；");
         }
         return context.toString();
     }
 
-    private static String clean(String text) {
-        return text.strip().replaceAll("[。！？!?，,]+$", "").strip();
+    private static BaritoneBridge.Result navigate(KurumiJourneyMapBridge.Point point) {
+        Minecraft mc = Minecraft.getInstance();
+        if (!mc.level.dimension().location().toString().equals(point.dimension()))
+            return new BaritoneBridge.Result(false, point.name() + " 在 " + point.dimension() + "，不能跨维度直接导航");
+        return BaritoneBridge.gotoCoordinates(point.x(), point.y(), point.z());
     }
 
-    private static void reply(String text) {
-        Minecraft.getInstance().getConnection().sendChat("" + text);
+    private static Player owner(Minecraft mc) {
+        for (Player player : mc.level.players())
+            if ("SekaiSaionji".equals(player.getName().getString())) return player;
+        return null;
+    }
+
+    private static boolean validName(String name) {
+        return !name.isBlank() && name.length() <= 24;
+    }
+
+    private static String clean(String text) {
+        return text == null ? "" : text.strip().replaceAll("[。！？!?，,]+$", "").strip();
+    }
+
+    private static void reply(String message) {
+        Minecraft.getInstance().getConnection().sendChat(message);
     }
 
     private KurumiLocationMemory() {}

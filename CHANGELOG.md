@@ -7,6 +7,11 @@
 
 ### 新增
 
+- 地点记忆现统一使用 JourneyMap 6.0 API v2：保留原来的“记住 / 地点列表 / 在哪里 / 去 / 忘记”
+  语句和 `gotoNamed` 导航，但读取的都是 JourneyMap 路径点（包括玩家手动创建的）。
+  Kurumi 新增的路径点持久保存在 JourneyMap；“忘记”仅能删除当前维度由 mcaimod 创建的路径点。
+  同名地点和跨维度导航会报告明确错误。旧版 `config/mcaimod-locations.json` 不迁移、不读取、不删除。
+  构建时从 JourneyMap Maven 获取 `journeymap-api-neoforge:26.2-2.0.0`，仅用于编译，运行时由 JourneyMap 提供。
 - Windows 部署脚本 install-mod.ps1：按照 gradle.properties 中的版本号，从 build/libs 选择对应的 mcaimod JAR
   移动到指定 NeoForge 26.2.0.93 实例的 mods 文件夹，覆盖同名文件，并清除同一 Mod 的
   其他旧版本 JAR 以避免重复加载；保留其他 Mod。

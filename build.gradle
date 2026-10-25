@@ -28,6 +28,10 @@ sourceSets.main.resources {
 
 repositories {
     mavenCentral()
+    maven {
+        name = 'JourneyMap API'
+        url = 'https://maven.blamejared.com'
+    }
 }
 
 base {
@@ -111,6 +115,8 @@ configurations {
 }
 
 dependencies {
+    // API is supplied at runtime by JourneyMap itself (optional integration).
+    compileOnly 'info.journeymap:journeymap-api-neoforge:26.2-2.0.0'
     // Official DashScope Java SDK for the Qwen multimodal API.
     jarJar(implementation('com.alibaba:dashscope-sdk-java:2.23.3')) {
         version {
