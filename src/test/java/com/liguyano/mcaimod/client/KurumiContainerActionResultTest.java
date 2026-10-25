@@ -19,6 +19,7 @@ class KurumiContainerActionResultTest {
         assertTrue(KurumiScriptParser.parse("result = put_item()").isEmpty());
         assertTrue(KurumiScriptParser.parse("result = put_item(\"minecraft:bread\")").isEmpty());
         assertTrue(KurumiScriptParser.parse("result = take_item(\"minecraft:bread\")").isEmpty());
+        assertTrue(KurumiScriptParser.parse("result = put_item(\"minecraft:bread\",1,\"auto\",\"extra\")").isEmpty());
     }
 
     @Test void preservesUnassignedContainerTransfers() {

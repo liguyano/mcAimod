@@ -7,6 +7,9 @@
 
 ### 新增
 
+- 修复带可选槽位参数的赋值调用 `result = put_item("minecraft:wheat",22,"grid_1")`
+  被误判为参数错误的问题；`put_item` 允许2或3个参数，`take_item` 仍要求2个。
+  复用现有失败测试并增加拒绝多余参数的回归断言；由用户本地运行 Gradle。
 - 所有受支持的游戏动作可通过赋值取得 `success`、`completed`、`message`，如
   `accepted = tpa_accept()`；未确认最终结果的动作保持 `completed=false`。
   增加解析器测试与受限操作权限校验，Gradle 构建仍由用户本地执行。

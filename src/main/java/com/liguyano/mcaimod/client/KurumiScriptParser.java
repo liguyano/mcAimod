@@ -140,9 +140,11 @@ public final class KurumiScriptParser {
                 Matcher m = ACTION_ASSIGN.matcher(code); m.matches();
                 if ("hold_use_item".equals(m.group(2)) && !validHoldArgs(m.group(3)))
                     throw new IllegalArgumentException("hold_use_item requires item ID and seconds");
-                if (("put_item".equals(m.group(2)) || "take_item".equals(m.group(2)))
-                        && !validHoldArgs(m.group(3)))
-                    throw new IllegalArgumentException(m.group(2) + " requires item ID and quantity");
+                if ("take_item".equals(m.group(2)) && !validHoldArgs(m.group(3)))
+                    throw new IllegalArgumentException("take_item requires item ID and quantity");
+                if ("put_item".equals(m.group(2)) && !m.group(3).matches(
+                        "(?s)\\s*\\S[^,]*,\\s*\\S[^,]*(?:,\\s*\\S[^,]*)?\\s*"))
+                    throw new IllegalArgumentException("put_item requires item ID, quantity and optional slot");
                 node.addProperty("op", "EXPR_ACTION_ASSIGN");
                 node.addProperty("name", m.group(1));
                 node.addProperty("method", m.group(2));
