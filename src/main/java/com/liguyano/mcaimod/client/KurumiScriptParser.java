@@ -287,7 +287,7 @@ public final class KurumiScriptParser {
                 step.addProperty("action", "PLACE_BLOCK");
                 step.addProperty("item_id", m.group(1));
                 if (m.group(2) != null) {
-                    step.addProperty("x", m.group(2) == null ? 0 : Integer.parseInt(m.group(2)));
+                    step.addProperty("x", Integer.parseInt(m.group(2)));
                     step.addProperty("y", Integer.parseInt(m.group(3)));
                     step.addProperty("z", Integer.parseInt(m.group(4)));
                 }
@@ -303,7 +303,7 @@ public final class KurumiScriptParser {
                     Matcher m = TAKE_ITEM.matcher(code); m.matches();
                     step.addProperty("action", "TAKE_ITEM");
                     step.addProperty("item_id", m.group(1));
-                    step.addProperty("quantity", Integer.parseInt(m.group(2)));
+                    step.addProperty("quantity", m.group(2) == null ? 0 : Integer.parseInt(m.group(2)));
                 } else {
                     Matcher m = PUT_ITEM.matcher(code); m.matches();
                     step.addProperty("action", "PUT_ITEM");
