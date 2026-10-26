@@ -8,19 +8,12 @@ import java.io.IOException;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.SecureRandom;
-import java.util.Base64;
 import java.util.List;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ConcurrentHashMap;
-import net.neoforged.fml.loading.FMLPaths;
 
 /** LAN-accessible dashboard; game actions are dispatched onto the Minecraft client thread. */
 public final class KurumiWebMonitor {
@@ -33,128 +26,6 @@ public final class KurumiWebMonitor {
     private static String nextRequirement = "";
     private static long nextId = 1;
     private static HttpServer server;
-    private static final long SESSION_TTL_MILLIS = 8L * 60 * 60 * 1000;
-    private static final SecureRandom RANDOM = new SecureRandom();
-    private static final Map<String, Long> SESSIONS = new ConcurrentHashMap<>();
-    private static final Map<String, LoginAttempt> LOGIN_ATTEMPTS = new ConcurrentHashMap<>();
-
-    private static final class LoginAttempt {
-        private int failures;
-        private long windowStartedAt;
-        private long blockedUntil;
-        synchronized boolean blocked(long now) { return now < blockedUntil; }
-        synchronized void failure(long now) {
-            if (now - windowStartedAt > 300_000L) { failures = 0; windowStartedAt = now; }
-            failures++;
-            if (failures >= 5) { blockedUntil = now + 60_000L; failures = 0; windowStartedAt = now; }
-        }
-        synchronized void success() { failures = 0; windowStartedAt = System.currentTimeMillis(); blockedUntil = 0; }
-    }
-
-    private static String configuredPassword() {
-        String env = System.getenv("MCAIMOD_WEB_PASSWORD");
-        if (env != null && !env.isBlank()) return env;
-        Path config = FMLPaths.CONFIGDIR.get().resolve("mcaimod-web.json");
-        if (!Files.isRegularFile(config)) return "";
-        try {
-            JsonObject json = JsonParser.parseString(Files.readString(config, StandardCharsets.UTF_8)).getAsJsonObject();
-            return json.has("password") && !json.get("password").isJsonNull()
-                    ? json.get("password").getAsString() : "";
-        } catch (Exception ex) {
-            System.err.println("Kurumi web password config error: " + ex.getMessage());
-            return "";
-        }
-    }
-
-    private static boolean authorized(HttpExchange exchange) {
-        String token = exchange.getRequestHeaders().getFirst("X-Kurumi-Auth");
-        if (token == null || token.isBlank()) return false;
-        Long expiresAt = SESSIONS.get(token);
-        if (expiresAt == null) return false;
-        if (expiresAt < System.currentTimeMillis()) {
-            SESSIONS.remove(token);
-            return false;
-        }
-        return true;
-    }
-
-    private static boolean requireAuth(HttpExchange exchange) throws IOException {
-        if (authorized(exchange)) return true;
-        JsonObject error = new JsonObject();
-        error.addProperty("error", "登录已失效，请重新输入密码");
-        reply(exchange, 401, error);
-        return false;
-    }
-
-    private static boolean constantTimeEquals(String a, String b) {
-        if (a == null || b == null) return false;
-        return MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static void handleLogin(HttpExchange exchange) throws IOException {
-        if (!"POST".equals(exchange.getRequestMethod())) {
-            exchange.sendResponseHeaders(405, -1);
-            exchange.close();
-            return;
-        }
-        String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
-        if (!"1".equals(exchange.getRequestHeaders().getFirst("X-Kurumi-Web"))
-                || contentType == null || !contentType.startsWith("application/json")) {
-            JsonObject error = new JsonObject();
-            error.addProperty("error", "请通过 Kurumi Web 登录表单提交请求");
-            reply(exchange, 400, error);
-            return;
-        }
-        String expected = configuredPassword();
-        if (expected.isBlank()) {
-            JsonObject error = new JsonObject();
-            error.addProperty("error", "尚未配置密码：请在 Minecraft 的 config/mcaimod-web.json 中设置 password");
-            reply(exchange, 503, error);
-            return;
-        }
-        String remote = exchange.getRemoteAddress().getAddress().getHostAddress();
-        LoginAttempt attempt = LOGIN_ATTEMPTS.computeIfAbsent(remote, ignored -> new LoginAttempt());
-        long now = System.currentTimeMillis();
-        if (attempt.blocked(now)) {
-            JsonObject error = new JsonObject();
-            error.addProperty("error", "登录尝试过多，请一分钟后再试");
-            reply(exchange, 429, error);
-            return;
-        }
-        try {
-            byte[] bytes = exchange.getRequestBody().readNBytes(4097);
-            if (bytes.length > 4096) {
-                JsonObject error = new JsonObject();
-                error.addProperty("error", "请求内容过长");
-                reply(exchange, 413, error);
-                return;
-            }
-            JsonObject payload = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject();
-            String supplied = payload.has("password") ? payload.get("password").getAsString() : "";
-            if (!constantTimeEquals(expected, supplied)) {
-                attempt.failure(now);
-                JsonObject error = new JsonObject();
-                error.addProperty("error", "密码错误");
-                reply(exchange, 401, error);
-                return;
-            }
-            attempt.success();
-            SESSIONS.entrySet().removeIf(entry -> entry.getValue() < now);
-            byte[] tokenBytes = new byte[32];
-            RANDOM.nextBytes(tokenBytes);
-            String token = Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
-            SESSIONS.put(token, now + SESSION_TTL_MILLIS);
-            JsonObject result = new JsonObject();
-            result.addProperty("token", token);
-            result.addProperty("expiresInSeconds", SESSION_TTL_MILLIS / 1000);
-            reply(exchange, 200, result);
-        } catch (RuntimeException ex) {
-            JsonObject error = new JsonObject();
-            error.addProperty("error", "请求 JSON 格式错误");
-            reply(exchange, 400, error);
-        }
-    }
-
     private static JsonObject skillJson(KurumiSkillMemory.Skill skill) {
         JsonObject item = new JsonObject();
         item.addProperty("name", skill.name());
@@ -175,7 +46,6 @@ public final class KurumiWebMonitor {
             exchange.close();
             return;
         }
-        if (!requireAuth(exchange)) return;
         KurumiSkillMemory store = KurumiSkillMemory.configured();
         if ("GET".equals(method)) {
             JsonObject result = new JsonObject();
@@ -380,7 +250,6 @@ public final class KurumiWebMonitor {
         // The page may be opened through any LAN IP or host name. Do not restrict
         // Host/Origin/Sec-Fetch-Site to localhost, but keep the explicit page header
         // so unrelated sites cannot send browser requests to run game actions.
-        if (!requireAuth(exchange)) return;
         String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
         String gate = exchange.getRequestHeaders().getFirst("X-Kurumi-Web");
         if (!"1".equals(gate)
@@ -417,14 +286,12 @@ public final class KurumiWebMonitor {
         if (server != null) return;
         try {
             server = HttpServer.create(new InetSocketAddress("0.0.0.0", 8765), 0);
-            server.createContext("/api/login", KurumiWebMonitor::handleLogin);
             server.createContext("/api/skills", KurumiWebMonitor::handleSkills);
             server.createContext("/api/generate", exchange -> handlePost(exchange, true));
             server.createContext("/api/run", exchange -> handlePost(exchange, false));
             server.createContext("/api/status", exchange -> {
                 if (!"GET".equals(exchange.getRequestMethod())) { exchange.sendResponseHeaders(405, -1); exchange.close(); return; }
-                if (!requireAuth(exchange)) return;
-                exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+                        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
                 exchange.getResponseHeaders().set("Cache-Control", "no-store");
                 byte[] bytes = snapshot().getBytes(StandardCharsets.UTF_8);
                 exchange.sendResponseHeaders(200, bytes.length);
@@ -485,15 +352,6 @@ public final class KurumiWebMonitor {
         @media(max-width:750px){.cols{grid-template-columns:1fr}body{padding:12px}}
 
         </style></head><body>
-        <section id="loginOverlay" class="login-overlay">
-          <form id="loginForm" class="login-box">
-            <h1>Kurumi Web 登录</h1>
-            <p class="muted">请输入面板密码。登录后可查看任务、管理技能与快捷指令。</p>
-            <label for="loginPassword">密码</label>
-            <input id="loginPassword" type="password" autocomplete="current-password" required>
-            <div class="controls"><button id="loginBtn" type="submit">登录</button><span id="loginFeedback" class="feedback"></span></div>
-          </form>
-        </section>
         <header><h1>Kurumi · 任务监测</h1><span class="muted" id="connection">连接中…</span></header>
         <div class="cols">
           <section class="card">
@@ -531,38 +389,13 @@ public final class KurumiWebMonitor {
           </section>
           <section class="card">
             <div class="section-head"><h3>已保存技能</h3><button id="refreshSkillsBtn" class="secondary" type="button">刷新</button></div>
-            <div id="skillList" class="empty">登录后加载技能列表</div>
+            <div id="skillList" class="empty">正在加载技能列表</div>
           </section>
         </div>
         <script>
         function el(tag,cls,content){const n=document.createElement(tag);if(cls)n.className=cls;if(content!==undefined)n.textContent=String(content);return n;}
         const logViews=new Map();
-        let authToken=sessionStorage.getItem('kurumiAuthToken')||'';
-        function showLogin(message=''){
-          authToken='';sessionStorage.removeItem('kurumiAuthToken');
-          document.getElementById('loginOverlay').hidden=false;
-          document.getElementById('loginFeedback').textContent=message;
-          document.getElementById('connection').textContent='需要登录';
-        }
-        function showDashboard(){
-          document.getElementById('loginOverlay').hidden=true;
-          document.getElementById('loginFeedback').textContent='';
-        }
-        function authHeaders(extra={}){return {...extra,'X-Kurumi-Auth':authToken};}
-        document.getElementById('loginForm').addEventListener('submit',async event=>{
-          event.preventDefault();
-          const button=document.getElementById('loginBtn');button.disabled=true;
-          try{
-            const response=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json','X-Kurumi-Web':'1'},
-              body:JSON.stringify({password:document.getElementById('loginPassword').value})});
-            const data=await response.json();
-            if(!response.ok||!data.token)throw Error(data.error||'登录失败');
-            authToken=data.token;sessionStorage.setItem('kurumiAuthToken',authToken);
-            document.getElementById('loginPassword').value='';
-            showDashboard();await refresh();await loadSkills();
-          }catch(error){document.getElementById('loginFeedback').textContent=String(error.message||error);}
-          finally{button.disabled=false;}
-        });
+        function authHeaders(extra={}){return extra;}
         function rememberLogViews(){
           for(const card of document.querySelectorAll('#pending article.card, #current article.card, #history article.card')){
             const details=card.querySelector('details[data-task-id]');
@@ -631,11 +464,11 @@ public final class KurumiWebMonitor {
           return card;
         }
         async function loadSkills(){
-          if(!authToken)return;
+          
           const list=document.getElementById('skillList');
           try{
             const response=await fetch('/api/skills',{headers:authHeaders(),cache:'no-store'});
-            if(response.status===401){showLogin('登录已失效，请重新登录');return;}
+            
             const data=await response.json();
             if(!response.ok)throw Error(data.error||'读取技能失败');
             renderSkills(data.skills||[]);
@@ -671,7 +504,7 @@ public final class KurumiWebMonitor {
                 const response=await fetch('/api/skills',{method:'POST',headers:authHeaders({'Content-Type':'application/json','X-Kurumi-Web':'1'}),
                   body:JSON.stringify({action:'delete',name:skill.name})});
                 const data=await response.json();
-                if(response.status===401){showLogin('登录已失效，请重新登录');return;}
+                
                 if(!response.ok||!data.accepted)throw Error(data.error||'删除失败');
                 document.getElementById('skillFeedback').textContent='已删除 '+skill.name;
                 await loadSkills();
@@ -691,7 +524,7 @@ public final class KurumiWebMonitor {
             const response=await fetch('/api/skills',{method:'POST',headers:authHeaders({'Content-Type':'application/json','X-Kurumi-Web':'1'}),
               body:JSON.stringify({action:'save',name,title,description,triggers,code})});
             const data=await response.json();
-            if(response.status===401){showLogin('登录已失效，请重新登录');return;}
+            
             if(!response.ok||!data.accepted)throw Error(data.error||'保存失败');
             feedback.textContent='已保存 '+name+'（v'+(data.skill?.version||1)+'）';
             await loadSkills();
@@ -704,10 +537,10 @@ public final class KurumiWebMonitor {
         });
         document.getElementById('refreshSkillsBtn').addEventListener('click',loadSkills);
         async function refresh(){
-          if(!authToken)return;
+          
           try{
             const response=await fetch('/api/status',{headers:authHeaders(),cache:'no-store'});
-            if(response.status===401){showLogin('登录已失效，请重新登录');return;}
+            
             if(!response.ok)throw Error(response.status);
             const data=await response.json();
             rememberLogViews();
@@ -766,7 +599,7 @@ public final class KurumiWebMonitor {
           if(!confirm('这段脚本会在当前 Minecraft 世界中执行真实操作。确定执行吗？'))return;
           submit('/api/run',{script},document.getElementById('runStatus'));
         });
-        if(authToken){showDashboard();refresh();loadSkills();}else{showLogin();}
+        refresh();loadSkills();
         setInterval(refresh,1000);
         </script></body></html>
         """;
