@@ -349,6 +349,17 @@ return "指令处理结束"
 
 ### 主人批准的长期技能与快捷指令（试验版）
 
+### 脚本主动异常：`raise Exception(...)`
+
+受限伪代码支持 `raise Exception("失败原因")` 和 `raise Exception(result.message)`，可放在 `if`、`for`、`while` 和 `def` 函数内部。只有一个字符串字面量或变量属性路径可作为参数；不支持其他异常类、任意 Python 执行或多参数异常。执行到此语句时当前脚本**立即以失败状态结束**，日志会包含源码行号和异常原因，后续由 AI 根据实际报告决定是否重新规划，不会自动重复失败操作。此版本的 `observe()` 暂时仍会交还控制权；非阻塞观察将在兼容性处理后单独上线。
+
+```python
+for i in range(10):
+    result = pickup_item_all("minecraft:wheat")
+    if not result.success:
+        raise Exception(result.message)
+```
+
 Kurumi 可在实际验证操作成功之后，建议将可重复使用的顶层 `def` 函数保存成长期技能，并提出诸如「捡尸体」的完整快捷触发词。**只有主人回复「保存」才会写入** `config/mcaimod-skills.json`；回复「不保存」或「取消」即放弃。修改已有技能时保存新版本，并记录至多五份历史代码。
 
 每轮大模型只会收到已存技能的英文名称与标题，不把整套脚本塞进提示词；需要查看时可在受限脚本里调用 `skill = get_skill("loot_corpse")`、`observe(skill)` 获取指定源码，再规划后续动作。

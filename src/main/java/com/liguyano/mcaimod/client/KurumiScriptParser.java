@@ -409,6 +409,15 @@ public final class KurumiScriptParser {
             } else if (code.equals("continue")) {
                 if (loopDepth == 0) throw new IllegalArgumentException("continue outside loop");
                 node.addProperty("op", "CONTINUE");
+            } else if (code.startsWith("raise ")) {
+                if (!code.startsWith("raise Exception(") || !code.endsWith(")"))
+                    throw new IllegalArgumentException("只支持 raise Exception(消息)");
+                String expression = code.substring("raise Exception(".length(), code.length() - 1).strip();
+                if (!expression.matches("\"[^\"\\r\\n]{1,240}\"")
+                        && !expression.matches("[a-z][a-z0-9_]{0,23}(?:\\.[a-z][a-z0-9_]{0,23})*"))
+                    throw new IllegalArgumentException("raise Exception 只接受一个字符串或变量属性");
+                node.addProperty("op", "RAISE");
+                node.addProperty("expression", expression);
             } else if (code.equals("return") || code.matches("return\\s+.{1,500}")) {
                 node.addProperty("op", "RETURN");
                 node.addProperty("expression", code.equals("return") ? "" : code.substring(7).trim());

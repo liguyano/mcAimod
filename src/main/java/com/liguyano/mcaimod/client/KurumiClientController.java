@@ -526,6 +526,8 @@ public final class KurumiClientController {
                         + "固定次数任务使用 for i in range(4):，其下各语句缩进4格；不支持 repeat(n):。"
                         + "也支持运行时 for i in range(10):、range(1,6)、range(9,0,-2)、range(count)，接受整数或整数变量，最多100轮；"
                         + "支持顶层 def function(arg): 定义函数，value = function(参数) 取得 return 的返回值；函数局部变量不污染调用者，禁止直接或间接递归，重复请用循环。"
+                        + "遇到脚本无法自行处理的错误，可写 raise Exception(\"明确原因\") 或 raise Exception(result.message)，"
+                        + "立即以失败状态停止当前脚本，并把真实原因及行号交给下一轮 AI 分析；禁止无依据自动重试。"
                         + "for/while 内可使用 break、continue，循环变量可以在条件和工具参数中使用。"
                         + "while 循环最多20轮，任务最多20分钟、动作最多200个；不确定时先观察，不要假称动作已完成。"));
                 conversation.add(new ChatMessage("system",
@@ -691,7 +693,8 @@ public final class KurumiClientController {
                 + "observe(check_nearby_chest(\"minecraft:diamond\")) 或 "
                 + "observe(get_nearby_chest_result(\"minecraft:diamond\"))。"
                 + "需要内部观察时优先使用 value = get_inventory()、observe(value)，不要将原始 JSON 用 talk 发到公屏。"
-                + "observe(value) 会立即暂停脚本并将观察内容发送给你，后面的脚本语句不会执行。"
+                + "当前 observe(value) 仍会结束本段脚本并交还控制权；正常重复操作优先在 for/while 内使用结果字段和局部检查，"
+                + "脚本能够自行处理的失败不要频繁 observe()；无法处理时用 raise Exception(原因) 主动交给 AI。"
                 + "talk 仅用来向玩家自然语言发言，物品太多可分多条，每条不超过120字符；不得自行编造。"
                 + "每条脚本最多12条 talk，发送间隔至少2秒，长结果可能截断。"
                 + "若无法执行用户要求，仍使用 EXECUTE_SCRIPT 并通过 talk 说明原因。"));

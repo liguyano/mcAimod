@@ -229,6 +229,15 @@ public final class KurumiTaskPlanner {
                 if (expression.length() > 500) throw new IllegalArgumentException("return too long");
                 statements.add(new Statement(op, new Step(op, expression, 1, null, null, null, ""),
                         null, List.of(), List.of()));
+            } else if ("RAISE".equals(op)) {
+                String expression = node.get("expression").getAsString();
+                if (!expression.matches("\"[^\"\\r\\n]{1,240}\"")
+                        && !expression.matches("[a-z][a-z0-9_]{0,23}(?:\\.[a-z][a-z0-9_]{0,23})*"))
+                    throw new IllegalArgumentException("invalid raise expression");
+                int sourceLine = node.get("line").getAsInt();
+                if (sourceLine < 1 || sourceLine > 8192) throw new IllegalArgumentException("invalid source line");
+                statements.add(new Statement(op, new Step(op, expression, 1, null, null, null,
+                        Integer.toString(sourceLine)), null, List.of(), List.of()));
             } else if ("BREAK".equals(op)) {
                 statements.add(new Statement(op, null, null, List.of(), List.of()));
             } else if ("CONTINUE".equals(op)) {

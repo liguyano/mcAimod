@@ -1147,6 +1147,23 @@ public final class KurumiPseudoExecutor {
                     cancel();
                 }
             }
+            case "RAISE" -> {
+                String detail;
+                try {
+                    detail = KurumiExpressions.text(KurumiExpressions.evaluate(stmt.step().itemId(), variables));
+                } catch (RuntimeException ex) {
+                    detail = "异常原因求值失败：" + ex.getMessage();
+                }
+                detail = detail.replace('\n', ' ').replace('\r', ' ');
+                if (detail.length() > 240) detail = detail.substring(0, 240);
+                String reason = "脚本第 " + stmt.step().target() + " 行主动抛出异常：" + detail;
+                KurumiWebMonitor.log(reason);
+                finishRun(false, reason);
+                running = false;
+                frames.clear();
+                functions.clear();
+                KurumiWebMonitor.state("脚本异常，等待 AI 根据失败原因重新规划");
+            }
             case "BREAK" -> {
                 Frame target = null;
                 for (Frame f : frames) {

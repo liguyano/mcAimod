@@ -7,6 +7,8 @@
 
 ### 新增
 
+- 受限脚本新增 `raise Exception("原因")` 与 `raise Exception(result.message)`，支持在循环、条件、函数内主动以失败状态退出，报告行号和错误原因给下一轮 AI 分析；拒绝任意异常类与任意 Python 调用。新增解析回归测试；Windows JDK 25 构建待验证。
+
 - 新增主人批准的持久化技能库 `mcaimod-skills.json`：模型仅看技能标题索引、按需 `get_skill(name)` 获取源码；通过有验证结果的 finish 建议保存，经主人明确同意后才写入。快捷触发词只做完整匹配，直达受限脚本执行；结果未确认时自动交给 AI 分析失败原因，但不机械重试。加入存储、快捷结果检查回归测试；Windows JDK 25 编译和游戏内测试待验证。
 
 - 移除过时的 `repeat(n):` 脚本语法，统一改用运行时 `for i in range(n):`；同步清理 AI 提示词，
