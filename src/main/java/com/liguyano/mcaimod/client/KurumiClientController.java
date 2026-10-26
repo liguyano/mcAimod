@@ -176,6 +176,7 @@ public final class KurumiClientController {
     }
 
     private static void onAgentTick(net.neoforged.neoforge.client.event.ClientTickEvent.Post event) {
+        BaritoneBridge.tickWaterAvoidance();
         AwaitedStage stage = awaitedStage;
         if (stage == null || stage.generation() != generation) return;
         if (System.currentTimeMillis() - stage.started() > AGENT_DEADLINE_MS) {

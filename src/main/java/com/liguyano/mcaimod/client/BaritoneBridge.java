@@ -1,8 +1,13 @@
 package com.liguyano.mcaimod.client;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Supplier;
+import java.util.function.BooleanSupplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.block.Blocks;
 import java.util.function.Predicate;
 
 /**
@@ -21,6 +26,94 @@ public final class BaritoneBridge {
     }
 
     private static Boolean previousAllowBreak;
+    private static Object previousBlocksToAvoid;
+    private static Runnable waterFallback;
+    private static BooleanSupplier waterGoalReached;
+    private static long lastWaterProgress;
+    private static double lastWaterX, lastWaterZ;
+
+    /** Water is initially impassable to Baritone, then allowed if the land route stalls. */
+    private static boolean setWaterAvoidance(boolean enabled) {
+        try {
+            Class<?> api = Class.forName("baritone.api.BaritoneAPI");
+            Object settings = api.getMethod("getSettings").invoke(null);
+            Object setting = settings.getClass().getField("blocksToAvoid").get(settings);
+            java.lang.reflect.Field value = setting.getClass().getField("value");
+            if (enabled) {
+                if (previousBlocksToAvoid == null) previousBlocksToAvoid = value.get(setting);
+                @SuppressWarnings("unchecked")
+                List<Object> blocks = new ArrayList<>((List<Object>) previousBlocksToAvoid);
+                if (!blocks.contains(Blocks.WATER)) blocks.add(Blocks.WATER);
+                value.set(setting, blocks);
+            } else if (previousBlocksToAvoid != null) {
+                value.set(setting, previousBlocksToAvoid);
+                previousBlocksToAvoid = null;
+            }
+            return true;
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException ex) {
+            return false;
+        }
+    }
+
+    private static Result preferLand(Supplier<Result> start, Runnable fallback, BooleanSupplier reached) {
+        waterFallback = null;
+        waterGoalReached = null;
+        setWaterAvoidance(false);
+        boolean avoidsWater = setWaterAvoidance(true);
+        Result result = start.get();
+        if (!result.success()) {
+            setWaterAvoidance(false);
+            return result;
+        }
+        if (avoidsWater) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player != null) {
+                lastWaterX = mc.player.getX();
+                lastWaterZ = mc.player.getZ();
+                lastWaterProgress = System.currentTimeMillis();
+                waterFallback = fallback;
+                waterGoalReached = reached;
+            }
+        }
+        return new Result(true, result.message() + (avoidsWater
+                ? "；优先陆路，若长时间无法前进则允许涉水" : "；避水选项不可用，使用普通寻路"));
+    }
+
+    /** Called on client ticks even when the agent is waiting for a script result. */
+    public static void tickWaterAvoidance() {
+        Runnable fallback = waterFallback;
+        if (fallback == null) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) {
+            waterFallback = null;
+            waterGoalReached = null;
+            setWaterAvoidance(false);
+            return;
+        }
+        if (waterGoalReached != null && waterGoalReached.getAsBoolean()) {
+            waterFallback = null;
+            waterGoalReached = null;
+            setWaterAvoidance(false);
+            return;
+        }
+        double dx = mc.player.getX() - lastWaterX;
+        double dz = mc.player.getZ() - lastWaterZ;
+        if (dx * dx + dz * dz >= 1.0) {
+            lastWaterX = mc.player.getX();
+            lastWaterZ = mc.player.getZ();
+            lastWaterProgress = System.currentTimeMillis();
+        } else if (shouldFallbackToWater(lastWaterProgress, System.currentTimeMillis())) {
+            waterFallback = null;
+            waterGoalReached = null;
+            setWaterAvoidance(false);
+            fallback.run();
+            KurumiWebMonitor.log("Baritone 陆路寻路停滞，已恢复普通寻路（允许涉水）");
+        }
+    }
+
+    static boolean shouldFallbackToWater(long lastProgress, long now) {
+        return now - lastProgress >= 8_000L;
+    }
 
     /** Scope no-breaking navigation until another explicit action or stop. */
     private static Result setBreakPolicy(boolean navigation) {
@@ -46,6 +139,9 @@ public final class BaritoneBridge {
         if (radius < 4 || radius > 32) {
             return new Result(false, "农作半径必须在 4–32 格之间");
         }
+        waterFallback = null;
+        waterGoalReached = null;
+        setWaterAvoidance(false);
         // Baritone's #farm command uses its own optional arguments. Start with
         // the standard command rather than assuming an unsupported radius syntax.
         Result policy = setBreakPolicy(false);
@@ -56,8 +152,15 @@ public final class BaritoneBridge {
     public static Result gotoCoordinates(int x, int y, int z) {
         Result policy = setBreakPolicy(true);
         if (!policy.success()) return policy;
-        return executeLocal("goto " + x + " " + y + " " + z,
-                "已向 Baritone 发送无破坏寻路到坐标 " + x + " " + y + " " + z);
+        String command = "goto " + x + " " + y + " " + z;
+        String message = "已向 Baritone 发送无破坏寻路到坐标 " + x + " " + y + " " + z;
+        return preferLand(() -> executeLocal(command, message), () -> executeLocal(command, message), () -> {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player == null) return false;
+            double dx = mc.player.getX() - (x + 0.5);
+            double dz = mc.player.getZ() - (z + 0.5);
+            return dx * dx + dz * dz <= 2.25 && Math.abs(mc.player.getY() - y) <= 2;
+        });
     }
 
     /** Relative movement uses the player's actual yaw, not fixed world axes. */
@@ -117,6 +220,10 @@ public final class BaritoneBridge {
         String canonical = match.name();
         Result policy = setBreakPolicy(true);
         if (!policy.success()) return policy;
+        return preferLand(() -> startFollow(canonical), () -> startFollow(canonical), () -> false);
+    }
+
+    private static Result startFollow(String canonical) {
         try {
             Object baritone = primaryBaritone();
             if (baritone == null) return unavailable();
@@ -140,6 +247,9 @@ public final class BaritoneBridge {
 
     /** Bounded resource collection; only known block identifiers can be passed. */
     public static Result mineBlock(String blockId) {
+        waterFallback = null;
+        waterGoalReached = null;
+        setWaterAvoidance(false);
         if (blockId == null || !blockId.matches("minecraft:[a-z0-9_]{1,64}"))
             return new Result(false, "无效的方块名称");
         Result policy = setBreakPolicy(false);
@@ -148,6 +258,9 @@ public final class BaritoneBridge {
     }
 
     public static Result stop() {
+        waterFallback = null;
+        waterGoalReached = null;
+        setWaterAvoidance(false);
         Result stopped = executeLocal("stop", "已向 Baritone 发送 #stop");
         Result restored = setBreakPolicy(false);
         return !restored.success() ? restored : stopped;
