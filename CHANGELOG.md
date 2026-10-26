@@ -5,7 +5,7 @@
 
 ## Unreleased — 2026-10-26
 
-- 新增通用只读查询 `check_inventory_item(item_id)`：只返回 `item_id`、`exists` 和 `scope=player_inventory`，用于确认背包是否拥有指定物品，不返回数量；旧的 `check_inventory_count` 保持兼容并继续提供数量。支持读取 `.exists`，也支持 `observe(check_inventory_item("namespace:item"))`。补充脚本与工具请求解析测试；按用户要求不在本次执行编译。
+- 新增通用只读查询 `check_inventory_item(item_id)`：直接返回玩家背包中该物品的数量（数字；没有时为 `0`），可直接用于 `count > 0`、`count >= 64` 等判断，也支持 `observe(check_inventory_item("namespace:item"))`。旧的 `check_inventory_count` 保持兼容。补充脚本解析与数值比较测试；按用户要求不在本次执行编译。
 - 为 Kurumi 配方查询接入 NeoForge 的 `OnDatapackSyncEvent#sendRecipes` 与客户端 `RecipesReceivedEvent#getRecipeMap`：
   同步工作台、熔炉、烟熏炉、高炉、营火、切石机和锻造台配方；`get_crafting_recipe(item_id)`
   返回匹配的配方 ID、类型、产出数量与材料候选，不再只检查已解锁的客户端配方书。
