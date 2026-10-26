@@ -6,6 +6,12 @@ class KurumiToolRequestTest {
         assertEquals("scan_nearby_entities", KurumiToolRequest.parse("{\"type\":\"tool\",\"tool\":\"scan_nearby_entities\"}"));
         assertEquals("get_inventory", KurumiToolRequest.parse("{\"type\":\"tool\",\"tool\":\"get_inventory\"}"));
     }
+    @Test void acceptsRecipeLookupAndRejectsMalformedItemIds() {
+        assertEquals("get_crafting_recipe:minecraft:chest", KurumiToolRequest.parse(
+                "{\\"type\\":\\"tool\\",\\"tool\\":\\"get_crafting_recipe\\",\\"item_id\\":\\"minecraft:chest\\"}"));
+        assertNull(KurumiToolRequest.parse(
+                "{\\"type\\":\\"tool\\",\\"tool\\":\\"get_crafting_recipe\\",\\"item_id\\":\\"not-an-id\\"}"));
+    }
     @Test void rejectsUnknownTools() {
         assertNull(KurumiToolRequest.parse("{\"type\":\"tool\",\"tool\":\"execute_command\"}"));
         assertNull(KurumiToolRequest.parse("not json"));
