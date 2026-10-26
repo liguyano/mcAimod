@@ -38,6 +38,13 @@ public final class KurumiClientController {
                                 String originalRequest, long generation, int stage,
                                 long started, long scriptId) {}
     private static AwaitedStage awaitedStage;
+    private record QuickStage(KurumiSkillMemory.Skill skill, UUID sender, long generation,
+                              long scriptId, long started) {}
+    private record PendingSkillApproval(UUID sender, KurumiSkillMemory.Skill skill) {}
+    private static final KurumiSkillMemory SKILLS = KurumiSkillMemory.configured();
+    private static QuickStage quickStage;
+    private static PendingSkillApproval pendingSkillApproval;
+    private static boolean verifiedScriptCompletion;
     private static KurumiAgentSession agentSession = new KurumiAgentSession();
     private static UUID activeSender;
     private static long agentStartedAt;
@@ -117,6 +124,9 @@ public final class KurumiClientController {
         generation++;
         requestInFlight = false;
         awaitedStage = null;
+        quickStage = null;
+        pendingSkillApproval = null;
+        verifiedScriptCompletion = false;
         agentSession = new KurumiAgentSession();
         activeSender = null;
         autoFarmEnabled = false;
@@ -148,6 +158,9 @@ public final class KurumiClientController {
         generation++;
         requestInFlight = false;
         awaitedStage = null;
+        quickStage = null;
+        pendingSkillApproval = null;
+        verifiedScriptCompletion = false;
         agentSession = new KurumiAgentSession();
         activeSender = null;
         GATE.reset();
@@ -177,6 +190,48 @@ public final class KurumiClientController {
 
     private static void onAgentTick(net.neoforged.neoforge.client.event.ClientTickEvent.Post event) {
         BaritoneBridge.tickWaterAvoidance();
+        QuickStage quick = quickStage;
+        if (quick != null && quick.generation() == generation) {
+            if (System.currentTimeMillis() - quick.started() > AGENT_DEADLINE_MS) {
+                quickStage = null;
+                KurumiPseudoExecutor.cancel();
+                publicFailure("快捷技能执行超时，已取消");
+                return;
+            }
+            if (KurumiPseudoExecutor.finishedRunId() != quick.scriptId()) return;
+            quickStage = null;
+            String report = KurumiPseudoExecutor.finishedRunReport();
+            boolean succeeded = KurumiPseudoExecutor.finishedRunSucceeded()
+                    && KurumiSkillResultVerifier.confirmed(KurumiPseudoExecutor.variablesSnapshot());
+            if (succeeded) {
+                KurumiWebMonitor.log("快捷技能已验证完成：" + quick.skill().title());
+                notice("快捷技能【" + quick.skill().title() + "】执行成功");
+                finishRequest();
+            } else {
+                KurumiWebMonitor.log("快捷技能未验证成功，转交 AI 分析：" + report);
+                Optional<ModelProfile> profile;
+                try {
+                    profile = ModelProfiles.load(FMLPaths.CONFIGDIR.get().resolve("mcaimod-models.json")).first();
+                } catch (Exception ex) { profile = Optional.empty(); }
+                if (profile.isEmpty()) {
+                    publicFailure("快捷技能未完成，且没有可用模型分析失败原因；详见日志");
+                    return;
+                }
+                agentSession.recordObservation("快捷技能失败", report);
+                List<ChatMessage> recovery = new ArrayList<>();
+                recovery.add(new ChatMessage("system", "你是 Kurumi。严格仅输出 JSON：继续操作用 "
+                        + "{\"type\":\"action\",\"action\":\"EXECUTE_SCRIPT\",\"reply\":\"说明\",\"script\":\"脚本\"}；"
+                        + "完成用 {\"type\":\"finish\",\"reason\":\"原因\"}。"
+                        + "不得把超时或脚本结束当成功，不得自动重复失败动作；先分析真实反馈，由你决定是否需要观察、改写或放弃。"));
+                recovery.add(new ChatMessage("user", "主人快捷指令：" + quick.skill().title()
+                        + "\n技能源码：\n" + quick.skill().code()
+                        + "\n实际执行报告：\n" + report
+                        + "\n返回变量快照：\n" + KurumiPseudoExecutor.variablesSnapshot()
+                        + "\n请诊断失败并决定下一步，不要无依据地报告成功。"));
+                runAgent(profile.get(), recovery, quick.sender(), quick.skill().title(), generation, 1);
+            }
+            return;
+        }
         AwaitedStage stage = awaitedStage;
         if (stage == null || stage.generation() != generation) return;
         if (System.currentTimeMillis() - stage.started() > AGENT_DEADLINE_MS) {
@@ -194,6 +249,8 @@ public final class KurumiClientController {
             return;
         }
         String report = KurumiPseudoExecutor.finishedRunReport();
+        verifiedScriptCompletion = KurumiPseudoExecutor.finishedRunSucceeded()
+                && KurumiSkillResultVerifier.hasVerifiedCompletion(report);
         agentSession.recordObservation("阶段" + stage.stage(), report);
         KurumiWebMonitor.requestReceived(stage.originalRequest() + "（工具反馈阶段 "
                 + stage.stage() + "）");
@@ -317,6 +374,24 @@ public final class KurumiClientController {
             minecraft.getConnection().sendChat("已直接停止当前任务。" + result.message());
             return;
         }
+        if (isOwner && pendingSkillApproval != null
+                && pendingSkillApproval.sender().equals(event.getSender())) {
+            String answer = message.strip();
+            if ("保存".equals(answer) || "记住".equals(answer) || "不保存".equals(answer)
+                    || "取消".equals(answer)) {
+                PendingSkillApproval approval = pendingSkillApproval;
+                pendingSkillApproval = null;
+                if ("保存".equals(answer) || "记住".equals(answer)) {
+                    boolean saved = SKILLS.saveApproved(approval.skill());
+                    minecraft.getConnection().sendChat(saved
+                            ? "主人，已保存技能【" + approval.skill().title() + "】和批准的快捷触发词。"
+                            : "主人，技能保存失败，可能是脚本无效或快捷词重复；请查看日志。");
+                } else {
+                    minecraft.getConnection().sendChat("好的主人，这次不保存技能。");
+                }
+                return;
+            }
+        }
         if (requestInFlight) {
             if (event.getSender().equals(activeSender)
                     && (isOwner || KurumiWakeRouter.mentionsKurumi(message))) {
@@ -347,6 +422,42 @@ public final class KurumiClientController {
             GATE.finish();
             return;
         }
+        if (pending == null && isOwner && SKILLS.findExactTrigger(message).isPresent()) {
+            KurumiSkillMemory.Skill skill = SKILLS.findExactTrigger(message).get();
+            if (!autoFarmEnabled) {
+                minecraft.getConnection().sendChat("主人，请先开启 /kurumi auto on 再执行保存的快捷技能。");
+                GATE.finish();
+                return;
+            }
+            Optional<KurumiTaskPlanner.Program> program = KurumiScriptParser.parse(
+                    skill.code() + "\nresult = " + skill.name() + "()\nobserve(result)");
+            if (program.isEmpty()) {
+                minecraft.getConnection().sendChat("快捷技能源码无法解析，已取消执行：" + KurumiScriptParser.lastError());
+                GATE.finish();
+                return;
+            }
+            if (KurumiPseudoExecutor.busy() || KurumiPlanExecutor.busy() || KurumiLongTaskBridge.busy()) {
+                minecraft.getConnection().sendChat("有任务正在执行，无法启动快捷技能。");
+                GATE.finish();
+                return;
+            }
+            KurumiPseudoExecutor.clearVariables();
+            BaritoneBridge.Result started = KurumiPseudoExecutor.start(program.get());
+            if (!started.success()) {
+                minecraft.getConnection().sendChat("快捷技能未启动：" + started.message());
+                GATE.finish();
+                return;
+            }
+            requestInFlight = true;
+            agentSession = new KurumiAgentSession();
+            activeSender = sender;
+            agentStartedAt = System.currentTimeMillis();
+            verifiedScriptCompletion = false;
+            quickStage = new QuickStage(skill, sender, generation, KurumiPseudoExecutor.activeRunId(), agentStartedAt);
+            KurumiWebMonitor.requestReceived("快捷技能：" + skill.title());
+            minecraft.getConnection().sendChat("主人，已直接执行快捷技能【" + skill.title() + "】。");
+            return;
+        }
         if (pending == null && !KurumiFishingBridge.busy()
                 && KurumiLocationMemory.handle(message, senderNameForMemory)) {
             GATE.finish();
@@ -357,6 +468,7 @@ public final class KurumiClientController {
         activeSender = event.getSender();
         KurumiPseudoExecutor.clearVariables();
         agentStartedAt = System.currentTimeMillis();
+        verifiedScriptCompletion = false;
         String effectiveMessage = pending == null ? message
                 : "继续完成先前任务：" + pending.request() + "。之前询问：" + pending.question()
                 + "。玩家最新回答：" + message
@@ -607,7 +719,15 @@ public final class KurumiClientController {
                                  String message, long requestGeneration, int toolCalls, int formatRetries) {
         Minecraft minecraft = Minecraft.getInstance();
         String snapshot = KurumiPseudoExecutor.variablesSnapshot();
-        PROVIDER.chat(profile, KurumiAgentContext.compact(conversation, message,
+        List<ChatMessage> withSkills = new ArrayList<>(conversation);
+        withSkills.add(new ChatMessage("system", "长期技能索引（只提供标题，不包含代码）：\n" + SKILLS.titles()
+                + "\n要了解某个技能，请先执行只读脚本 skill = get_skill(\"技能英文名\")，随后 observe(skill)，"
+                + "等待返回实际源码后再调用。"
+                + "完成任务且实际有验证成功的操作、技能值得长期复用时，可以在最终 type=finish JSON 中附加"
+                + " suggest_skill 对象，字段为 name、title、description、triggers（建议的快捷触发词数组）、code（只包含顶层 def 函数定义）。"
+                + "主人必须明确回复保存才会持久化；不要自行声称已保存。"
+                + "快捷指令成功后无需模型分析，失败时你要分析反馈，自行决定是否修正，不要机械重试。"));
+        PROVIDER.chat(profile, KurumiAgentContext.compact(withSkills, message,
                         agentSession.buildModelContext() + "\n当前变量快照（可能省略大值，变量本体保留于客户端）："
                         + snapshot.substring(0, Math.min(10000, snapshot.length()))
                         + "\n" + KurumiPlayerDirectory.modelContext()))
@@ -633,6 +753,17 @@ public final class KurumiClientController {
                             appendPendingMessages(next);
                             runAgent(profile, next, sender, message, requestGeneration, toolCalls, 0);
                         } else {
+                            if (verifiedScriptCompletion && "SekaiSaionji".equals(
+                                    minecraft.getConnection().getPlayerInfo(sender) == null ? ""
+                                            : minecraft.getConnection().getPlayerInfo(sender).getProfile().name())) {
+                                KurumiSkillMemory.parseProposal(reply).ifPresent(proposal -> {
+                                    pendingSkillApproval = new PendingSkillApproval(sender, proposal);
+                                    minecraft.getConnection().sendChat("主人~，这次操作验证成功了。要将【"
+                                            + proposal.title() + "】保存成可复用技能吗？建议快捷词："
+                                            + String.join("、", proposal.triggers())
+                                            + "。回复『保存』或『不保存』即可。");
+                                });
+                            }
                             KurumiWebMonitor.log("Agent 自主完成：" + reply);
                             KurumiWebMonitor.state("AI 已确认任务完成");
                             KurumiPseudoExecutor.clearVariables();

@@ -90,6 +90,7 @@ public final class KurumiWebActions {
                 已检查的箱子记为 chest_1、chest_2 等，每次搜索会更新对应记忆。
                 通用方块记忆：saved = remember_block("矿场箱子",x,y,z)，
                 point = get_remembered_block("矿场箱子")，可用 point.x、point.y、point.z。
+                skill = get_skill("loot_corpse")，按名称查询主人批准保存的技能源码，使用 observe(skill) 查看返回；不能直接通过该查询执行代码。
                 即时扫描：blocks = search_all_block("minecraft:chest") 返回坐标对象数组，
                 所有方块ID通用。仅搜索附近已加载区域（水平24格、上下8格），最多64项；
                 只扫描世界方块，不打开容器、不自动寻路、不自动保存到持久记忆。

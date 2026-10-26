@@ -247,6 +247,10 @@ public final class KurumiExpressions {
             if(args.size()!=1) throw new IllegalArgumentException("get_remembered_block_at 需要从0开始的编号");
             return KurumiChestSearch.blockAt(integer(args.get(0)));
         }
+        if ("get_skill".equals(name)) {
+            if (args.size()!=1) throw new IllegalArgumentException("get_skill 需要技能名称");
+            return KurumiSkillMemory.configured().describe(string(args.get(0)));
+        }
         if ("get_remembered_block".equals(name)) {
             if (args.size()!=1) throw new IllegalArgumentException("get_remembered_block 需要记忆名称");
             return KurumiChestSearch.get(string(args.get(0)));

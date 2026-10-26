@@ -253,7 +253,7 @@ public final class KurumiScriptParser {
                 Matcher call = ACTION_ASSIGN.matcher(code);
                 if (call.matches() && !java.util.Set.of("get_fishing_status", "get_agent_observation",
                         "len", "search_all_block", "check_inventory", "check_distance",
-                        "list_remembered_blocks", "get_remembered_block_at", "get_remembered_block",
+                        "list_remembered_blocks", "get_remembered_block_at", "get_remembered_block", "get_skill",
                         "remember_block", "get_chest_search_result", "find_nearest_block",
                         "check_inventory_count", "get_crafting_recipe", "check_nearby_chest",
                         "get_nearby_chest_result", "get_position", "get_player_status",
