@@ -714,11 +714,13 @@ public final class KurumiPseudoExecutor {
                                     KurumiExpressions.integer(args.get(1)),
                                     args.size() == 3 ? KurumiExpressions.text(args.get(2)) : "auto");
                         } else {
-                            if (args.size() != 2)
-                                throw new IllegalArgumentException("take_item 需要物品ID和数量");
-                            outcome = KurumiInteractionBridge.takeItem(
-                                    KurumiExpressions.text(args.get(0)),
-                                    KurumiExpressions.integer(args.get(1)));
+                            if (args.size() != 1 && args.size() != 2)
+                                throw new IllegalArgumentException("take_item 需要物品ID及可选数量（省略表示全部）");
+                            outcome = args.size() == 1
+                                    ? KurumiInteractionBridge.takeItemAll(KurumiExpressions.text(args.get(0)))
+                                    : KurumiInteractionBridge.takeItem(
+                                            KurumiExpressions.text(args.get(0)),
+                                            KurumiExpressions.integer(args.get(1)));
                         }
                     } else if (KurumiTaskPlanner.assignableAction(name)
                             && !java.util.Set.of("search_chests", "take_from_memory",
@@ -994,7 +996,7 @@ public final class KurumiPseudoExecutor {
                             : "INTERACT".equals(step.action())
                             ? KurumiInteractionBridge.interact(step.itemId())
                             : "TAKE_ITEM".equals(step.action())
-                            ? KurumiInteractionBridge.takeItem(step.itemId(), step.quantity())
+                            ? (step.quantity() == 0 ? KurumiInteractionBridge.takeItemAll(step.itemId()) : KurumiInteractionBridge.takeItem(step.itemId(), step.quantity()))
                             : KurumiInteractionBridge.putItem(step.itemId(), step.quantity(), step.target());
                     lastResultSuccess = result.success();
                     assignedResult = "ACTION_RESULT".equals(stmt.op());
