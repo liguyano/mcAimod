@@ -413,7 +413,9 @@ public final class KurumiClientController {
                         + "变量在当前 Agent 任务的多段脚本之间保留，不限制变量数量，但有总内存安全预算；不支持 import、函数定义和任意 Java/Python 执行。"
                         + "固定次数任务使用 repeat(4):，其下各语句缩进4格，最多重复20次；"
                         + "repeat 在解析时展开，每次重新执行查询和动作；展开后总语句最多200条。"
-                        + "循环最多20轮，任务最多20分钟；不确定时先观察，不要假称动作已完成。"));
+                        + "也支持运行时 for i in range(10):、range(1,6)、range(9,0,-2)，仅接受1至3个整数字面量，最多100轮；"
+                        + "for/while 内可使用 break、continue，循环变量可以在条件和工具参数中使用。"
+                        + "while 循环最多20轮，任务最多20分钟、动作最多200个；不确定时先观察，不要假称动作已完成。"));
                 conversation.add(new ChatMessage("system",
                         "常用动作：come(\\\"玩家名\\\") 到玩家附近停止；follow(\\\"玩家名\\\") 持续跟随；"
                         + "goto(x,y,z) 坐标寻路；move(\\\"forward\\\",n)、move(\\\"back\\\",n)、"

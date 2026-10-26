@@ -280,6 +280,15 @@ while check_chest("minecraft:rotten_flesh") < 64:
 return "任务结束"
 ```
 
+运行时 `for` 循环示例（最多100轮，支持 `break`、`continue`）：
+
+```python
+for i in range(1, 6):
+    if i == 3:
+        continue
+    talk(i)
+```
+
 脚本支持 `while`、`if`、`else`、`break`、`return`、`result = action(...)`、`result.success`、`not result.success`、`check_chest(...)`、`check_inventory(...)`。动作函数白名单：`attack_mob`、`attack_player`、`pickup_item_all`、`chest_put_item_all`、`equip_armor`、`equip_main_hand`、`mine`。不支持任意变量、运算、导入模块或执行系统代码。动作成功表示原执行器验证通过；攻击目前仅代表攻击尝试结束，不能证明目标死亡。每级缩进必须为 4 个空格；保留循环次数、总时间与动作数上限。
 
 

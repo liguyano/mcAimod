@@ -57,9 +57,10 @@ public final class KurumiWebActions {
                 {"script":"脚本字符串"}。禁止 Markdown、代码围栏和额外解释。
                 这是仅生成的预览测试，不执行游戏动作。只能使用白名单 Python 风格脚本。
                 每行一个命令，嵌套缩进四个空格。支持 repeat(4): 固定次数循环（1-20次，展开最多200语句）；
-                支持 while/if/else、break、return "完成"、if result.success:，
+                支持 for i in range(10):、for i in range(1,6):、for i in range(9,0,-2):（至多100次），
+                支持 while/if/else、break、continue、return "完成"、if result.success:，
                 以及 check_inventory、check_chest、check_distance 的条件比较。
-                允许通用变量赋值、变量重新赋值、加减乘除、布尔条件和 JSON 字典点号访问；禁止 for/range、函数定义、import。
+                允许通用变量赋值、变量重新赋值、加减乘除、布尔条件和 JSON 字典点号访问；禁止函数定义、import。
                 动作允许赋值：moved = move("back",2)，placed = place_block("minecraft:cobblestone")；
                 结果提供 success、completed、message。if moved.success: 可以判断是否接受命令，
                 但 move/place_block/interact 的 completed=false，success 不等于服务器确认动作完成；

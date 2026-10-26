@@ -119,7 +119,22 @@ public final class KurumiTaskPlanner {
             if (++budget[0] > 200 || !el.isJsonObject()) throw new IllegalArgumentException("budget");
             JsonObject node = el.getAsJsonObject();
             String op = node.get("op").getAsString();
-            if ("IF".equals(op) || "WHILE".equals(op)) {
+            if ("FOR".equals(op)) {
+                String name = node.get("name").getAsString();
+                int start = node.get("start").getAsInt();
+                int end = node.get("end").getAsInt();
+                int step = node.get("step").getAsInt();
+                if (!name.matches("[a-z][a-z0-9_]{0,23}") || step == 0
+                        || Math.abs((long) start) > 100_000 || Math.abs((long) end) > 100_000
+                        || Math.abs((long) step) > 100_000)
+                    throw new IllegalArgumentException("invalid range");
+                long count = step > 0 ? Math.max(0, ((long) end - start + step - 1) / step)
+                        : Math.max(0, ((long) start - end - step - 1) / -(long) step);
+                if (count > 100) throw new IllegalArgumentException("range budget exceeded");
+                List<Statement> body = parseStatements(node.getAsJsonArray("body"), depth + 1, budget);
+                statements.add(new Statement(op, new Step("FOR", start + "," + end + "," + step,
+                        1, null, null, null, name), null, body, List.of()));
+            } else if ("IF".equals(op) || "WHILE".equals(op)) {
                 Condition condition = parseCondition(node.getAsJsonObject("condition"));
                 List<Statement> body = parseStatements(node.getAsJsonArray("body"), depth + 1, budget);
                 List<Statement> otherwise = "IF".equals(op) && node.has("else")
@@ -193,6 +208,8 @@ public final class KurumiTaskPlanner {
             } else if ("RETURN".equals(op)) {
                 statements.add(new Statement(op, null, null, List.of(), List.of()));
             } else if ("BREAK".equals(op)) {
+                statements.add(new Statement(op, null, null, List.of(), List.of()));
+            } else if ("CONTINUE".equals(op)) {
                 statements.add(new Statement(op, null, null, List.of(), List.of()));
             } else if ("ACTION".equals(op) || "ACTION_RESULT".equals(op)) {
                 JsonObject stepNode = node.getAsJsonObject("step");

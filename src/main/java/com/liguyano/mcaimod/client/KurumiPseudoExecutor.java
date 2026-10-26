@@ -15,11 +15,26 @@ public final class KurumiPseudoExecutor {
     private static final class Frame {
         final List<KurumiTaskPlanner.Statement> statements;
         final KurumiTaskPlanner.Statement loop;
+        final String forVariable;
+        final int forEnd, forStep;
+        int forValue;
         int index;
         int iterations;
         Frame(List<KurumiTaskPlanner.Statement> statements, KurumiTaskPlanner.Statement loop) {
             this.statements = statements;
             this.loop = loop;
+            this.forVariable = null;
+            this.forEnd = 0;
+            this.forStep = 0;
+        }
+        Frame(KurumiTaskPlanner.Statement loop, int start, int end, int step) {
+            this.statements = loop.body();
+            this.loop = loop;
+            this.forVariable = loop.step().target();
+            this.forValue = start;
+            this.forEnd = end;
+            this.forStep = step;
+            this.iterations = 1;
         }
     }
     private static final Deque<Frame> frames = new ArrayDeque<>();
@@ -384,6 +399,24 @@ public final class KurumiPseudoExecutor {
         }
         Frame frame = frames.peek();
         if (frame.index >= frame.statements.size()) {
+            if (frame.forVariable != null) {
+                long next = (long) frame.forValue + frame.forStep;
+                if ((frame.forStep > 0 && next < frame.forEnd)
+                        || (frame.forStep < 0 && next > frame.forEnd)) {
+                    if (++frame.iterations > 100) {
+                        KurumiWebMonitor.log("for 循环超过100次，脚本已停止");
+                        cancel();
+                        return;
+                    }
+                    frame.forValue = (int) next;
+                    variables.put(frame.forVariable, new com.google.gson.JsonPrimitive(frame.forValue));
+                    frame.index = 0;
+                    return;
+                }
+                frames.pop();
+                if (!frames.isEmpty()) frames.peek().index++;
+                return;
+            }
             frames.pop();
             return;
         }
@@ -403,6 +436,18 @@ public final class KurumiPseudoExecutor {
         }
         KurumiWebMonitor.step(stmt, actions, frame.iterations, lastResultSuccess);
         switch (stmt.op()) {
+            case "FOR" -> {
+                String[] range = stmt.step().itemId().split(",", -1);
+                int start = Integer.parseInt(range[0]);
+                int end = Integer.parseInt(range[1]);
+                int step = Integer.parseInt(range[2]);
+                if ((step > 0 && start >= end) || (step < 0 && start <= end)) {
+                    frame.index++;
+                } else {
+                    variables.put(stmt.step().target(), new com.google.gson.JsonPrimitive(start));
+                    frames.push(new Frame(stmt, start, end, step));
+                }
+            }
             case "EXPR_ASSIGN" -> {
                 try {
                     String name = stmt.step().target();
@@ -1004,7 +1049,7 @@ public final class KurumiPseudoExecutor {
                     if (f.loop != null) { target = f; break; }
                 }
                 if (target == null) {
-                    say("BREAK 只能在 WHILE 内使用");
+                    say("BREAK 只能在循环内使用");
                     cancel();
                     return;
                 }
@@ -1013,6 +1058,19 @@ public final class KurumiPseudoExecutor {
                     if (popped == target) break;
                 }
                 if (!frames.isEmpty()) frames.peek().index++;
+            }
+            case "CONTINUE" -> {
+                Frame target = null;
+                for (Frame f : frames) {
+                    if (f.loop != null) { target = f; break; }
+                }
+                if (target == null) { cancel(); return; }
+                while (!frames.isEmpty() && frames.peek() != target) frames.pop();
+                if (target.forVariable != null) {
+                    target.index = target.statements.size();
+                } else {
+                    frames.pop(); // The parent WHILE condition is re-evaluated next tick.
+                }
             }
             default -> cancel();
         }

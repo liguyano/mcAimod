@@ -39,6 +39,7 @@ public final class KurumiScriptParser {
     private static final Pattern GOTO_NAMED = Pattern.compile("goto\\(\"([^\"]{1,24})\"\\)");
     private static final Pattern GOTO = Pattern.compile("goto\\((-?\\d{1,8}),\\s*(-?\\d{1,4}),\\s*(-?\\d{1,8})\\)");
     private static final Pattern RETURN = Pattern.compile("return\\s+\"[^\"\\r\\n]{0,100}\"");
+    private static final Pattern FOR_RANGE = Pattern.compile("for ([a-z][a-z0-9_]{0,23}) in range\\(([^()]*)\\):");
     private static final ThreadLocal<String> LAST_ERROR = ThreadLocal.withInitial(() -> "");
     public static String lastError() { return LAST_ERROR.get(); }
     /** Dynamic arguments may be variables, but a hold always needs two nonempty arguments. */
@@ -77,7 +78,7 @@ public final class KurumiScriptParser {
                 return Optional.empty();
             }
             Cursor cursor = new Cursor();
-            JsonArray body = block(lines, cursor, 0, 0);
+            JsonArray body = block(lines, cursor, 0, 0, 0);
             if (cursor.at != lines.size()) {
                 LAST_ERROR.set("第 " + lines.get(cursor.at).number() + " 行缩进或结构错误");
                 return Optional.empty();
@@ -93,7 +94,7 @@ public final class KurumiScriptParser {
             return Optional.empty();
         }
     }
-    private static JsonArray block(List<Line> lines, Cursor cursor, int indent, int depth) {
+    private static JsonArray block(List<Line> lines, Cursor cursor, int indent, int depth, int loopDepth) {
         if (depth > 3) throw new IllegalArgumentException("nesting");
         JsonArray out = new JsonArray();
         while (cursor.at < lines.size() && lines.get(cursor.at).indent() == indent) {
@@ -105,7 +106,7 @@ public final class KurumiScriptParser {
                 if (repetitions > 20) throw new IllegalArgumentException("repeat count");
                 if (cursor.at >= lines.size() || lines.get(cursor.at).indent() != indent + 1)
                     throw new IllegalArgumentException("empty repeat");
-                JsonArray body = block(lines, cursor, indent + 1, depth + 1);
+                JsonArray body = block(lines, cursor, indent + 1, depth + 1, loopDepth);
                 for (int i = 0; i < repetitions; i++) {
                     for (var element : body) {
                         if (out.size() >= 200) throw new IllegalArgumentException("expanded repeat too large");
@@ -114,7 +115,36 @@ public final class KurumiScriptParser {
                 }
                 continue;
             }
-            if (code.startsWith("while ") && code.endsWith(":")
+            Matcher forRange = FOR_RANGE.matcher(code);
+            if (forRange.matches()) {
+                String[] args = forRange.group(2).split(",", -1);
+                if (args.length < 1 || args.length > 3)
+                    throw new IllegalArgumentException("range requires 1 to 3 integers");
+                int[] numbers = new int[args.length];
+                for (int i = 0; i < args.length; i++) {
+                    String value = args[i].trim();
+                    if (!value.matches("-?\\d{1,6}"))
+                        throw new IllegalArgumentException("range only supports integer literals");
+                    numbers[i] = Integer.parseInt(value);
+                    if (Math.abs((long) numbers[i]) > 100_000)
+                        throw new IllegalArgumentException("range argument exceeds limit");
+                }
+                int start = args.length == 1 ? 0 : numbers[0];
+                int end = args.length == 1 ? numbers[0] : numbers[1];
+                int step = args.length == 3 ? numbers[2] : 1;
+                if (step == 0) throw new IllegalArgumentException("range step cannot be zero");
+                long count = step > 0 ? Math.max(0, ((long) end - start + step - 1) / step)
+                        : Math.max(0, ((long) start - end - step - 1) / -(long) step);
+                if (count > 100) throw new IllegalArgumentException("range may execute at most 100 times");
+                if (cursor.at >= lines.size() || lines.get(cursor.at).indent() != indent + 1)
+                    throw new IllegalArgumentException("empty for body");
+                node.addProperty("op", "FOR");
+                node.addProperty("name", forRange.group(1));
+                node.addProperty("start", start);
+                node.addProperty("end", end);
+                node.addProperty("step", step);
+                node.add("body", block(lines, cursor, indent + 1, depth + 1, loopDepth + 1));
+            } else if (code.startsWith("while ") && code.endsWith(":")
                     || code.startsWith("if ") && code.endsWith(":")) {
                 boolean loop = code.startsWith("while ");
                 node.addProperty("op", loop ? "WHILE" : "IF");
@@ -127,14 +157,15 @@ public final class KurumiScriptParser {
                 } else node.add("condition", condition(condition));
                 if (cursor.at >= lines.size() || lines.get(cursor.at).indent() != indent + 1)
                     throw new IllegalArgumentException("empty body");
-                node.add("body", block(lines, cursor, indent + 1, depth + 1));
+                node.add("body", block(lines, cursor, indent + 1, depth + 1,
+                        loopDepth + (loop ? 1 : 0)));
                 if (!loop && cursor.at < lines.size()
                         && lines.get(cursor.at).indent() == indent
                         && lines.get(cursor.at).code().equals("else:")) {
                     cursor.at++;
                     if (cursor.at >= lines.size() || lines.get(cursor.at).indent() != indent + 1)
                         throw new IllegalArgumentException("empty else");
-                    node.add("else", block(lines, cursor, indent + 1, depth + 1));
+                    node.add("else", block(lines, cursor, indent + 1, depth + 1, loopDepth));
                 }
             } else if (isActionAssignment(code)) {
                 Matcher m = ACTION_ASSIGN.matcher(code); m.matches();
@@ -305,7 +336,11 @@ public final class KurumiScriptParser {
                 node.addProperty("op", "TALK");
                 node.addProperty("message", TALK.matcher(code).replaceFirst("$1"));
             } else if (code.equals("break")) {
+                if (loopDepth == 0) throw new IllegalArgumentException("break outside loop");
                 node.addProperty("op", "BREAK");
+            } else if (code.equals("continue")) {
+                if (loopDepth == 0) throw new IllegalArgumentException("continue outside loop");
+                node.addProperty("op", "CONTINUE");
             } else if (code.equals("return") || RETURN.matcher(code).matches()) {
                 node.addProperty("op", "RETURN");
             } else {
