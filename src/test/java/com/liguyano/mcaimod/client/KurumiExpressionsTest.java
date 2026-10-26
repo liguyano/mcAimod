@@ -61,7 +61,7 @@ class KurumiExpressionsTest {
                 observe(check_inventory_item("some_mod:materials/ingot"))
                 """).isPresent(), KurumiScriptParser.lastError());
         assertTrue(KurumiScriptParser.parse(
-                "talk(check_inventory_item(\\"some_mod:materials/ingot\\"))").isPresent(),
+                "talk(check_inventory_item(\"some_mod:materials/ingot\"))").isPresent(),
                 KurumiScriptParser.lastError());
         assertTrue(KurumiExpressions.truth(KurumiExpressions.evaluate("count > 0",
                 Map.of("count", new JsonPrimitive(3)))));
