@@ -145,6 +145,7 @@ public final class KurumiScriptParser {
             JsonObject node = new JsonObject();
             node.addProperty("line", lines.get(cursor.at - 1).number());
             Matcher definition = DEFINITION.matcher(code);
+            Matcher forRange = FOR_RANGE.matcher(code);
             if (definition.matches()) {
                 if (indent != 0) throw new IllegalArgumentException("函数只能定义在顶层");
                 String[] params = definition.group(2).isBlank() ? new String[0] : definition.group(2).split(",", -1);
@@ -176,9 +177,7 @@ public final class KurumiScriptParser {
                     }
                 }
                 continue;
-            }
-            Matcher forRange = FOR_RANGE.matcher(code);
-            if (forRange.matches()) {
+            } else if (forRange.matches()) {
                 String[] args = forRange.group(2).split(",", -1);
                 if (args.length < 1 || args.length > 3)
                     throw new IllegalArgumentException("range requires 1 to 3 integers");
