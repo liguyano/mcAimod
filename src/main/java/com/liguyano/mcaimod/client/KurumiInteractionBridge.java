@@ -220,6 +220,28 @@ public final class KurumiInteractionBridge {
                 + "（以服务器同步为准）");
     }
 
+    /** Default no-quantity take: shift-click the output to collect all craftable results. */
+    public static BaritoneBridge.Result takeItemAll(String itemId) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.gameMode == null)
+            return new BaritoneBridge.Result(false, "尚未进入游戏");
+        if (itemId == null || !itemId.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+            return new BaritoneBridge.Result(false, "物品 ID 无效");
+        var menu = mc.player.containerMenu;
+        int output;
+        if (menu instanceof CraftingMenu) output = 0;
+        else if (menu instanceof AbstractFurnaceMenu) output = 2;
+        else return new BaritoneBridge.Result(false, "默认全部取出仅支持已打开的工作台或熔炉");
+        if (!menu.getCarried().isEmpty())
+            return new BaritoneBridge.Result(false, "鼠标光标上有物品，先清空光标");
+        ItemStack stack = menu.getSlot(output).getItem();
+        if (stack.isEmpty() || !itemId.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()))
+            return new BaritoneBridge.Result(false, "产物槽没有 " + itemId);
+        mc.gameMode.handleContainerInput(menu.containerId, output, 0, ContainerInput.QUICK_MOVE, mc.player);
+        return new BaritoneBridge.Result(true, "已发送 Shift+左键批量取出 " + itemId
+                + " 请求（合成到无法继续或背包空间不足为止；以服务器同步为准）");
+    }
+
     /** Move an exact bounded quantity between the player inventory and a generic open menu. */
     private static BaritoneBridge.Result genericTransfer(String itemId, int quantity, boolean putting) {
         Minecraft mc = Minecraft.getInstance();
