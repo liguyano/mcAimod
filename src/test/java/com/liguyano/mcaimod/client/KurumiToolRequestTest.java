@@ -8,9 +8,9 @@ class KurumiToolRequestTest {
     }
     @Test void acceptsRecipeLookupAndRejectsMalformedItemIds() {
         assertEquals("get_crafting_recipe:minecraft:chest", KurumiToolRequest.parse(
-                "{\\"type\\":\\"tool\\",\\"tool\\":\\"get_crafting_recipe\\",\\"item_id\\":\\"minecraft:chest\\"}"));
+                "{\"type\":\"tool\",\"tool\":\"get_crafting_recipe\",\"item_id\":\"minecraft:chest\"}"));
         assertNull(KurumiToolRequest.parse(
-                "{\\"type\\":\\"tool\\",\\"tool\\":\\"get_crafting_recipe\\",\\"item_id\\":\\"not-an-id\\"}"));
+                "{\"type\":\"tool\",\"tool\":\"get_crafting_recipe\",\"item_id\":\"not-an-id\"}"));
     }
     @Test void rejectsUnknownTools() {
         assertNull(KurumiToolRequest.parse("{\"type\":\"tool\",\"tool\":\"execute_command\"}"));
