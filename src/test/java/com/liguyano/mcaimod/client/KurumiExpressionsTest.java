@@ -51,6 +51,18 @@ class KurumiExpressionsTest {
         assertTrue(KurumiExpressions.truth(KurumiExpressions.evaluate("count >= 256", vars)));
     }
 
+    @Test void genericInventoryItemCheckIsAllowedInAssignmentAndObserveScripts() {
+        assertTrue(KurumiScriptParser.parse("""
+                item = check_inventory_item("minecraft:diamond")
+                if item.exists:
+                    talk("有钻石")
+                observe(check_inventory_item("some_mod:materials/ingot"))
+                """).isPresent(), KurumiScriptParser.lastError());
+        assertTrue(KurumiScriptParser.parse(
+                "talk(check_inventory_item(\\"some_mod:materials/ingot\\"))").isPresent(),
+                KurumiScriptParser.lastError());
+    }
+
     @Test void floatArithmeticAndConditionsRemainSupported() {
         Map<String, JsonElement> vars = new HashMap<>();
         vars.put("ratio", KurumiExpressions.evaluate("1.5 + 2.25 / 2", vars));
