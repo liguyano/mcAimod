@@ -690,6 +690,7 @@ public final class KurumiClientController {
                 + "observe(get_inventory())、observe(get_distance(\"block\",\"minecraft:warped_stem\"))、"
                 + "observe(get_distance(\"player\",\"SekaiSaionji\"))、"
                 + "observe(find_nearest_block(\"minecraft:chest\"))、"
+                + "observe(check_inventory_item(\\\"minecraft:diamond\\\"))、"
                 + "observe(check_inventory_count(\"minecraft:diamond\"))、"
                 + "observe(get_crafting_recipe(\"minecraft:chest\"))、"
                 + "observe(check_nearby_chest(\"minecraft:diamond\")) 或 "
