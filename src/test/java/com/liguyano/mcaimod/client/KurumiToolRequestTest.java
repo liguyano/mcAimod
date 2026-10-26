@@ -14,11 +14,11 @@ class KurumiToolRequestTest {
     }
     @Test void acceptsGenericInventoryItemCheckAndRejectsMalformedIds() {
         assertEquals("check_inventory_item:minecraft:diamond", KurumiToolRequest.parse(
-                "{\\"type\\":\\"tool\\",\\"tool\\":\\"check_inventory_item\\",\\"item_id\\":\\"minecraft:diamond\\"}"));
+                "{\"type\":\"tool\",\"tool\":\"check_inventory_item\",\"item_id\":\"minecraft:diamond\"}"));
         assertEquals("check_inventory_item:some_mod:materials/ingot", KurumiToolRequest.parse(
-                "{\\"type\\":\\"tool\\",\\"tool\\":\\"check_inventory_item\\",\\"item_id\\":\\"some_mod:materials/ingot\\"}"));
+                "{\"type\":\"tool\",\"tool\":\"check_inventory_item\",\"item_id\":\"some_mod:materials/ingot\"}"));
         assertNull(KurumiToolRequest.parse(
-                "{\\"type\\":\\"tool\\",\\"tool\\":\\"check_inventory_item\\",\\"item_id\\":\\"bad id\\"}"));
+                "{\"type\":\"tool\",\"tool\":\"check_inventory_item\",\"item_id\":\"bad id\"}"));
     }
     @Test void rejectsUnknownTools() {
         assertNull(KurumiToolRequest.parse("{\"type\":\"tool\",\"tool\":\"execute_command\"}"));
