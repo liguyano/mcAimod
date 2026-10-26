@@ -164,9 +164,10 @@ public final class KurumiToolbox {
             int count = KurumiTaskChecks.inventoryCount(id);
             JsonObject check = new JsonObject();
             check.addProperty("item_id", id);
-            check.addProperty("count", count);
             check.addProperty("exists", count > 0);
             check.addProperty("scope", "player_inventory");
+            if (tool.startsWith("check_inventory_count:"))
+                check.addProperty("count", count);
             return check.toString();
         }
         if (tool != null && tool.startsWith("check_position:")) {
