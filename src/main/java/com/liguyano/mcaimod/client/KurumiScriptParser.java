@@ -20,7 +20,7 @@ public final class KurumiScriptParser {
     private static final Pattern FARM = Pattern.compile("(?:(result)\\s*=\\s*)?farm\\((\\d{1,2})\\)");
     // Read-only observations will be exposed through the script interpreter.
     private static final Pattern OBSERVE = Pattern.compile("talk\\((get_player_status|get_position|get_environment|scan_nearby_entities|scan_nearby_blocks|scan_dropped_items|get_inventory|inspect_container)\\(\\)\\)");
-    private static final Pattern OBSERVE_ARG = Pattern.compile("talk\\((get_distance|find_nearest_block|check_inventory_item|check_inventory_count|get_crafting_recipe|check_nearby_chest|get_nearby_chest_result)\\(\\\"([A-Za-z0-9_.:-]+)\\\"(?:,\\s*\\\"([A-Za-z0-9_.:-]+)\\\")?\\)\\)");
+    private static final Pattern OBSERVE_ARG = Pattern.compile("talk\\((get_distance|find_nearest_block|check_inventory_item|check_inventory_count|get_crafting_recipe|check_nearby_chest|get_nearby_chest_result)\\(\\\"([A-Za-z0-9_./:-]+)\\\"(?:,\\s*\\\"([A-Za-z0-9_./:-]+)\\\")?\\)\\)");
     private static final Pattern INSPECT_SLOT = Pattern.compile("talk\\(inspect_slot\\((\\d{1,3})\\)\\)");
     private static final Pattern OBSERVE_POSITION = Pattern.compile("talk\\(check_position\\(\\s*(-?\\d{1,8})\\s*,\\s*(-?\\d{1,4})\\s*,\\s*(-?\\d{1,8})\\s*,\\s*(\\d{1,2})\\s*\\)\\)");
     private static final Pattern TALK = Pattern.compile("talk\\(\"([^\"\\r\\n]{1,120})\"\\)");
