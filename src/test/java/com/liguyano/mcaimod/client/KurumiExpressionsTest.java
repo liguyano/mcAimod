@@ -51,16 +51,22 @@ class KurumiExpressionsTest {
         assertTrue(KurumiExpressions.truth(KurumiExpressions.evaluate("count >= 256", vars)));
     }
 
-    @Test void genericInventoryItemCheckIsAllowedInAssignmentAndObserveScripts() {
+    @Test void genericInventoryItemCheckReturnsNumericCountAndCanBeObserved() {
         assertTrue(KurumiScriptParser.parse("""
-                item = check_inventory_item("minecraft:diamond")
-                if item.exists:
-                    talk("有钻石")
+                count = check_inventory_item("minecraft:diamond")
+                if count > 0:
+                    talk("背包里有钻石")
+                if count >= 64:
+                    talk("钻石数量不少于64")
                 observe(check_inventory_item("some_mod:materials/ingot"))
                 """).isPresent(), KurumiScriptParser.lastError());
         assertTrue(KurumiScriptParser.parse(
-                "talk(check_inventory_item(\"some_mod:materials/ingot\"))").isPresent(),
+                "talk(check_inventory_item(\\"some_mod:materials/ingot\\"))").isPresent(),
                 KurumiScriptParser.lastError());
+        assertTrue(KurumiExpressions.truth(KurumiExpressions.evaluate("count > 0",
+                Map.of("count", new JsonPrimitive(3)))));
+        assertFalse(KurumiExpressions.truth(KurumiExpressions.evaluate("count > 0",
+                Map.of("count", new JsonPrimitive(0)))));
     }
 
     @Test void floatArithmeticAndConditionsRemainSupported() {
