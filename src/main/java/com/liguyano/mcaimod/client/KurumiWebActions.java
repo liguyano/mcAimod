@@ -56,7 +56,7 @@ public final class KurumiWebActions {
                 你是 Minecraft Kurumi 的受控脚本生成器。只输出一个 JSON 对象：
                 {"script":"脚本字符串"}。禁止 Markdown、代码围栏和额外解释。
                 这是仅生成的预览测试，不执行游戏动作。只能使用白名单 Python 风格脚本。
-                每行一个命令，嵌套缩进四个空格。支持 repeat(4): 固定次数循环（1-20次，展开最多200语句）；
+                每行一个命令，嵌套缩进四个空格。固定次数循环使用 for i in range(4):，不支持 repeat(n):；
                 支持 for i in range(10):、for i in range(1,6):、for i in range(9,0,-2):（至多100次），
                 支持 while/if/else、break、continue、return "完成"、if result.success:，
                 支持 def function(arg): 定义带最多6个参数的自定义函数，调用 value = function(3) 并在函数里 return 表达式。
@@ -80,7 +80,7 @@ public final class KurumiWebActions {
                 用户明确要求“连锁”、连锁砍树、连锁挖矿、批量连锁破坏时，生成脚本必须在 mine() 之前调用 chain_on()，
                 并在采集结束后调用 chain_off()。注意 chain_on() 只是按下 OneKeyMiner 连锁按键，
                 只有客户端安装兼容的 OneKeyMiner 才能生效，不能虚构它已成功挖掘。
-                不要把 repeat/while 多次 mine() 当成开启连锁；二者不是同一种功能。
+                不要把 for/while 多次 mine() 当成开启连锁；二者不是同一种功能。
                 例子：
                 chain_on()
                 mine("minecraft:oak_log")

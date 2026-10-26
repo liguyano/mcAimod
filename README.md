@@ -282,6 +282,8 @@ return "任务结束"
 
 运行时 `for` 循环示例（最多100轮，支持 `break`、`continue`）：
 
+原先的 `repeat(n):` 已移除，请统一使用 `for i in range(n):`。
+
 ```python
 for i in range(1, 6):
     if i == 3:

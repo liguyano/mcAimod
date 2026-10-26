@@ -25,10 +25,9 @@ class KurumiExpressionsTest {
         String twoHundredOne = "sleep(1)\n".repeat(201);
         assertTrue(KurumiScriptParser.parse(twoHundred).isPresent());
         assertTrue(KurumiScriptParser.parse(twoHundredOne).isEmpty());
-        String expanded = "repeat(20):\n" + "    sleep(1)\n".repeat(10);
-        assertTrue(KurumiScriptParser.parse(expanded).isPresent());
-        String tooManyExpanded = "repeat(20):\n" + "    sleep(1)\n".repeat(11);
-        assertTrue(KurumiScriptParser.parse(tooManyExpanded).isEmpty());
+        assertTrue(KurumiScriptParser.parse("for i in range(100):\n    sleep(1)").isPresent());
+        assertTrue(KurumiScriptParser.parse("for i in range(101):\n    sleep(1)").isEmpty());
+        assertTrue(KurumiScriptParser.parse("repeat(4):\n    sleep(1)").isEmpty());
     }
 
     @Test void countObjectCanBeComparedAndUsedInWhileIfExpressions() {

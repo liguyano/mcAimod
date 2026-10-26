@@ -164,19 +164,6 @@ public final class KurumiScriptParser {
                 node.addProperty("name", definition.group(1));
                 node.addProperty("params", String.join(",", java.util.Arrays.stream(params).map(String::trim).toList()));
                 node.add("body", block(lines, cursor, indent + 1, depth + 1, 0));
-            } else if (code.matches("repeat\\([1-9][0-9]?\\):")) {
-                int repetitions = Integer.parseInt(code.substring(7, code.length() - 2));
-                if (repetitions > 20) throw new IllegalArgumentException("repeat count");
-                if (cursor.at >= lines.size() || lines.get(cursor.at).indent() != indent + 1)
-                    throw new IllegalArgumentException("empty repeat");
-                JsonArray body = block(lines, cursor, indent + 1, depth + 1, loopDepth);
-                for (int i = 0; i < repetitions; i++) {
-                    for (var element : body) {
-                        if (out.size() >= 200) throw new IllegalArgumentException("expanded repeat too large");
-                        out.add(element.deepCopy());
-                    }
-                }
-                continue;
             } else if (forRange.matches()) {
                 String[] args = forRange.group(2).split(",", -1);
                 if (args.length < 1 || args.length > 3)
