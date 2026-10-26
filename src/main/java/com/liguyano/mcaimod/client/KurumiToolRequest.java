@@ -47,10 +47,10 @@ public final class KurumiToolRequest {
                 return item.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
                         ? "get_nearby_chest_result:" + item : null;
             }
-            if ("check_inventory_count".equals(tool)) {
+            if ("check_inventory_item".equals(tool) || "check_inventory_count".equals(tool)) {
                 String item = object.has("item_id") ? object.get("item_id").getAsString() : "";
                 return item.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
-                        ? "check_inventory_count:" + item : null;
+                        ? tool + ":" + item : null;
             }
             if ("check_position".equals(tool)) {
                 int x = object.get("x").getAsInt(), y = object.get("y").getAsInt(), z = object.get("z").getAsInt();
