@@ -43,6 +43,16 @@ class KurumiSkillMemoryTest {
         assertTrue(Files.readString(temp.resolve("skills.json")).contains("return 1"));
     }
 
+    @Test void deletesExistingSkillOnly() {
+        var store = new KurumiSkillMemory(temp.resolve("skills.json"));
+        var skill = new KurumiSkillMemory.Skill("loot_corpse", "捡尸体", "寻找尸体并取物",
+                List.of("捡尸体"), "def loot_corpse():\n    return true", 1);
+        assertTrue(store.saveApproved(skill));
+        assertTrue(store.delete("loot_corpse"));
+        assertTrue(store.read("loot_corpse").isEmpty());
+        assertFalse(store.delete("missing_skill"));
+    }
+
     @Test void onlyAcceptsSkillProposalsInExplicitFinishReplies() {
         String suggestion = "\"suggest_skill\":{\"name\":\"loot_corpse\",\"title\":\"捡尸体\","
                 + "\"description\":\"寻找尸体并取物\",\"triggers\":[\"捡尸体\"],"

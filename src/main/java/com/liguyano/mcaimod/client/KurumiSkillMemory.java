@@ -129,6 +129,34 @@ final class KurumiSkillMemory {
         }
     }
 
+    synchronized boolean delete(String name) {
+        if (name == null || !name.matches("[a-z][a-z0-9_]{0,23}")) return false;
+        try {
+            JsonObject root = readRoot();
+            JsonArray current = root.getAsJsonArray("skills");
+            JsonArray updated = new JsonArray();
+            boolean removed = false;
+            for (JsonElement element : current) {
+                JsonObject entry = element.getAsJsonObject();
+                if (name.equals(entry.get("name").getAsString())) removed = true;
+                else updated.add(entry);
+            }
+            if (!removed) return false;
+            root.add("skills", updated);
+            Files.createDirectories(path.getParent());
+            Path pending = path.resolveSibling(path.getFileName() + ".tmp");
+            Files.writeString(pending, new GsonBuilder().setPrettyPrinting().create().toJson(root), StandardCharsets.UTF_8);
+            try { Files.move(pending, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
+            catch (java.nio.file.AtomicMoveNotSupportedException ex) {
+                Files.move(pending, path, StandardCopyOption.REPLACE_EXISTING);
+            }
+            return true;
+        } catch (Exception ex) {
+            KurumiWebMonitor.log("技能库删除失败：" + ex.getMessage());
+            return false;
+        }
+    }
+
     private static JsonObject toJson(Skill skill, JsonArray history) {
         JsonObject json = new JsonObject();
         json.addProperty("name", skill.name());

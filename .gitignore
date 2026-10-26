@@ -42,3 +42,4 @@ repo/
 # Development bookkeeping and local model secrets
 .superpowers/
 config/mcaimod-models.json
+config/mcaimod-web.json

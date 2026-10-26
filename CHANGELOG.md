@@ -5,6 +5,8 @@
 
 ## Unreleased — 2026-10-26
 
+- Kurumi Web 增加密码登录与 8 小时随机会话令牌；任务状态、脚本生成/执行、技能 API 均要求认证。增加连续登录失败限流。技能页支持查看、手动新增、编辑和删除技能及快捷触发词，保存继续使用受限解释器校验。真实密码只放在本机 config/mcaimod-web.json 或 MCAIMOD_WEB_PASSWORD 环境变量，不提交到仓库。
+
 ### 新增
 
 - 受限脚本新增 `raise Exception("原因")` 与 `raise Exception(result.message)`，支持在循环、条件、函数内主动以失败状态退出，报告行号和错误原因给下一轮 AI 分析；拒绝任意异常类与任意 Python 调用。新增解析回归测试；Windows JDK 25 构建待验证。
