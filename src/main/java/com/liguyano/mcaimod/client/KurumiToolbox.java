@@ -151,11 +151,19 @@ public final class KurumiToolbox {
             return KurumiChestInspector.check(tool.substring("check_nearby_chest:".length()));
         if (tool != null && tool.startsWith("get_nearby_chest_result:"))
             return KurumiChestInspector.status(tool.substring("get_nearby_chest_result:".length()));
-        if (tool != null && tool.startsWith("check_inventory_count:")) {
-            String id = tool.substring("check_inventory_count:".length());
+        if (tool != null && (tool.startsWith("check_inventory_item:")
+                || tool.startsWith("check_inventory_count:"))) {
+            String prefix = tool.startsWith("check_inventory_item:")
+                    ? "check_inventory_item:" : "check_inventory_count:";
+            String id = tool.substring(prefix.length());
+            if (!id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+                return "{\\"error\\":\\"invalid_item_id\\"}";
+            int count = KurumiTaskChecks.inventoryCount(id);
             JsonObject check = new JsonObject();
             check.addProperty("item_id", id);
-            check.addProperty("count", KurumiTaskChecks.inventoryCount(id));
+            check.addProperty("count", count);
+            check.addProperty("exists", count > 0);
+            check.addProperty("scope", "player_inventory");
             return check.toString();
         }
         if (tool != null && tool.startsWith("check_position:")) {
