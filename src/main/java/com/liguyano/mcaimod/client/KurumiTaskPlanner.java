@@ -211,7 +211,7 @@ public final class KurumiTaskPlanner {
                         "scan_nearby_entities", "scan_nearby_blocks", "scan_dropped_items",
                         "get_inventory", "inspect_container").contains(tool)
                         || tool.matches("(get_distance:(block|entity|item):[a-z0-9_.-]+:[a-z0-9_./-]{1,128}|get_distance:player:[A-Za-z0-9_]{1,16})")
-                        || tool.matches("(find_nearest_block|check_inventory_count|get_crafting_recipe|check_nearby_chest|get_nearby_chest_result):[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
+                        || tool.matches("(find_nearest_block|check_inventory_item|check_inventory_count|get_crafting_recipe|check_nearby_chest|get_nearby_chest_result):[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
                         || tool.matches("inspect_slot:(?:0|[1-9][0-9]{0,2})")
                         || tool.matches("check_position:-?\\d{1,8}:-?\\d{1,4}:-?\\d{1,8}:\\d{1,2}")))
                     throw new IllegalArgumentException("invalid observation");

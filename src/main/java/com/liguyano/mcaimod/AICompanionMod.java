@@ -5,6 +5,8 @@ import com.liguyano.mcaimod.chat.ConversationManager;
 import com.liguyano.mcaimod.command.AIChatCommand;
 import com.liguyano.mcaimod.model.ModelProfiles;
 import com.liguyano.mcaimod.model.OpenAiCompatibleProvider;
+import net.minecraft.world.item.crafting.RecipeType;
+import net.neoforged.neoforge.event.OnDatapackSyncEvent;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.api.distmarker.Dist;
@@ -40,6 +42,19 @@ public final class AICompanionMod {
                 new ConversationManager(), profiles, new OpenAiCompatibleProvider()));
         NeoForge.EVENT_BUS.addListener(commands::register);
         NeoForge.EVENT_BUS.addListener(commands::onLogout);
+        // Send complete vanilla workstation recipe data to the client for Kurumi's read-only lookup.
+        // This runs on the logical server, including the integrated server in singleplayer.
+        NeoForge.EVENT_BUS.addListener(AICompanionMod::syncKurumiRecipes);
+    }
+
+    private static void syncKurumiRecipes(OnDatapackSyncEvent event) {
+        event.sendRecipes(RecipeType.CRAFTING);
+        event.sendRecipes(RecipeType.SMELTING);
+        event.sendRecipes(RecipeType.BLASTING);
+        event.sendRecipes(RecipeType.SMOKING);
+        event.sendRecipes(RecipeType.CAMPFIRE_COOKING);
+        event.sendRecipes(RecipeType.STONECUTTING);
+        event.sendRecipes(RecipeType.SMITHING);
     }
 
     private static void installDefaultConfig(Path target) {
