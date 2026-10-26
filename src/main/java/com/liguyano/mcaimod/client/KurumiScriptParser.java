@@ -40,6 +40,9 @@ public final class KurumiScriptParser {
     private static final Pattern GOTO = Pattern.compile("goto\\((-?\\d{1,8}),\\s*(-?\\d{1,4}),\\s*(-?\\d{1,8})\\)");
     private static final Pattern RETURN = Pattern.compile("return\\s+\"[^\"\\r\\n]{0,100}\"");
     private static final Pattern FOR_RANGE = Pattern.compile("for ([a-z][a-z0-9_]{0,23}) in range\\(([^()]*)\\):");
+    private static final Pattern DEFINITION = Pattern.compile("def ([a-z][a-z0-9_]{0,23})\\(([^()]*)\\):");
+    private static final Pattern SIMPLE_CALL = Pattern.compile("([a-z][a-z0-9_]{0,23})\\((.*)\\)");
+    private static final ThreadLocal<java.util.Set<String>> FUNCTION_NAMES = ThreadLocal.withInitial(java.util.HashSet::new);
     private static final ThreadLocal<String> LAST_ERROR = ThreadLocal.withInitial(() -> "");
     public static String lastError() { return LAST_ERROR.get(); }
     /** Dynamic arguments may be variables, but a hold always needs two nonempty arguments. */
@@ -78,6 +81,15 @@ public final class KurumiScriptParser {
                 return Optional.empty();
             }
             Cursor cursor = new Cursor();
+            java.util.Set<String> definitions = FUNCTION_NAMES.get();
+            definitions.clear();
+            for (Line line : lines) {
+                Matcher definition = DEFINITION.matcher(line.code());
+                if (definition.matches()) {
+                    if (line.indent() != 0 || !definitions.add(definition.group(1)))
+                        throw new IllegalArgumentException("函数只能定义在顶层，名称不能重复");
+                }
+            }
             JsonArray body = block(lines, cursor, 0, 0, 0);
             if (cursor.at != lines.size()) {
                 LAST_ERROR.set("第 " + lines.get(cursor.at).number() + " 行缩进或结构错误");
@@ -85,6 +97,7 @@ public final class KurumiScriptParser {
             }
             JsonObject obj = new JsonObject();
             obj.add("program", body);
+            rejectRecursiveFunctions(body);
             var parsed = KurumiTaskPlanner.parseProgram(obj);
             if (parsed.isEmpty()) LAST_ERROR.set("指令结构校验未通过，请检查动作参数及条件");
             parsed.ifPresent(program -> KurumiWebMonitor.register(program, source));
@@ -92,16 +105,65 @@ public final class KurumiScriptParser {
         } catch (RuntimeException e) {
             LAST_ERROR.set(e.getMessage() == null ? "未知解析错误" : e.getMessage());
             return Optional.empty();
+        } finally {
+            FUNCTION_NAMES.remove();
         }
     }
+    private static void rejectRecursiveFunctions(JsonArray body) {
+        java.util.Map<String, java.util.Set<String>> calls = new java.util.HashMap<>();
+        for (var element : body) {
+            JsonObject node = element.getAsJsonObject();
+            if ("DEF".equals(node.get("op").getAsString())) {
+                java.util.Set<String> used = new java.util.HashSet<>();
+                collectCalls(node.getAsJsonArray("body"), used);
+                calls.put(node.get("name").getAsString(), used);
+            }
+        }
+        for (String name : calls.keySet()) checkCallCycle(name, calls, new java.util.HashSet<>(), new java.util.HashSet<>());
+    }
+    private static void collectCalls(JsonArray nodes, java.util.Set<String> used) {
+        for (var element : nodes) {
+            JsonObject node = element.getAsJsonObject();
+            if ("CALL_FUNCTION".equals(node.get("op").getAsString())) used.add(node.get("method").getAsString());
+            if (node.has("body")) collectCalls(node.getAsJsonArray("body"), used);
+            if (node.has("else")) collectCalls(node.getAsJsonArray("else"), used);
+        }
+    }
+    private static void checkCallCycle(String name, java.util.Map<String, java.util.Set<String>> calls,
+            java.util.Set<String> visiting, java.util.Set<String> done) {
+        if (done.contains(name)) return;
+        if (!visiting.add(name)) throw new IllegalArgumentException("禁止递归调用函数：" + name);
+        for (String next : calls.getOrDefault(name, java.util.Set.of())) checkCallCycle(next, calls, visiting, done);
+        visiting.remove(name);
+        done.add(name);
+    }
     private static JsonArray block(List<Line> lines, Cursor cursor, int indent, int depth, int loopDepth) {
-        if (depth > 3) throw new IllegalArgumentException("nesting");
+        if (depth > 5) throw new IllegalArgumentException("nesting");
         JsonArray out = new JsonArray();
         while (cursor.at < lines.size() && lines.get(cursor.at).indent() == indent) {
             String code = lines.get(cursor.at++).code();
             JsonObject node = new JsonObject();
             node.addProperty("line", lines.get(cursor.at - 1).number());
-            if (code.matches("repeat\\([1-9][0-9]?\\):")) {
+            Matcher definition = DEFINITION.matcher(code);
+            if (definition.matches()) {
+                if (indent != 0) throw new IllegalArgumentException("函数只能定义在顶层");
+                String[] params = definition.group(2).isBlank() ? new String[0] : definition.group(2).split(",", -1);
+                if (params.length > 6) throw new IllegalArgumentException("函数参数最多6个");
+                if (KurumiTaskPlanner.assignableAction(definition.group(1))
+                        || java.util.Set.of("talk", "observe", "sleep", "range", "len", "return").contains(definition.group(1)))
+                    throw new IllegalArgumentException("函数名与现有命令冲突");
+                java.util.Set<String> unique = new java.util.HashSet<>();
+                for (String parameter : params) {
+                    if (!parameter.trim().matches("[a-z][a-z0-9_]{0,23}") || !unique.add(parameter.trim()))
+                        throw new IllegalArgumentException("函数参数名称无效或重复");
+                }
+                if (cursor.at >= lines.size() || lines.get(cursor.at).indent() != indent + 1)
+                    throw new IllegalArgumentException("函数体不能为空");
+                node.addProperty("op", "DEF");
+                node.addProperty("name", definition.group(1));
+                node.addProperty("params", String.join(",", java.util.Arrays.stream(params).map(String::trim).toList()));
+                node.add("body", block(lines, cursor, indent + 1, depth + 1, 0));
+            } else if (code.matches("repeat\\([1-9][0-9]?\\):")) {
                 int repetitions = Integer.parseInt(code.substring(7, code.length() - 2));
                 if (repetitions > 20) throw new IllegalArgumentException("repeat count");
                 if (cursor.at >= lines.size() || lines.get(cursor.at).indent() != indent + 1)
@@ -121,10 +183,15 @@ public final class KurumiScriptParser {
                 if (args.length < 1 || args.length > 3)
                     throw new IllegalArgumentException("range requires 1 to 3 integers");
                 int[] numbers = new int[args.length];
+                boolean dynamicRange = false;
                 for (int i = 0; i < args.length; i++) {
                     String value = args[i].trim();
-                    if (!value.matches("-?\\d{1,6}"))
-                        throw new IllegalArgumentException("range only supports integer literals");
+                    if (!value.matches("-?\\d{1,6}")) {
+                        if (!value.matches("[a-z][a-z0-9_]{0,23}"))
+                            throw new IllegalArgumentException("range only supports integers or variables");
+                        dynamicRange = true;
+                        continue;
+                    }
                     numbers[i] = Integer.parseInt(value);
                     if (Math.abs((long) numbers[i]) > 100_000)
                         throw new IllegalArgumentException("range argument exceeds limit");
@@ -135,11 +202,12 @@ public final class KurumiScriptParser {
                 if (step == 0) throw new IllegalArgumentException("range step cannot be zero");
                 long count = step > 0 ? Math.max(0, ((long) end - start + step - 1) / step)
                         : Math.max(0, ((long) start - end - step - 1) / -(long) step);
-                if (count > 100) throw new IllegalArgumentException("range may execute at most 100 times");
+                if (!dynamicRange && count > 100) throw new IllegalArgumentException("range may execute at most 100 times");
                 if (cursor.at >= lines.size() || lines.get(cursor.at).indent() != indent + 1)
                     throw new IllegalArgumentException("empty for body");
-                node.addProperty("op", "FOR");
+                node.addProperty("op", dynamicRange ? "FOR_EXPR" : "FOR");
                 node.addProperty("name", forRange.group(1));
+                if (dynamicRange) node.addProperty("expression", forRange.group(2));
                 node.addProperty("start", start);
                 node.addProperty("end", end);
                 node.addProperty("step", step);
@@ -167,6 +235,20 @@ public final class KurumiScriptParser {
                         throw new IllegalArgumentException("empty else");
                     node.add("else", block(lines, cursor, indent + 1, depth + 1, loopDepth));
                 }
+            } else if (SIMPLE_CALL.matcher(code).matches()
+                    && FUNCTION_NAMES.get().contains(SIMPLE_CALL.matcher(code).replaceFirst("$1"))) {
+                Matcher call = SIMPLE_CALL.matcher(code); call.matches();
+                node.addProperty("op", "CALL_FUNCTION");
+                node.addProperty("method", call.group(1));
+                node.addProperty("expression", call.group(2));
+                node.addProperty("name", "");
+            } else if (ACTION_ASSIGN.matcher(code).matches()
+                    && FUNCTION_NAMES.get().contains(code.substring(code.indexOf('=') + 1).stripLeading().split("\\(", 2)[0])) {
+                Matcher call = ACTION_ASSIGN.matcher(code); call.matches();
+                node.addProperty("op", "CALL_FUNCTION");
+                node.addProperty("name", call.group(1));
+                node.addProperty("method", call.group(2));
+                node.addProperty("expression", call.group(3));
             } else if (isActionAssignment(code)) {
                 Matcher m = ACTION_ASSIGN.matcher(code); m.matches();
                 if ("hold_use_item".equals(m.group(2)) && !validHoldArgs(m.group(3)))
@@ -341,8 +423,9 @@ public final class KurumiScriptParser {
             } else if (code.equals("continue")) {
                 if (loopDepth == 0) throw new IllegalArgumentException("continue outside loop");
                 node.addProperty("op", "CONTINUE");
-            } else if (code.equals("return") || RETURN.matcher(code).matches()) {
+            } else if (code.equals("return") || code.matches("return\\s+.{1,500}")) {
                 node.addProperty("op", "RETURN");
+                node.addProperty("expression", code.equals("return") ? "" : code.substring(7).trim());
             } else {
                 Matcher m = CALL.matcher(code);
                 if (!m.matches()) throw new IllegalArgumentException("第 " + lines.get(cursor.at - 1).number() + " 行不支持的语句：" + code.substring(0, Math.min(code.length(), 100)));

@@ -59,8 +59,11 @@ public final class KurumiWebActions {
                 每行一个命令，嵌套缩进四个空格。支持 repeat(4): 固定次数循环（1-20次，展开最多200语句）；
                 支持 for i in range(10):、for i in range(1,6):、for i in range(9,0,-2):（至多100次），
                 支持 while/if/else、break、continue、return "完成"、if result.success:，
+                支持 def function(arg): 定义带最多6个参数的自定义函数，调用 value = function(3) 并在函数里 return 表达式。
+                函数可以调用其他自定义函数，但禁止直接或间接递归；重复操作用 for/while。
+                支持 for i in range(count):，count 可以是整数变量，运行时仍最多100次。
                 以及 check_inventory、check_chest、check_distance 的条件比较。
-                允许通用变量赋值、变量重新赋值、加减乘除、布尔条件和 JSON 字典点号访问；禁止函数定义、import。
+                允许通用变量赋值、变量重新赋值、加减乘除、布尔条件和 JSON 字典点号访问；禁止 import。
                 动作允许赋值：moved = move("back",2)，placed = place_block("minecraft:cobblestone")；
                 结果提供 success、completed、message。if moved.success: 可以判断是否接受命令，
                 但 move/place_block/interact 的 completed=false，success 不等于服务器确认动作完成；

@@ -113,13 +113,31 @@ public final class KurumiTaskPlanner {
     }
 
     private static List<Statement> parseStatements(JsonArray array, int depth, int[] budget) {
-        if (depth > 3 || array.size() > 200) throw new IllegalArgumentException("nesting");
+        if (depth > 5 || array.size() > 200) throw new IllegalArgumentException("nesting");
         List<Statement> statements = new ArrayList<>();
         for (JsonElement el : array) {
             if (++budget[0] > 200 || !el.isJsonObject()) throw new IllegalArgumentException("budget");
             JsonObject node = el.getAsJsonObject();
             String op = node.get("op").getAsString();
-            if ("FOR".equals(op)) {
+            if ("DEF".equals(op)) {
+                String name = node.get("name").getAsString();
+                String params = node.get("params").getAsString();
+                if (!name.matches("[a-z][a-z0-9_]{0,23}") || params.length() > 200)
+                    throw new IllegalArgumentException("invalid function definition");
+                List<Statement> body = parseStatements(node.getAsJsonArray("body"), depth + 1, budget);
+                if (body.isEmpty()) throw new IllegalArgumentException("empty function");
+                statements.add(new Statement(op, new Step(op, params, 1, null, null, null, name),
+                        null, body, List.of()));
+            } else if ("CALL_FUNCTION".equals(op)) {
+                String name = node.get("name").getAsString();
+                String method = node.get("method").getAsString();
+                String args = node.get("expression").getAsString();
+                if (!name.matches("|[a-z][a-z0-9_]{0,23}")
+                        || !method.matches("[a-z][a-z0-9_]{0,23}") || args.length() > 500)
+                    throw new IllegalArgumentException("invalid function call");
+                statements.add(new Statement(op, new Step(method, args, 1, null, null, null, name),
+                        null, List.of(), List.of()));
+            } else if ("FOR".equals(op) || "FOR_EXPR".equals(op)) {
                 String name = node.get("name").getAsString();
                 int start = node.get("start").getAsInt();
                 int end = node.get("end").getAsInt();
@@ -130,9 +148,10 @@ public final class KurumiTaskPlanner {
                     throw new IllegalArgumentException("invalid range");
                 long count = step > 0 ? Math.max(0, ((long) end - start + step - 1) / step)
                         : Math.max(0, ((long) start - end - step - 1) / -(long) step);
-                if (count > 100) throw new IllegalArgumentException("range budget exceeded");
+                if ("FOR".equals(op) && count > 100) throw new IllegalArgumentException("range budget exceeded");
                 List<Statement> body = parseStatements(node.getAsJsonArray("body"), depth + 1, budget);
-                statements.add(new Statement(op, new Step("FOR", start + "," + end + "," + step,
+                statements.add(new Statement(op, new Step(op, "FOR_EXPR".equals(op)
+                        ? node.get("expression").getAsString() : start + "," + end + "," + step,
                         1, null, null, null, name), null, body, List.of()));
             } else if ("IF".equals(op) || "WHILE".equals(op)) {
                 Condition condition = parseCondition(node.getAsJsonObject("condition"));
@@ -206,7 +225,10 @@ public final class KurumiTaskPlanner {
                 statements.add(new Statement(op, new Step("TALK", "", 1, null, null, null, message),
                         null, List.of(), List.of()));
             } else if ("RETURN".equals(op)) {
-                statements.add(new Statement(op, null, null, List.of(), List.of()));
+                String expression = node.has("expression") ? node.get("expression").getAsString() : "";
+                if (expression.length() > 500) throw new IllegalArgumentException("return too long");
+                statements.add(new Statement(op, new Step(op, expression, 1, null, null, null, ""),
+                        null, List.of(), List.of()));
             } else if ("BREAK".equals(op)) {
                 statements.add(new Statement(op, null, null, List.of(), List.of()));
             } else if ("CONTINUE".equals(op)) {

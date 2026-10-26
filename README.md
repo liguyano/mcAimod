@@ -289,7 +289,19 @@ for i in range(1, 6):
     talk(i)
 ```
 
-脚本支持 `while`、`if`、`else`、`break`、`return`、`result = action(...)`、`result.success`、`not result.success`、`check_chest(...)`、`check_inventory(...)`。动作函数白名单：`attack_mob`、`attack_player`、`pickup_item_all`、`chest_put_item_all`、`equip_armor`、`equip_main_hand`、`mine`。不支持任意变量、运算、导入模块或执行系统代码。动作成功表示原执行器验证通过；攻击目前仅代表攻击尝试结束，不能证明目标死亡。每级缩进必须为 4 个空格；保留循环次数、总时间与动作数上限。
+脚本支持 `while`、`if`、`else`、`break`、`return`、`result = action(...)`、`result.success`、`not result.success`、`check_chest(...)`、`check_inventory(...)`。支持 `def` 自定义函数（仅顶层定义，最多6个参数）、局部变量、`return` 表达式及函数间调用；**禁止直接与间接递归**，重复工作请使用 `for` / `while`。`range(count)` 支持传入整数变量，运行时仍限制最多100轮。
+
+```python
+def walk_twice(distance):
+    for i in range(2):
+        result = move("forward", distance)
+    return result
+
+outcome = walk_twice(3)
+observe(outcome)
+```
+
+动作函数白名单：`attack_mob`、`attack_player`、`pickup_item_all`、`chest_put_item_all`、`equip_armor`、`equip_main_hand`、`mine`。不支持任意 Python 导入模块或执行系统代码。动作成功表示原执行器验证通过；攻击目前仅代表攻击尝试结束，不能证明目标死亡。每级缩进必须为 4 个空格；保留循环次数、总时间与动作数上限。
 
 
 ### 在任务中发送公屏聊天：`talk()`

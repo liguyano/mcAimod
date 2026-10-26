@@ -20,6 +20,9 @@ public final class KurumiPseudoExecutor {
         int forValue;
         int index;
         int iterations;
+        String functionName;
+        String returnVariable;
+        java.util.Map<String, com.google.gson.JsonElement> callerVariables;
         Frame(List<KurumiTaskPlanner.Statement> statements, KurumiTaskPlanner.Statement loop) {
             this.statements = statements;
             this.loop = loop;
@@ -38,6 +41,7 @@ public final class KurumiPseudoExecutor {
         }
     }
     private static final Deque<Frame> frames = new ArrayDeque<>();
+    private static final java.util.Map<String, KurumiTaskPlanner.Statement> functions = new java.util.HashMap<>();
     private static long started;
     private static long runSequence, activeRunId, finishedRunId;
     private static boolean finishedRunSucceeded;
@@ -153,6 +157,7 @@ public final class KurumiPseudoExecutor {
         awaitingExternal = false;
         awaitingMenu = false;
         frames.clear();
+        functions.clear();
         KurumiBlockBreakingBridge.cancel();
         KurumiChestSearch.cancel();
         KurumiTakeAllBridge.cancel();
@@ -181,6 +186,11 @@ public final class KurumiPseudoExecutor {
         if (program == null || program.statements().isEmpty())
             return new BaritoneBridge.Result(false, "脚本为空");
         frames.clear();
+        functions.clear();
+        for (var statement : program.statements()) {
+            if ("DEF".equals(statement.op()) && functions.putIfAbsent(statement.step().target(), statement) != null)
+                return new BaritoneBridge.Result(false, "函数定义名称重复");
+        }
         activeRunId = ++runSequence;
         finishedRunObserved = false;
         observations.setLength(0);
@@ -218,6 +228,49 @@ public final class KurumiPseudoExecutor {
             case "NE" -> actual != c.count();
             default -> false;
         };
+    }
+    private static void finishFunction(Frame function, com.google.gson.JsonElement result) {
+        while (!frames.isEmpty()) {
+            Frame popped = frames.pop();
+            if (popped == function) break;
+        }
+        variables.clear();
+        variables.putAll(function.callerVariables);
+        if (function.returnVariable != null && !function.returnVariable.isEmpty()) {
+            checkMemory(function.returnVariable, result);
+            variables.put(function.returnVariable, result.deepCopy());
+            observe("函数返回 " + function.returnVariable, result.toString());
+        }
+        if (!frames.isEmpty()) frames.peek().index++;
+    }
+    private static Frame enclosingFunction() {
+        for (Frame f : frames) if (f.functionName != null) return f;
+        return null;
+    }
+    private static void restoreFunctionScopesOnPause() {
+        for (Frame frame : frames) {
+            if (frame.functionName == null) continue;
+            variables.clear();
+            variables.putAll(frame.callerVariables);
+        }
+    }
+    private static void callFunction(KurumiTaskPlanner.Statement stmt, Frame caller) {
+        String name = stmt.step().action();
+        KurumiTaskPlanner.Statement definition = functions.get(name);
+        if (definition == null) throw new IllegalArgumentException("没有定义函数: " + name);
+        for (Frame frame : frames) if (name.equals(frame.functionName))
+            throw new IllegalArgumentException("禁止函数递归: " + name);
+        String parameters = definition.step().itemId();
+        String[] names = parameters.isEmpty() ? new String[0] : parameters.split(",");
+        var args = KurumiExpressions.arguments(stmt.step().itemId(), variables);
+        if (args.size() != names.length) throw new IllegalArgumentException(name + " 参数数量应为 " + names.length);
+        var saved = new java.util.HashMap<>(variables);
+        Frame called = new Frame(definition.body(), null);
+        called.functionName = name;
+        called.returnVariable = stmt.step().target();
+        called.callerVariables = saved;
+        for (int i = 0; i < names.length; i++) variables.put(names[i], args.get(i).deepCopy());
+        frames.push(called);
     }
     private static void completeCondition(boolean result) {
         KurumiTaskPlanner.Statement stmt = pendingStatement;
@@ -399,6 +452,10 @@ public final class KurumiPseudoExecutor {
         }
         Frame frame = frames.peek();
         if (frame.index >= frame.statements.size()) {
+            if (frame.functionName != null) {
+                finishFunction(frame, com.google.gson.JsonNull.INSTANCE);
+                return;
+            }
             if (frame.forVariable != null) {
                 long next = (long) frame.forValue + frame.forStep;
                 if ((frame.forStep > 0 && next < frame.forEnd)
@@ -436,6 +493,39 @@ public final class KurumiPseudoExecutor {
         }
         KurumiWebMonitor.step(stmt, actions, frame.iterations, lastResultSuccess);
         switch (stmt.op()) {
+            case "DEF" -> frame.index++;
+            case "CALL_FUNCTION" -> {
+                try {
+                    callFunction(stmt, frame);
+                } catch (RuntimeException ex) {
+                    KurumiWebMonitor.log("自定义函数调用失败：" + ex.getMessage());
+                    cancel();
+                }
+            }
+            case "FOR_EXPR" -> {
+                try {
+                    var parts = KurumiExpressions.arguments(stmt.step().itemId(), variables);
+                    if (parts.size() < 1 || parts.size() > 3)
+                        throw new IllegalArgumentException("range 参数必须为1到3个");
+                    int start = parts.size() == 1 ? 0 : parts.get(0).getAsInt();
+                    int end = parts.size() == 1 ? parts.get(0).getAsInt() : parts.get(1).getAsInt();
+                    int step = parts.size() == 3 ? parts.get(2).getAsInt() : 1;
+                    if (step == 0 || Math.abs((long) start) > 100_000 || Math.abs((long) end) > 100_000
+                            || Math.abs((long) step) > 100_000)
+                        throw new IllegalArgumentException("range 参数超出限制");
+                    long count = step > 0 ? Math.max(0, ((long) end - start + step - 1) / step)
+                            : Math.max(0, ((long) start - end - step - 1) / -(long) step);
+                    if (count > 100) throw new IllegalArgumentException("range 最多循环100次");
+                    if (count == 0) frame.index++;
+                    else {
+                        variables.put(stmt.step().target(), new com.google.gson.JsonPrimitive(start));
+                        frames.push(new Frame(stmt, start, end, step));
+                    }
+                } catch (RuntimeException ex) {
+                    KurumiWebMonitor.log("for range 表达式失败：" + ex.getMessage());
+                    cancel();
+                }
+            }
             case "FOR" -> {
                 String[] range = stmt.step().itemId().split(",", -1);
                 int start = Integer.parseInt(range[0]);
@@ -489,6 +579,7 @@ public final class KurumiPseudoExecutor {
                         if (args.size() != 1) throw new IllegalArgumentException("observe 需要一个参数");
                         String value = KurumiExpressions.text(args.get(0));
                         observe("AI观察", value);
+                        restoreFunctionScopesOnPause();
                         finishedRunObserved = true;
                         finishRun(true, "observe() 主动交还控制权给 AI");
                         running = false;
@@ -1038,10 +1129,23 @@ public final class KurumiPseudoExecutor {
                 }
             }
             case "RETURN" -> {
-                finishRun(true, "脚本主动 RETURN");
-                running = false;
-                frames.clear();
-                KurumiWebMonitor.state("当前脚本 RETURN，等待 AI 决策");
+                try {
+                    Frame function = enclosingFunction();
+                    if (function != null) {
+                        String expression = stmt.step().itemId();
+                        var value = expression.isEmpty() ? com.google.gson.JsonNull.INSTANCE
+                                : KurumiExpressions.evaluate(expression, variables);
+                        finishFunction(function, value);
+                    } else {
+                        finishRun(true, "脚本主动 RETURN");
+                        running = false;
+                        frames.clear();
+                        KurumiWebMonitor.state("当前脚本 RETURN，等待 AI 决策");
+                    }
+                } catch (RuntimeException ex) {
+                    KurumiWebMonitor.log("函数返回失败：" + ex.getMessage());
+                    cancel();
+                }
             }
             case "BREAK" -> {
                 Frame target = null;
