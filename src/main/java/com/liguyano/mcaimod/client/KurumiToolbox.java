@@ -156,8 +156,11 @@ public final class KurumiToolbox {
             String prefix = tool.startsWith("check_inventory_item:")
                     ? "check_inventory_item:" : "check_inventory_count:";
             String id = tool.substring(prefix.length());
-            if (!id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
-                return "{\\"error\\":\\"invalid_item_id\\"}";
+            if (!id.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")) {
+                JsonObject error = new JsonObject();
+                error.addProperty("error", "invalid_item_id");
+                return error.toString();
+            }
             int count = KurumiTaskChecks.inventoryCount(id);
             JsonObject check = new JsonObject();
             check.addProperty("item_id", id);
