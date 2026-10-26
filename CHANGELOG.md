@@ -5,6 +5,12 @@
 
 ## Unreleased — 2026-10-26
 
+- 为 Kurumi 配方查询接入 NeoForge 的 `OnDatapackSyncEvent#sendRecipes` 与客户端 `RecipesReceivedEvent#getRecipeMap`：
+  同步工作台、熔炉、烟熏炉、高炉、营火、切石机和锻造台配方；`get_crafting_recipe(item_id)`
+  返回匹配的配方 ID、类型、产出数量与材料候选，不再只检查已解锁的客户端配方书。
+  客户端退出世界时清除同步缓存。自定义机器配方类型和 26.2 中非 RecipeManager 的酿造机制暂未覆盖；
+  远程服务器必须安装本 Mod 才能主动同步完整配方。待 JDK 25 构建与联机验证。
+
 - Kurumi Web 增加密码登录与 8 小时随机会话令牌；任务状态、脚本生成/执行、技能 API 均要求认证。增加连续登录失败限流。技能页支持查看、手动新增、编辑和删除技能及快捷触发词，保存继续使用受限解释器校验。真实密码只放在本机 config/mcaimod-web.json 或 MCAIMOD_WEB_PASSWORD 环境变量，不提交到仓库。
 
 ### 新增
