@@ -162,12 +162,14 @@ public final class KurumiToolbox {
                 return error.toString();
             }
             int count = KurumiTaskChecks.inventoryCount(id);
+            // Generic item query returns the quantity directly; keep the legacy method's object contract.
+            if (tool.startsWith("check_inventory_item:"))
+                return Integer.toString(count);
             JsonObject check = new JsonObject();
             check.addProperty("item_id", id);
             check.addProperty("exists", count > 0);
             check.addProperty("scope", "player_inventory");
-            if (tool.startsWith("check_inventory_count:"))
-                check.addProperty("count", count);
+            check.addProperty("count", count);
             return check.toString();
         }
         if (tool != null && tool.startsWith("check_position:")) {
