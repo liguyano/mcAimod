@@ -646,6 +646,8 @@ public final class KurumiClientController {
                         + "check_nearby_chest(\\\"minecraft:diamond\\\")、"
                         + "get_nearby_chest_result(\\\"minecraft:diamond\\\")、"
                         + "check_position(100,64,200,3)。"
+                        + "配方查询 get_crafting_recipe(item_id) 返回服务器通过 NeoForge 同步的标准工作站配方、产出和材料候选；"
+                        + "若 available=false 或 ingredients 为空，先说明配方同步范围限制，不得凭记忆猜配方；自定义机器和本版本非 RecipeManager 的酿造机制可能需要专门适配。"
                         + "打开容器后可使用 observe(inspect_container()) 向你返回全部槽位，"
                         + "observe(inspect_slot(0)) 返回指定槽位；不得预设模组机器的槽位用途。"
                         + "搜索只覆盖已加载区域；只有 talk(find_nearest_block(...)) 不会自动寻路，保存为变量后可传给 goto。"
