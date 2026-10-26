@@ -191,13 +191,29 @@ public final class KurumiInteractionBridge {
         if (stack.getCount() > maxCount)
             return new BaritoneBridge.Result(false, "产物槽有 " + stack.getCount()
                     + " 个，超过指定数量；请增大数量后再取（不会多拿）");
-        int destination = -1;
-        for (int i = menu.slots.size() - 36; i < menu.slots.size(); i++) {
-            if (menu.getSlot(i).getItem().isEmpty()) { destination = i; break; }
-        }
-        if (destination < 0)
-            return new BaritoneBridge.Result(false, "背包没有空槽，无法安全取出");
+        // Prefer an existing compatible stack before allocating a fresh inventory slot.
+        // A crafting output may be collected repeatedly, so spreading each result into
+        // a new slot would exhaust the inventory unnecessarily.
         int amount = stack.getCount();
+        int destination = -1;
+        int firstEmpty = -1;
+        for (int i = menu.slots.size() - 36; i < menu.slots.size(); i++) {
+            Slot slot = menu.getSlot(i);
+            if (!slot.mayPlace(stack)) continue;
+            ItemStack current = slot.getItem();
+            if (current.isEmpty()) {
+                if (firstEmpty < 0) firstEmpty = i;
+                continue;
+            }
+            if (ItemStack.isSameItemSameComponents(current, stack)
+                    && Math.min(current.getMaxStackSize(), slot.getMaxStackSize()) - current.getCount() >= amount) {
+                destination = i;
+                break;
+            }
+        }
+        if (destination < 0) destination = firstEmpty;
+        if (destination < 0)
+            return new BaritoneBridge.Result(false, "背包没有能合并产物的堆叠或空槽，无法安全取出");
         mc.gameMode.handleContainerInput(menu.containerId, output, 0, ContainerInput.PICKUP, mc.player);
         mc.gameMode.handleContainerInput(menu.containerId, destination, 0, ContainerInput.PICKUP, mc.player);
         return new BaritoneBridge.Result(true, "已尝试取出 " + itemId + " × " + amount
