@@ -266,7 +266,7 @@ public final class KurumiExpressions {
         }
         String tool;
         switch(name) {
-            case "find_nearest_block", "check_inventory_count", "get_crafting_recipe",
+            case "find_nearest_block", "check_inventory_item", "check_inventory_count", "get_crafting_recipe",
                     "check_nearby_chest", "get_nearby_chest_result" -> {
                 if (args.size()!=1) throw new IllegalArgumentException("工具参数数量错误");
                 tool=name+":"+string(args.get(0));
@@ -289,7 +289,7 @@ public final class KurumiExpressions {
             }
             default -> throw new IllegalArgumentException("不支持的表达式函数: "+name);
         }
-        if (!tool.matches("[a-z_]+(?::[A-Za-z0-9_.-]+){0,3}") || tool.length()>180)
+        if (!tool.matches("[a-z_]+(?::[A-Za-z0-9_./-]+){0,3}") || tool.length()>180)
             throw new IllegalArgumentException("工具参数无效");
         try { return JsonParser.parseString(KurumiToolbox.observe(tool)); }
         catch (RuntimeException ex) { throw new IllegalArgumentException("工具返回无效: "+name); }
