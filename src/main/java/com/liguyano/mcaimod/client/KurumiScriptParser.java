@@ -30,7 +30,7 @@ public final class KurumiScriptParser {
     private static final Pattern TWO = Pattern.compile("(drop|pickup|chest_take|chest_put|collect_and_store)\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})\\)");
     private static final Pattern PLACE_BLOCK = Pattern.compile("place_block\\(\"([a-z0-9_.:-]+)\"(?:,\\s*(-?\\d{1,8}),\\s*(-?\\d{1,4}),\\s*(-?\\d{1,8}))?\\)");
     private static final Pattern INTERACT = Pattern.compile("interact\\(\"([a-z0-9_.:-]+)\"\\)");
-    private static final Pattern TAKE_ITEM = Pattern.compile("take_item\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})\\)");
+    private static final Pattern TAKE_ITEM = Pattern.compile("take_item\\(\\\"([a-z0-9_.:-]+)\\\"(?:,\\\\s*(\\\\d{1,2}))?\\\\)");
     private static final Pattern PUT_ITEM = Pattern.compile("put_item\\(\"([a-z0-9_.:-]+)\",\\s*(\\d{1,2})(?:,\\s*\"(input|fuel|auto|grid_[1-9])\")?\\)");
     private static final Pattern MOVE = Pattern.compile("move\\(\\\"(forward|back|left|right)\\\",\\s*(\\d{1,2})\\)");
     private static final Pattern VARIABLE_ASSIGN = Pattern.compile("([a-z][a-z0-9_]{0,23})\\s*=\\s*(.+)");
@@ -239,8 +239,8 @@ public final class KurumiScriptParser {
                 Matcher m = ACTION_ASSIGN.matcher(code); m.matches();
                 if ("hold_use_item".equals(m.group(2)) && !validHoldArgs(m.group(3)))
                     throw new IllegalArgumentException("hold_use_item requires item ID and seconds");
-                if ("take_item".equals(m.group(2)) && !validHoldArgs(m.group(3)))
-                    throw new IllegalArgumentException("take_item requires item ID and quantity");
+                if ("take_item".equals(m.group(2)) && !m.group(3).matches("(?s)\\s*\\S[^,]*(?:,\\s*\\S[^,]*)?\\s*"))
+                    throw new IllegalArgumentException("take_item requires item ID and optional quantity");
                 if ("put_item".equals(m.group(2)) && !m.group(3).matches(
                         "(?s)\\s*\\S[^,]*,\\s*\\S[^,]*(?:,\\s*\\S[^,]*)?\\s*"))
                     throw new IllegalArgumentException("put_item requires item ID, quantity and optional slot");
@@ -287,7 +287,7 @@ public final class KurumiScriptParser {
                 step.addProperty("action", "PLACE_BLOCK");
                 step.addProperty("item_id", m.group(1));
                 if (m.group(2) != null) {
-                    step.addProperty("x", Integer.parseInt(m.group(2)));
+                    step.addProperty("x", m.group(2) == null ? 0 : Integer.parseInt(m.group(2)));
                     step.addProperty("y", Integer.parseInt(m.group(3)));
                     step.addProperty("z", Integer.parseInt(m.group(4)));
                 }
