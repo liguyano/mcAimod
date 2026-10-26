@@ -508,7 +508,6 @@ public final class KurumiClientController {
                         + "数量判断优先使用 check_inventory(\\\"minecraft:cherry_log\\\")，直接返回数字；"
                         + "check_inventory_item(\\\"minecraft:cherry_log\\\") 通用检查背包是否拥有指定物品，返回 item_id、exists、count 和 scope；"
                         + "例如 item = check_inventory_item(\\\"minecraft:cherry_log\\\")，用 item.exists 判断有没有，用 item.count 读取数量。"
-                + "observe(check_inventory_item(\"minecraft:diamond\"))、"
                         + "支持小数例如 rate = 1.5、rate = rate + 0.5，if/while 可直接比较变量。" 
                         + "动作支持变量接收：moved = move(\\\"back\\\",2)、"
                         + "placed = place_block(\\\"minecraft:cobblestone\\\")、"
