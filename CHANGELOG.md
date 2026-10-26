@@ -5,6 +5,8 @@
 
 ## Unreleased — 2026-10-26
 
+- 按使用者要求移除 Kurumi Web 登录：取消密码和令牌校验、登录表单与客户端认证头，开放任务状态、脚本预览/执行及技能管理接口；仍保留原解释器校验和请求格式检查。公网 cpolar 隧道访问者也能直接操作，请在隧道或网络层自行限制来源。未由助手编译。
+
 - 新增通用只读查询 `check_inventory_item(item_id)`：直接返回玩家背包中该物品的数量（数字；没有时为 `0`），可直接用于 `count > 0`、`count >= 64` 等判断，也支持 `observe(check_inventory_item("namespace:item"))`。旧的 `check_inventory_count` 保持兼容。补充脚本解析与数值比较测试；按用户要求不在本次执行编译。
 - 为 Kurumi 配方查询接入 NeoForge 的 `OnDatapackSyncEvent#sendRecipes` 与客户端 `RecipesReceivedEvent#getRecipeMap`：
   同步工作台、熔炉、烟熏炉、高炉、营火、切石机和锻造台配方；`get_crafting_recipe(item_id)`
