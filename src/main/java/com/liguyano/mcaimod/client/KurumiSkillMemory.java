@@ -21,7 +21,11 @@ import java.util.Set;
 /** Owner-approved library of safe, reusable, user-defined script functions. */
 final class KurumiSkillMemory {
     record Skill(String name, String title, String description, List<String> triggers,
-                 String code, int version) {}
+                 String code, int version, String group) {
+        Skill(String name, String title, String description, List<String> triggers, String code, int version) {
+            this(name, title, description, triggers, code, version, "skills");
+        }
+    }
 
     private static final Set<String> RESERVED = Set.of("停止", "stop", "过来", "睡觉", "tp", "保存", "不保存", "取消");
     private static final int MAX_SKILLS = 128;
@@ -40,8 +44,9 @@ final class KurumiSkillMemory {
             return List.of();
         }
     }
-    synchronized Optional<Skill> read(String name) {
-        return all().stream().filter(x -> x.name().equals(name)).findFirst();
+    synchronized Optional<Skill> read(String name) { return read("skills", name); }
+    synchronized Optional<Skill> read(String group, String name) {
+        return all().stream().filter(x -> x.group().equals(group) && x.name().equals(name)).findFirst();
     }
     synchronized Optional<Skill> findExactTrigger(String text) {
         String target = text.strip();
@@ -50,7 +55,7 @@ final class KurumiSkillMemory {
     synchronized String titles() {
         StringBuilder out = new StringBuilder();
         for (Skill s : all()) {
-            out.append(s.name()).append(" — ").append(s.title())
+            out.append(s.group()).append(".").append(s.name()).append(" — ").append(s.title())
                     .append("；用途：").append(s.description())
                     .append("；参数：").append(signature(s))
                     .append("；触发词：").append(String.join("、", s.triggers())).append('\n');
@@ -72,27 +77,30 @@ final class KurumiSkillMemory {
         if (script == null || script.length() > 12000)
             throw new IllegalArgumentException("脚本过长");
         java.util.regex.Pattern from = java.util.regex.Pattern.compile(
-                "^from skills import ([a-z][a-z0-9_]{0,23}(?:\\s*,\\s*[a-z][a-z0-9_]{0,23})*)$");
-        java.util.regex.Pattern one = java.util.regex.Pattern.compile(
-                "^import skills\\.([a-z][a-z0-9_]{0,23})$");
+                "^from ([a-z][a-z0-9_]{0,23}) import ([a-z][a-z0-9_]{0,23}(?:\\s*,\\s*[a-z][a-z0-9_]{0,23})*)$");
+        java.util.regex.Pattern single = java.util.regex.Pattern.compile(
+                "^import ([a-z][a-z0-9_]{0,23})\\.([a-z][a-z0-9_]{0,23})$");
         java.util.regex.Pattern legacy = java.util.regex.Pattern.compile(
                 "^(\\s*)run_skill\\(\\s*\"([a-z][a-z0-9_]{0,23})\"\\s*(?:,\\s*(.*))?\\)\\s*$");
         StringBuilder definitions = new StringBuilder();
         StringBuilder rewritten = new StringBuilder();
-        Set<String> added = new HashSet<>();
-        Set<String> namespaces = new HashSet<>();
+        Set<String> names = new HashSet<>();
+        java.util.Map<String,String> namespaces = new java.util.HashMap<>();
         for (String line : script.split("\n", -1)) {
             String trimmed = line.strip();
-            java.util.regex.Matcher multi = from.matcher(trimmed);
-            java.util.regex.Matcher single = one.matcher(trimmed);
-            java.util.regex.Matcher old = legacy.matcher(line);
+            var multi = from.matcher(trimmed);
+            var one = single.matcher(trimmed);
+            var old = legacy.matcher(line);
+            String group = "skills";
             List<String> imports = null;
             if (multi.matches()) {
-                imports = java.util.Arrays.stream(multi.group(1).split(","))
+                group = multi.group(1);
+                imports = java.util.Arrays.stream(multi.group(2).split(","))
                         .map(String::strip).toList();
-            } else if (single.matches()) {
-                imports = List.of(single.group(1));
-                namespaces.add(single.group(1));
+            } else if (one.matches()) {
+                group = one.group(1);
+                imports = List.of(one.group(2));
+                namespaces.put(group + "." + one.group(2), one.group(2));
             } else if (old.matches()) {
                 imports = List.of(old.group(2));
                 rewritten.append(old.group(1)).append(old.group(2))
@@ -101,38 +109,41 @@ final class KurumiSkillMemory {
             } else {
                 if (trimmed.startsWith("import ") || trimmed.startsWith("from ")
                         || trimmed.startsWith("run_skill("))
-                    throw new IllegalArgumentException("仅支持 from skills import name 或 import skills.name");
+                    throw new IllegalArgumentException("只允许从已保存的技能分组 import");
                 rewritten.append(line).append('\n');
             }
             if (imports != null) {
                 if (!old.matches() && !line.equals(trimmed))
-                    throw new IllegalArgumentException("技能 import 必须在脚本顶层");
+                    throw new IllegalArgumentException("import 必须在脚本顶层");
                 for (String name : imports) {
-                    Skill skill = read(name).orElseThrow(() ->
-                            new IllegalArgumentException("未保存的技能：" + name));
-                    if (added.add(name)) {
-                        if (!valid(skill)) throw new IllegalArgumentException("已保存技能无效：" + name);
-                        definitions.append(skill.code()).append('\n');
-                    }
+                    Skill skill = read(group, name).orElseThrow(() ->
+                            new IllegalArgumentException("技能不存在：" + group + "." + name));
+                    if (!names.add(name))
+                        throw new IllegalArgumentException("重复导入技能名：" + name);
+                    if (!valid(skill)) throw new IllegalArgumentException("已保存技能无效：" + name);
+                    definitions.append(skill.code()).append('\n');
                 }
             }
         }
-        if (added.isEmpty()) return script;
+        if (names.isEmpty()) return script;
         String calls = rewritten.toString();
-        for (String name : namespaces)
-            calls = calls.replaceAll("(?m)\\bskills\\." + java.util.regex.Pattern.quote(name) + "\\s*\\(", name + "(");
+        for (var entry : namespaces.entrySet())
+            calls = calls.replaceAll("(?m)\\b" + java.util.regex.Pattern.quote(entry.getKey())
+                    + "\\s*\\(", entry.getValue() + "(");
         String expanded = definitions.append(calls).toString();
         if (expanded.length() > 24000)
-            throw new IllegalArgumentException("展开后的技能脚本过长");
+            throw new IllegalArgumentException("导入后的技能脚本过长");
         return expanded;
     }
 
-    synchronized JsonObject describe(String name) {
+    synchronized JsonObject describe(String name) { return describe("skills", name); }
+    synchronized JsonObject describe(String group, String name) {
         JsonObject result = new JsonObject();
-        Optional<Skill> skill = read(name);
+        Optional<Skill> skill = read(group, name);
         result.addProperty("found", skill.isPresent());
         skill.ifPresent(s -> {
             result.addProperty("name", s.name());
+            result.addProperty("group", s.group());
             result.addProperty("title", s.title());
             result.addProperty("description", s.description());
             result.addProperty("code", s.code());
@@ -152,7 +163,8 @@ final class KurumiSkillMemory {
             for (JsonElement el : keywords) triggers.add(el.getAsString());
             Skill skill = new Skill(proposal.get("name").getAsString(), proposal.get("title").getAsString(),
                     proposal.get("description").getAsString(), List.copyOf(triggers),
-                    proposal.get("code").getAsString(), 1);
+                    proposal.get("code").getAsString(), 1,
+                    proposal.has("group") ? proposal.get("group").getAsString() : "skills");
             return valid(skill) ? Optional.of(skill) : Optional.empty();
         } catch (RuntimeException ex) { return Optional.empty(); }
     }
@@ -162,10 +174,10 @@ final class KurumiSkillMemory {
         try {
             JsonObject root = readRoot();
             JsonArray current = root.getAsJsonArray("skills");
-            if (current.size() >= MAX_SKILLS && read(candidate.name()).isEmpty()) return false;
+            if (current.size() >= MAX_SKILLS && read(candidate.group(), candidate.name()).isEmpty()) return false;
             for (JsonElement element : current) {
                 JsonObject entry = element.getAsJsonObject();
-                if (entry.get("name").getAsString().equals(candidate.name())) continue;
+                if (entry.get("name").getAsString().equals(candidate.name()) && groupOf(entry).equals(candidate.group())) continue;
                 JsonArray triggers = entry.getAsJsonArray("triggers");
                 for (JsonElement value : triggers) if (candidate.triggers().contains(value.getAsString())) return false;
             }
@@ -173,7 +185,7 @@ final class KurumiSkillMemory {
             boolean replaced = false;
             for (JsonElement element : current) {
                 JsonObject old = element.getAsJsonObject();
-                if (!old.get("name").getAsString().equals(candidate.name())) {
+                if (!old.get("name").getAsString().equals(candidate.name()) || !groupOf(old).equals(candidate.group())) {
                     updated.add(old);
                     continue;
                 }
@@ -186,7 +198,7 @@ final class KurumiSkillMemory {
                 JsonArray trimmed = new JsonArray();
                 for (int i = Math.max(0, history.size() - 5); i < history.size(); i++) trimmed.add(history.get(i));
                 updated.add(toJson(new Skill(candidate.name(), candidate.title(), candidate.description(),
-                        candidate.triggers(), candidate.code(), old.get("version").getAsInt() + 1), trimmed));
+                        candidate.triggers(), candidate.code(), old.get("version").getAsInt() + 1, candidate.group()), trimmed));
             }
             if (!replaced) updated.add(toJson(candidate, new JsonArray()));
             root.add("skills", updated);
@@ -232,9 +244,13 @@ final class KurumiSkillMemory {
         }
     }
 
+    private static String groupOf(JsonObject skill) {
+        return skill.has("group") ? skill.get("group").getAsString() : "skills";
+    }
     private static JsonObject toJson(Skill skill, JsonArray history) {
         JsonObject json = new JsonObject();
         json.addProperty("name", skill.name());
+        json.addProperty("group", skill.group());
         json.addProperty("title", skill.title());
         json.addProperty("description", skill.description());
         json.addProperty("code", skill.code());
@@ -246,7 +262,8 @@ final class KurumiSkillMemory {
         return json;
     }
     private static boolean valid(Skill skill) {
-        if (skill == null || skill.name() == null || !skill.name().matches("[a-z][a-z0-9_]{0,23}")
+        if (skill == null || skill.group() == null || !skill.group().matches("[a-z][a-z0-9_]{0,23}")
+                || skill.name() == null || !skill.name().matches("[a-z][a-z0-9_]{0,23}")
                 || skill.title() == null || skill.title().isBlank() || skill.title().length() > 48
                 || skill.description() == null || skill.description().isBlank() || skill.description().length() > 240
                 || skill.code() == null || skill.code().length() > 6000 || skill.triggers() == null
@@ -271,7 +288,7 @@ final class KurumiSkillMemory {
             for (JsonElement trigger : s.getAsJsonArray("triggers")) triggers.add(trigger.getAsString());
             skills.add(new Skill(s.get("name").getAsString(), s.get("title").getAsString(),
                     s.get("description").getAsString(), List.copyOf(triggers),
-                    s.get("code").getAsString(), s.get("version").getAsInt()));
+                    s.get("code").getAsString(), s.get("version").getAsInt(), groupOf(s)));
         }
         return List.copyOf(skills);
     }
