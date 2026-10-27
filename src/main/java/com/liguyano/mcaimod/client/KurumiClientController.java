@@ -93,6 +93,7 @@ public final class KurumiClientController {
         KurumiPlanExecutor.install();
         KurumiPseudoExecutor.install();
         KurumiWebMonitor.install();
+        KurumiVoiceManager.install();
         KurumiChestInspector.install();
         KurumiChestSearch.install();
         KurumiFishingBridge.install();
@@ -311,6 +312,27 @@ public final class KurumiClientController {
                     notice("已关闭聊天监听。");
                     return 1;
                 }))
+                .then(LiteralArgumentBuilder.<CommandSourceStack>literal("voice")
+                        .then(LiteralArgumentBuilder.<CommandSourceStack>literal("on").executes(context -> {
+                            KurumiVoiceManager.setEnabled(true);
+                            notice("本地语音朗读已开启。");
+                            return 1;
+                        }))
+                        .then(LiteralArgumentBuilder.<CommandSourceStack>literal("off").executes(context -> {
+                            KurumiVoiceManager.setEnabled(false);
+                            notice("本地语音朗读已关闭。");
+                            return 1;
+                        }))
+                        .then(LiteralArgumentBuilder.<CommandSourceStack>literal("stop").executes(context -> {
+                            KurumiVoiceManager.stop();
+                            notice("已停止当前语音和等待队列。");
+                            return 1;
+                        }))
+                        .then(LiteralArgumentBuilder.<CommandSourceStack>literal("test").executes(context -> {
+                            KurumiVoiceManager.test();
+                            notice("已将测试语音加入本地播放队列。");
+                            return 1;
+                        })))
                 .then(LiteralArgumentBuilder.<CommandSourceStack>literal("auto")
                         .then(LiteralArgumentBuilder.<CommandSourceStack>literal("on").executes(context -> {
                             autoFarmEnabled = true;
