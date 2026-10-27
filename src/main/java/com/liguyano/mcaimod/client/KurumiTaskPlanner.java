@@ -311,7 +311,7 @@ public final class KurumiTaskPlanner {
                     int quantity = stepNode.has("quantity") ? stepNode.get("quantity").getAsInt() : 1;
                     String slot = stepNode.has("target") ? stepNode.get("target").getAsString() : "auto";
                     if (!item.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}")
-                            || quantity < 1 || quantity > 64
+                            || quantity > 64 || (quantity < 1 && !("TAKE_ITEM".equals(special) && quantity == 0))
                             || "PUT_ITEM".equals(special)
                             && !java.util.Set.of("input", "fuel", "auto", "grid_1", "grid_2", "grid_3",
                                     "grid_4", "grid_5", "grid_6", "grid_7", "grid_8", "grid_9").contains(slot))
