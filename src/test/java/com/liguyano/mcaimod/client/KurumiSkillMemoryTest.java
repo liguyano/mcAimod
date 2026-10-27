@@ -64,18 +64,18 @@ class KurumiSkillMemoryTest {
     @Test void supportsCustomGroupsAndImports() {
         var store = new KurumiSkillMemory(temp.resolve("skills.json"));
         var first = new KurumiSkillMemory.Skill("make_sticks", "木棍", "制作木棍", List.of(),
-                "def make_sticks(log_id, source, target):\\n    return log_id", 1, "crafting");
+                "def make_sticks(log_id, source, target):\n    return log_id", 1, "crafting");
         var second = new KurumiSkillMemory.Skill("make_sticks", "其他", "测试默认组", List.of(),
-                "def make_sticks():\\n    return 1", 1);
+                "def make_sticks():\n    return 1", 1);
         assertTrue(store.saveApproved(first));
         assertTrue(store.saveApproved(second));
         assertTrue(store.read("crafting", "make_sticks").isPresent());
         assertEquals("skills", store.read("make_sticks").orElseThrow().group());
         assertTrue(store.titles().contains("crafting.make_sticks"));
-        String script = store.expandCalls("from crafting import make_sticks\\nmake_sticks(\"minecraft:cherry_log\",pos(1,64,2),pos(3,64,4))");
+        String script = store.expandCalls("from crafting import make_sticks\nmake_sticks(\"minecraft:cherry_log\",pos(1,64,2),pos(3,64,4))");
         assertTrue(script.contains("def make_sticks(log_id, source, target):"));
         assertTrue(KurumiScriptParser.parse(script).isPresent(), KurumiScriptParser.lastError());
-        String other = store.expandCalls("import crafting.make_sticks\\ncrafting.make_sticks(\"minecraft:oak_log\",pos(1,64,2),pos(3,64,4))");
+        String other = store.expandCalls("import crafting.make_sticks\ncrafting.make_sticks(\"minecraft:oak_log\",pos(1,64,2),pos(3,64,4))");
         assertTrue(KurumiScriptParser.parse(other).isPresent(), KurumiScriptParser.lastError());
         assertTrue(store.delete("crafting", "make_sticks"));
         assertTrue(store.read("crafting", "make_sticks").isEmpty());
