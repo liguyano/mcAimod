@@ -17,6 +17,16 @@ import net.neoforged.neoforge.common.NeoForge;
 public final class KurumiChestBridge {
     private record Pending(String itemId, int quantity, long startedAt) {}
     private static Pending pending;
+    private static BlockPos selectedChest;
+
+    /** Pin subsequent chest commands to one exact block rather than the nearest chest. */
+    public static BaritoneBridge.Result target(int x, int y, int z) {
+        if (y < -64 || y > 320 || Math.abs((long)x) > 30000000 || Math.abs((long)z) > 30000000)
+            return new BaritoneBridge.Result(false, "箱子坐标无效");
+        selectedChest = new BlockPos(x, y, z);
+        return new BaritoneBridge.Result(true, "箱子目标已设为 " + x + "," + y + "," + z);
+    }
+
     private static final String ALL_ITEMS = "*";
     private static final String TAKE_ALL = "take:*";
     private static final String TAKE_ITEM_PREFIX = "take:";
@@ -62,6 +72,8 @@ public final class KurumiChestBridge {
             return new BaritoneBridge.Result(false, "当前不在游戏世界");
         if (pending != null)
             return new BaritoneBridge.Result(false, "上一项箱子操作尚未完成");
+        if (selectedChest != null && mc.player.containerMenu instanceof ChestMenu)
+            return new BaritoneBridge.Result(false, "已打开容器时不能确认是指定坐标的箱子，请先 close_container()");
         if (itemId != null && !ALL_ITEMS.equals(itemId) && !TAKE_ALL.equals(itemId) && !itemId.startsWith(TAKE_ITEM_PREFIX)) {
             String matchId = itemId.startsWith(ALL_OF_ITEM_PREFIX) ? itemId.substring(ALL_OF_ITEM_PREFIX.length()) : itemId;
             int count = 0;
@@ -92,6 +104,15 @@ public final class KurumiChestBridge {
                 best = distance;
                 nearest = pos.immutable();
             }
+        }
+        if (selectedChest != null) {
+            BlockPos pinned = selectedChest;
+            if (!mc.level.hasChunkAt(pinned)
+                    || !(mc.level.getBlockState(pinned).getBlock() instanceof ChestBlock))
+                return new BaritoneBridge.Result(false, "指定坐标不是已加载的普通箱子：" + pinned);
+            if (mc.player.getEyePosition().distanceToSqr(Vec3.atCenterOf(pinned)) >= 6.0 * 6.0)
+                return new BaritoneBridge.Result(false, "指定箱子超出交互距离，请先走近：" + pinned);
+            nearest = pinned;
         }
         if (nearest == null)
             return new BaritoneBridge.Result(false, "交互范围内找不到普通箱子，请先走近箱子");
