@@ -1,5 +1,7 @@
 # 更新日志 / Changelog
 
+- 新增 `excaplescript/cherry_log_to_sticks_loop.kurumi` 自动樱花原木箱->工作台->木棍箱循环示例（每次最多64原木，两个箱子坐标占位），并让箱子观察报告 `free_capacity`、`empty_slots`、`full_for_item`；循环及数量验证仍受既有脚本预算限制，待游戏内测试。
+
 - 添加脚本 `chest_target(x,y,z)` 将 `chest_take`/`chest_put`/`chest_put_item_all`/`chest_open` 的交互固定到指定普通箱子坐标；`chest_target()` 清除目标，恢复就近选箱。`check_nearby_chest` 同样遵从所选坐标；加入 `close_container()` 关闭工作台或其他容器。箱子原有数量查询已存在，箱子剩余可容纳容量尚无专用结果。未编译验证。
 
 - 新增仅客户端本地播放的 Edge TTS：脚本 talk() 文字异步排队，Java 通过 Python 子进程运行 JAR 内置 `kurumi_tts.py` 并在本机使用 pygame 播放；支持中日音色、配置示例和 /kurumi voice on/off/stop/test。需要用户自行安装 `edge-tts`、`pygame`，尚未编译及游戏内实测。
