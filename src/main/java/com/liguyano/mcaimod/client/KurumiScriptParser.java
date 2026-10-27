@@ -251,7 +251,7 @@ public final class KurumiScriptParser {
             } else if (VARIABLE_ASSIGN.matcher(code).matches() && !code.startsWith("result = ")) {
                 Matcher m = VARIABLE_ASSIGN.matcher(code); m.matches();
                 Matcher call = ACTION_ASSIGN.matcher(code);
-                if (call.matches() && !java.util.Set.of("get_fishing_status", "get_agent_observation",
+                if (call.matches() && !java.util.Set.of("pos", "get_fishing_status", "get_agent_observation",
                         "len", "search_all_block", "check_inventory", "check_distance",
                         "list_remembered_blocks", "get_remembered_block_at", "get_remembered_block", "get_skill",
                         "remember_block", "get_chest_search_result", "find_nearest_block",

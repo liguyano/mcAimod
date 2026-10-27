@@ -9,6 +9,18 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class KurumiExpressionsTest {
+    @Test void acceptsAssignedPositionObjectsForSkillArguments() {
+        String script = """
+                log_box = pos(-21, 64, 27)
+                stick_box = pos(-225, 62, -17)
+                goto(log_box.x, log_box.y, log_box.z)
+                """;
+        assertTrue(KurumiScriptParser.parse(script).isPresent(), KurumiScriptParser.lastError());
+        JsonElement coordinate = KurumiExpressions.evaluate("pos(-21,64,27)", Map.of());
+        assertEquals(-21, coordinate.getAsJsonObject().get("x").getAsInt());
+        assertEquals(64, coordinate.getAsJsonObject().get("y").getAsInt());
+        assertEquals(27, coordinate.getAsJsonObject().get("z").getAsInt());
+    }
     @Test void permitsStandaloneChestQueriesInsideSkillFunctions() {
         assertTrue(KurumiScriptParser.parse("""
                 def inspect(item_id):
