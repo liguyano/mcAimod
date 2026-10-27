@@ -20,6 +20,11 @@ while running:
     space = check_nearby_chest("minecraft:stick")
     sleep(1)
     space = get_nearby_chest_result("minecraft:stick")
+    retries = 0
+    while space.status == "pending" and retries < 5:
+        sleep(1)
+        space = get_nearby_chest_result("minecraft:stick")
+        retries = retries + 1
     if space.status != "observed":
         raise Exception("未能确认木棍箱容量")
     if space.free_capacity < 8:
@@ -32,6 +37,11 @@ while running:
     source = check_nearby_chest("minecraft:cherry_log")
     sleep(1)
     source = get_nearby_chest_result("minecraft:cherry_log")
+    retries = 0
+    while source.status == "pending" and retries < 5:
+        sleep(1)
+        source = get_nearby_chest_result("minecraft:cherry_log")
+        retries = retries + 1
     if source.status != "observed":
         raise Exception("无法确认樱花原木箱库存")
     if source.count == 0:
