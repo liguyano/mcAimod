@@ -66,7 +66,10 @@ public final class KurumiDecisionParser {
             if (!"EXECUTE_SCRIPT".equals(name)) return Optional.empty();
             if ("EXECUTE_SCRIPT".equals(name)) {
                 if (!object.has("script") || !object.get("script").isJsonPrimitive()) return Optional.empty();
-                String script = KurumiSkillMemory.configured().expandCalls(object.get("script").getAsString());
+                String script = object.get("script").getAsString();
+                // Ordinary scripts must not initialize NeoForge config during standalone parser tests.
+                if (script.matches("(?s).*(?m:^\\s*(?:from |import |run_skill\\().*"))
+                    script = KurumiSkillMemory.configured().expandCalls(script);
                 return KurumiScriptParser.parse(script).map(program ->
                         new Decision(reply, Optional.empty(), "", null, null, null, "", Optional.empty(), Optional.of(program)));
             }
