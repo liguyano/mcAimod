@@ -22,3 +22,7 @@
 ## `cherry_log_to_sticks_def.py`
 
 与上述生产线同样用途，但将操作拆成四个带参数的 `def` 技能：`inspect_box(x,y,z,item_id)` 查询指定箱子、`fetch_logs(x,y,z,amount)` 取原木、`craft_batch(amount)` 合成木板和木棍、`store_sticks(x,y,z)` 存入目标箱。主循环按目标箱剩余容量和来源数量选择每批最多64根原木。需要填写脚本末尾的六个坐标并在 Kurumi Web 直接执行，不是系统 Python。当前未编译/游戏内实测；保留前述背包空间、材料混入和解释器执行预算限制。
+
+## `cherry_log_to_sticks_struct.py`
+
+坐标使用 `pos(x,y,z)` 构造包含 `.x/.y/.z` 的对象。总技能 `make_sticks(log_id, log_box, stick_box)` 只接收三项参数：原木 ID、原木箱位置、木棍箱位置；示例支持常见九种原木（其余需扩展木板映射）。`pos()` 是 Mod 新增的 Kurumi 表达式，不是标准 Python 的函数。请修改文件最下方两个 `pos(...)` 坐标。首次建议少量测试，原本的解释器动作次数/循环上限和背包净空限制仍适用。未编译实测。
