@@ -29,7 +29,7 @@ public final class KurumiTaskPlanner {
                 "pickup_all", "pickup_item_all", "chest_take", "chest_put",
                 "chest_put_item_all", "collect_and_store", "farm", "chain_on", "chain_off",
                 "fish", "stop_fishing", "come", "follow", "mine", "attack", "attack_mob",
-                "attack_player").contains(method);
+                "attack_player", "chest_target", "close_container").contains(method);
     }
     private static final List<String> SUPPORTED = List.of(
             "EQUIP_MAIN_HAND", "EQUIP_ARMOR", "GOTO", "CHEST_TAKE", "CHEST_PUT",
@@ -196,7 +196,7 @@ public final class KurumiTaskPlanner {
                 String method = node.get("method").getAsString();
                 String args = node.get("expression").getAsString();
                 if (!java.util.Set.of("goto", "talk", "observe", "fish", "stop_fishing", "sleep", "move", "look", "look_at", "interact", "use_item", "hold_use_item",
-                        "equip_main_hand", "place_block", "break_block", "search_chests", "take_from_memory").contains(method) || args.length() > 500)
+                        "equip_main_hand", "place_block", "break_block", "search_chests", "take_from_memory", "chest_target", "close_container").contains(method) || args.length() > 500)
                     throw new IllegalArgumentException("invalid dynamic call");
                 statements.add(new Statement(op, new Step(method, args, 1,
                         null, null, null, ""), null, List.of(), List.of()));
