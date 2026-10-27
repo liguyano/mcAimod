@@ -54,9 +54,7 @@ while running:
     limit = space.free_capacity / 8
     if amount > limit:
         amount = limit
-    # 小批次加工防止背包容纳不下256木板/512木棍
-    if amount > 16:
-        amount = 16
+    # 每轮最多64根；请确保背包有足够空位容纳产物
     if amount < 1:
         raise Exception("木棍箱已无足够空间")
 
