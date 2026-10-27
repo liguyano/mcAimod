@@ -29,6 +29,7 @@ public final class KurumiWebMonitor {
     private static JsonObject skillJson(KurumiSkillMemory.Skill skill) {
         JsonObject item = new JsonObject();
         item.addProperty("name", skill.name());
+        item.addProperty("group", skill.group());
         item.addProperty("title", skill.title());
         item.addProperty("description", skill.description());
         item.addProperty("code", skill.code());
@@ -75,7 +76,8 @@ public final class KurumiWebMonitor {
             String action = payload.has("action") ? payload.get("action").getAsString() : "save";
             if ("delete".equals(action)) {
                 String name = payload.get("name").getAsString();
-                boolean deleted = store.delete(name);
+                String group = payload.has("group") ? payload.get("group").getAsString() : "skills";
+                boolean deleted = store.delete(group, name);
                 JsonObject result = new JsonObject();
                 result.addProperty("accepted", deleted);
                 if (!deleted) result.addProperty("error", "技能不存在或删除失败");
@@ -83,6 +85,7 @@ public final class KurumiWebMonitor {
                 return;
             }
             String name = payload.get("name").getAsString();
+            String group = payload.has("group") ? payload.get("group").getAsString() : "skills";
             String title = payload.get("title").getAsString();
             String description = payload.get("description").getAsString();
             String code = payload.get("code").getAsString();
@@ -91,13 +94,13 @@ public final class KurumiWebMonitor {
             List<String> triggers = new java.util.ArrayList<>();
             for (var trigger : triggerArray) triggers.add(trigger.getAsString());
             KurumiSkillMemory.Skill candidate = new KurumiSkillMemory.Skill(
-                    name, title, description, List.copyOf(triggers), code, 1);
+                    name, title, description, List.copyOf(triggers), code, 1, group);
             boolean saved = store.saveApproved(candidate);
             JsonObject result = new JsonObject();
             result.addProperty("accepted", saved);
             if (!saved) result.addProperty("error",
                     "技能校验失败、触发词冲突或技能数量已达上限；请检查函数定义、名称和触发词");
-            else result.add("skill", skillJson(store.read(name).orElse(candidate)));
+            else result.add("skill", skillJson(store.read(group, name).orElse(candidate)));
             reply(exchange, saved ? 200 : 400, result);
         } catch (RuntimeException ex) {
             JsonObject error = new JsonObject();
@@ -380,6 +383,7 @@ public final class KurumiWebMonitor {
           <section class="card">
             <h3>手动新增 / 编辑技能</h3>
             <p class="muted">代码必须是解释器支持的 def 函数；触发词用英文逗号分隔。保存后立即生效，修改会保留最近版本。</p>
+            <label for="skillGroup">分组名（默认 skills）</label><input id="skillGroup" placeholder="skills" value="skills" maxlength="24">
             <label for="skillName">函数名（例如 loot_corpse）</label><input id="skillName" placeholder="loot_corpse" maxlength="24">
             <label for="skillTitle">标题</label><input id="skillTitle" placeholder="捡尸体" maxlength="48">
             <label for="skillDescription">说明</label><input id="skillDescription" placeholder="寻找最近的尸体并取出所有物品" maxlength="240">
@@ -480,7 +484,7 @@ public final class KurumiWebMonitor {
           list.className='';
           for(const skill of skills){
             const card=el('article','skill-row');
-            card.append(el('strong','',skill.title+' ('+skill.name+') · v'+skill.version));
+            card.append(el('strong','',skill.title+' ('+(skill.group||'skills')+'.'+skill.name+') · v'+skill.version));
             card.append(el('p','muted',skill.description||''));
             card.append(el('p','', '快捷触发词：'+((skill.triggers||[]).join('、')||'无')));
             const details=el('details');details.append(el('summary','','查看函数代码'));
@@ -489,6 +493,7 @@ public final class KurumiWebMonitor {
             const actions=el('div','skill-actions');
             const edit=el('button','secondary','编辑');edit.type='button';
             edit.addEventListener('click',()=>{
+              document.getElementById('skillGroup').value=skill.group||'skills';
               document.getElementById('skillName').value=skill.name;
               document.getElementById('skillTitle').value=skill.title;
               document.getElementById('skillDescription').value=skill.description;
@@ -502,7 +507,7 @@ public final class KurumiWebMonitor {
               if(!confirm('确定删除技能 '+skill.name+' 及其快捷触发词吗？'))return;
               try{
                 const response=await fetch('/api/skills',{method:'POST',headers:authHeaders({'Content-Type':'application/json','X-Kurumi-Web':'1'}),
-                  body:JSON.stringify({action:'delete',name:skill.name})});
+                  body:JSON.stringify({action:'delete',name:skill.name,group:skill.group||'skills'})});
                 const data=await response.json();
                 
                 if(!response.ok||!data.accepted)throw Error(data.error||'删除失败');
@@ -515,6 +520,7 @@ public final class KurumiWebMonitor {
         }
         async function saveSkill(){
           const name=document.getElementById('skillName').value.trim();
+          const group=document.getElementById('skillGroup').value.trim()||'skills';
           const title=document.getElementById('skillTitle').value.trim();
           const description=document.getElementById('skillDescription').value.trim();
           const triggers=document.getElementById('skillTriggers').value.split(',').map(x=>x.trim()).filter(Boolean);
@@ -522,7 +528,7 @@ public final class KurumiWebMonitor {
           const feedback=document.getElementById('skillFeedback');
           try{
             const response=await fetch('/api/skills',{method:'POST',headers:authHeaders({'Content-Type':'application/json','X-Kurumi-Web':'1'}),
-              body:JSON.stringify({action:'save',name,title,description,triggers,code})});
+              body:JSON.stringify({action:'save',group,name,title,description,triggers,code})});
             const data=await response.json();
             
             if(!response.ok||!data.accepted)throw Error(data.error||'保存失败');
@@ -532,6 +538,7 @@ public final class KurumiWebMonitor {
         }
         document.getElementById('saveSkillBtn').addEventListener('click',saveSkill);
         document.getElementById('clearSkillBtn').addEventListener('click',()=>{
+          document.getElementById('skillGroup').value='skills';
           for(const id of ['skillName','skillTitle','skillDescription','skillTriggers','skillCode'])document.getElementById(id).value='';
           document.getElementById('skillFeedback').textContent='表单已清空';
         });
