@@ -23,4 +23,13 @@ class KurumiRaiseExceptionTest {
         assertTrue(KurumiScriptParser.parse("raise Exception(\"a\", \"b\")").isEmpty());
         assertTrue(KurumiScriptParser.parse("raise Exception(__import__(\"os\"))").isEmpty());
     }
+
+    @Test void supportsConcatenatedActionErrorsWithoutAllowingArbitraryCalls() {
+        assertTrue(KurumiScriptParser.parse("""
+                result = goto(-110,70,62)
+                if not result.success:
+                    raise Exception("回家失败：" + result.message)
+                """).isPresent(), KurumiScriptParser.lastError());
+        assertTrue(KurumiScriptParser.parse("raise Exception(\"x\" + __import__(\"os\"))").isEmpty());
+    }
 }

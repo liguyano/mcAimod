@@ -35,13 +35,19 @@ public final class KurumiScriptParser {
     private static final Pattern MOVE = Pattern.compile("move\\(\\\"(forward|back|left|right)\\\",\\s*(\\d{1,2})\\)");
     private static final Pattern VARIABLE_ASSIGN = Pattern.compile("([a-z][a-z0-9_]{0,23})\\s*=\\s*(.+)");
     private static final Pattern ACTION_ASSIGN = Pattern.compile("([a-z][a-z0-9_]{0,23})\\s*=\\s*([a-z_]+)\\((.*)\\)");
-    private static final Pattern VARIABLE_CALL = Pattern.compile("(goto|talk|observe|fish|stop_fishing|sleep|move|look|look_at|interact|use_item|hold_use_item|equip_main_hand|place_block|break_block|search_chests|take_from_memory|chest_target|close_container)\\((.*)\\)");
+    private static final Pattern VARIABLE_CALL = Pattern.compile("(goto|talk|observe|fish|stop_fishing|sleep|move|look|look_at|interact|use_item|hold_use_item|equip_main_hand|place_block|break_block|search_chests|take_from_memory|chest_target|close_container|put_item|take_item)\\((.*)\\)");
     private static final Pattern GOTO_NAMED = Pattern.compile("goto\\(\"([^\"]{1,24})\"\\)");
     private static final Pattern GOTO = Pattern.compile("goto\\((-?\\d{1,8}),\\s*(-?\\d{1,4}),\\s*(-?\\d{1,8})\\)");
     private static final Pattern RETURN = Pattern.compile("return\\s+\"[^\"\\r\\n]{0,100}\"");
     private static final Pattern FOR_RANGE = Pattern.compile("for ([a-z][a-z0-9_]{0,23}) in range\\(([^()]*)\\):");
     private static final Pattern DEFINITION = Pattern.compile("def ([a-z][a-z0-9_]{0,23})\\(([^()]*)\\):");
     private static final Pattern SIMPLE_CALL = Pattern.compile("([a-z][a-z0-9_]{0,23})\\((.*)\\)");
+    private static final String RAISE_PART = "(?:\"[^\"\\r\\n]{1,190}\"|[a-z][a-z0-9_]{0,23}(?:\\.[a-z][a-z0-9_]{0,23})*)";
+    private static final Pattern RAISE_EXPRESSION = Pattern.compile(RAISE_PART + "(?:\\s*\\+\\s*" + RAISE_PART + ")*");
+    static boolean safeRaiseExpression(String expression) {
+        return expression != null && expression.length() <= 500
+                && RAISE_EXPRESSION.matcher(expression).matches();
+    }
     private static final ThreadLocal<java.util.Set<String>> FUNCTION_NAMES = ThreadLocal.withInitial(java.util.HashSet::new);
     private static final ThreadLocal<String> LAST_ERROR = ThreadLocal.withInitial(() -> "");
     public static String lastError() { return LAST_ERROR.get(); }
@@ -248,18 +254,10 @@ public final class KurumiScriptParser {
                 node.addProperty("name", m.group(1));
                 node.addProperty("method", m.group(2));
                 node.addProperty("expression", m.group(3));
-            } else if (VARIABLE_ASSIGN.matcher(code).matches() && !code.startsWith("result = ")) {
+            } else if (VARIABLE_ASSIGN.matcher(code).matches()) {
                 Matcher m = VARIABLE_ASSIGN.matcher(code); m.matches();
                 Matcher call = ACTION_ASSIGN.matcher(code);
-                if (call.matches() && !java.util.Set.of("pos", "get_fishing_status", "get_agent_observation",
-                        "len", "search_all_block", "check_inventory", "check_distance",
-                        "list_remembered_blocks", "get_remembered_block_at", "get_remembered_block", "get_skill",
-                        "remember_block", "get_chest_search_result", "find_nearest_block",
-                        "check_inventory_item", "check_inventory_count", "get_crafting_recipe", "check_nearby_chest",
-                        "get_nearby_chest_result", "get_position", "get_player_status",
-                        "get_environment", "get_inventory", "scan_nearby_entities",
-                        "scan_nearby_blocks", "scan_dropped_items", "inspect_container",
-                        "inspect_slot", "get_distance").contains(call.group(2)))
+                if (call.matches() && !KurumiExpressions.isExpressionFunction(call.group(2)))
                     throw new IllegalArgumentException("未知的赋值方法: " + call.group(2));
 
                 node.addProperty("op", "EXPR_ASSIGN");
@@ -397,12 +395,17 @@ public final class KurumiScriptParser {
                 Matcher m = VARIABLE_CALL.matcher(code); m.matches();
                 if ("hold_use_item".equals(m.group(1)) && !validHoldArgs(m.group(2)))
                     throw new IllegalArgumentException("hold_use_item requires item ID and seconds");
+                if ("put_item".equals(m.group(1)) && !m.group(2).matches(
+                        "(?s)\\s*\\S[^,]*,\\s*\\S[^,]*(?:,\\s*\\S[^,]*)?\\s*"))
+                    throw new IllegalArgumentException("put_item requires item ID, quantity and optional slot");
+                if ("take_item".equals(m.group(1)) && !m.group(2).matches(
+                        "(?s)\\s*\\S[^,]*(?:,\\s*\\S[^,]*)?\\s*"))
+                    throw new IllegalArgumentException("take_item requires item ID and optional quantity");
                 node.addProperty("op", "EXPR_CALL");
                 node.addProperty("method", m.group(1));
                 node.addProperty("expression", m.group(2));
             } else if (SIMPLE_CALL.matcher(code).matches()
-                    && java.util.Set.of("check_nearby_chest", "get_nearby_chest_result").contains(
-                            code.substring(0, code.indexOf('(')))) {
+                    && KurumiExpressions.isExpressionFunction(code.substring(0, code.indexOf('(')))) {
                 node.addProperty("op", "EXPR_EVAL");
                 node.addProperty("expression", code);
             } else if (TALK.matcher(code).matches()) {
@@ -418,9 +421,8 @@ public final class KurumiScriptParser {
                 if (!code.startsWith("raise Exception(") || !code.endsWith(")"))
                     throw new IllegalArgumentException("只支持 raise Exception(消息)");
                 String expression = code.substring("raise Exception(".length(), code.length() - 1).strip();
-                if (!expression.matches("\"[^\"\\r\\n]{1,240}\"")
-                        && !expression.matches("[a-z][a-z0-9_]{0,23}(?:\\.[a-z][a-z0-9_]{0,23})*"))
-                    throw new IllegalArgumentException("raise Exception 只接受一个字符串或变量属性");
+                if (!safeRaiseExpression(expression))
+                    throw new IllegalArgumentException("raise Exception 只接受字符串、变量属性及其 + 拼接");
                 node.addProperty("op", "RAISE");
                 node.addProperty("expression", expression);
             } else if (code.equals("return") || code.matches("return\\s+.{1,500}")) {

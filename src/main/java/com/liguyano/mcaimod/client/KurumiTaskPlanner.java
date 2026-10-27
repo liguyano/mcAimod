@@ -201,7 +201,7 @@ public final class KurumiTaskPlanner {
                 String method = node.get("method").getAsString();
                 String args = node.get("expression").getAsString();
                 if (!java.util.Set.of("goto", "talk", "observe", "fish", "stop_fishing", "sleep", "move", "look", "look_at", "interact", "use_item", "hold_use_item",
-                        "equip_main_hand", "place_block", "break_block", "search_chests", "take_from_memory", "chest_target", "close_container").contains(method) || args.length() > 500)
+                        "equip_main_hand", "place_block", "break_block", "search_chests", "take_from_memory", "chest_target", "close_container", "put_item", "take_item").contains(method) || args.length() > 500)
                     throw new IllegalArgumentException("invalid dynamic call");
                 statements.add(new Statement(op, new Step(method, args, 1,
                         null, null, null, ""), null, List.of(), List.of()));
@@ -236,8 +236,7 @@ public final class KurumiTaskPlanner {
                         null, List.of(), List.of()));
             } else if ("RAISE".equals(op)) {
                 String expression = node.get("expression").getAsString();
-                if (!expression.matches("\"[^\"\\r\\n]{1,240}\"")
-                        && !expression.matches("[a-z][a-z0-9_]{0,23}(?:\\.[a-z][a-z0-9_]{0,23})*"))
+                if (!KurumiScriptParser.safeRaiseExpression(expression))
                     throw new IllegalArgumentException("invalid raise expression");
                 int sourceLine = node.get("line").getAsInt();
                 if (sourceLine < 1 || sourceLine > 8192) throw new IllegalArgumentException("invalid source line");

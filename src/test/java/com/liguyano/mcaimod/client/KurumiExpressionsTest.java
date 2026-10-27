@@ -9,6 +9,50 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class KurumiExpressionsTest {
+    @Test void supportsIntegerDivisionForCraftingStackCounts() {
+        assertEquals(37, KurumiExpressions.integer(KurumiExpressions.evaluate("75 // 2", Map.of())));
+        assertEquals(64, KurumiExpressions.integer(KurumiExpressions.evaluate("128 // 2", Map.of())));
+        assertTrue(KurumiScriptParser.parse("half = planks // 2").isPresent(), KurumiScriptParser.lastError());
+        assertThrows(IllegalArgumentException.class,
+                () -> KurumiExpressions.evaluate("75 // 0", Map.of()));
+    }
+    @Test void permitsQueryFunctionsAsStandaloneAssignedAndNestedExpressions() {
+        String script = """
+                inspect_container()
+                result = get_nearby_chest_result("minecraft:cod")
+                items = get_inventory()
+                check_inventory_item("minecraft:salmon")
+                find_nearest_block("minecraft:chest")
+                get_environment()
+                get_player_status()
+                talk(inspect_container())
+                observe(result)
+                """;
+        assertTrue(KurumiScriptParser.parse(script).isPresent(), KurumiScriptParser.lastError());
+        assertTrue(KurumiScriptParser.parse("unknown_query(1)").isEmpty());
+    }
+
+    @Test void acceptsGeneratedFishingStopAndChestStorageScript() {
+        String script = """
+                stop_fishing()
+                come("SekaiSaionji")
+                chest = find_nearest_block("minecraft:chest")
+                if not chest.found:
+                    raise Exception("附近没有找到箱子")
+                goto(chest.x, chest.y, chest.z)
+                opened = interact("minecraft:chest")
+                if not opened.success:
+                    raise Exception("打开箱子失败: " + opened.message)
+                sleep(1)
+                inspect_container()
+                cod = check_inventory_item("minecraft:cod")
+                salmon = check_inventory_item("minecraft:salmon")
+                total = cod + salmon
+                if total > 0:
+                    put_item("minecraft:cod", cod, "auto")
+                """;
+        assertTrue(KurumiScriptParser.parse(script).isPresent(), KurumiScriptParser.lastError());
+    }
     @Test void acceptsAssignedPositionObjectsForSkillArguments() {
         String script = """
                 log_box = pos(-21, 64, 27)

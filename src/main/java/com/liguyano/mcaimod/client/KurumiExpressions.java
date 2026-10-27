@@ -5,6 +5,17 @@ import java.util.Map;
 
 /** Bounded expression evaluator for the pseudocode DSL, not a Python/Java interpreter. */
 public final class KurumiExpressions {
+    /** Expression functions also permitted as standalone (discarded-result) statements. */
+    public static boolean isExpressionFunction(String name) {
+        return java.util.Set.of("pos", "get_fishing_status", "get_agent_observation", "len",
+                "search_all_block", "check_inventory", "check_distance", "list_remembered_blocks",
+                "get_remembered_block_at", "get_remembered_block", "get_skill", "remember_block",
+                "get_chest_search_result", "find_nearest_block", "check_inventory_item",
+                "check_inventory_count", "get_crafting_recipe", "check_nearby_chest",
+                "get_nearby_chest_result", "get_position", "get_player_status", "get_environment",
+                "get_inventory", "scan_nearby_entities", "scan_nearby_blocks", "scan_dropped_items",
+                "inspect_container", "inspect_slot", "get_distance").contains(name);
+    }
     private final String input;
     private final Map<String, JsonElement> variables;
     private int at;
@@ -136,6 +147,11 @@ public final class KurumiExpressions {
         JsonElement a = unary();
         while (true) {
             if (take("*")) a = numeric(number(a)*number(unary()));
+            else if (take("//")) {
+                double d = number(unary());
+                if (d == 0) throw new IllegalArgumentException("不能除以零");
+                a = numeric(Math.floor(number(a) / d));
+            }
             else if (take("/")) {
                 double d=number(unary());
                 if (d==0) throw new IllegalArgumentException("不能除以零");
