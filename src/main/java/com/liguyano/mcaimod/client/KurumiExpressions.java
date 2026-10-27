@@ -28,7 +28,7 @@ public final class KurumiExpressions {
         boolean quoted = false;
         for (int i = 0; i <= source.length(); i++) {
             if (i == source.length() || (source.charAt(i) == ',' && depth == 0 && !quoted)) {
-                if (values.size() >= 6 || start == i) throw new IllegalArgumentException("参数数量或格式错误");
+                if (values.size() >= 7 || start == i) throw new IllegalArgumentException("参数数量或格式错误");
                 values.add(evaluate(source.substring(start, i), vars));
                 start = i + 1;
                 continue;
