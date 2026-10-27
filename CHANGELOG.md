@@ -1,5 +1,7 @@
 # 更新日志 / Changelog
 
+- 新增 Kurumi `pos(x,y,z)` 坐标对象表达式，供 `.x/.y/.z` 字段访问；`excaplescript/cherry_log_to_sticks_struct.py` 用 `make_sticks(log_id, log_box, stick_box)` 三参数封装原木箱到木棍箱流水线。此前提高函数参数容量至7；均待编译及游戏内验证。
+
 - 新增 `excaplescript/cherry_log_to_sticks_loop.py` 自动樱花原木箱->工作台->木棍箱循环示例（每次最多64原木，两个箱子坐标占位），并让箱子观察报告 `free_capacity`、`empty_slots`、`full_for_item`；循环及数量验证仍受既有脚本预算限制，待游戏内测试。
 
 - 添加脚本 `chest_target(x,y,z)` 将 `chest_take`/`chest_put`/`chest_put_item_all`/`chest_open` 的交互固定到指定普通箱子坐标；`chest_target()` 清除目标，恢复就近选箱。`check_nearby_chest` 同样遵从所选坐标；加入 `close_container()` 关闭工作台或其他容器。箱子原有数量查询已存在，箱子剩余可容纳容量尚无专用结果。未编译验证。
