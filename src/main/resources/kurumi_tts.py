@@ -9,7 +9,7 @@ import pygame
 
 
 async def main():
-    if len(sys.argv) != 7:
+    if len(sys.argv) != 6:
         raise SystemExit("Usage: kurumi_tts.py TEXT VOICE RATE PITCH VOLUME")
     _, text, voice, rate, pitch, volume = sys.argv
     fd, path = tempfile.mkstemp(prefix="kurumi-tts-", suffix=".mp3")
