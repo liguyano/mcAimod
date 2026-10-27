@@ -69,34 +69,56 @@ final class KurumiSkillMemory {
      * The model chooses values; the saved, approved code is loaded locally.
      */
     synchronized String expandCalls(String script) {
-        if (script == null || script.length() > 12000) throw new IllegalArgumentException("脚本过长");
-        java.util.regex.Pattern call = java.util.regex.Pattern.compile(
-                "^(\\s*)(?:run_skill)\\(\\s*\\\"([a-z][a-z0-9_]{0,23})\\\"\\s*(?:,\\s*(.*))?\\)\\s*$");
+        if (script == null || script.length() > 12000)
+            throw new IllegalArgumentException("脚本过长");
+        java.util.regex.Pattern from = java.util.regex.Pattern.compile(
+                "^from skills import ([a-z][a-z0-9_]{0,23}(?:\\s*,\\s*[a-z][a-z0-9_]{0,23})*)$");
+        java.util.regex.Pattern one = java.util.regex.Pattern.compile(
+                "^import skills\\.([a-z][a-z0-9_]{0,23})$");
+        java.util.regex.Pattern legacy = java.util.regex.Pattern.compile(
+                "^(\\s*)run_skill\\(\\s*\"([a-z][a-z0-9_]{0,23})\"\\s*(?:,\\s*(.*))?\\)\\s*$");
         StringBuilder definitions = new StringBuilder();
         StringBuilder rewritten = new StringBuilder();
         Set<String> added = new HashSet<>();
-        for (String line : script.split("\\n", -1)) {
-            java.util.regex.Matcher matcher = call.matcher(line);
-            if (matcher.matches()) {
-                String name = matcher.group(2);
-                Skill skill = read(name).orElseThrow(() ->
-                        new IllegalArgumentException("未保存的技能：" + name));
-                if (added.add(name)) {
-                    if (!valid(skill)) throw new IllegalArgumentException("保存的技能无效：" + name);
-                    definitions.append(skill.code()).append('\n');
-                }
-                rewritten.append(matcher.group(1)).append(name)
-                        .append('(').append(matcher.group(3) == null ? "" : matcher.group(3))
+        for (String line : script.split("\n", -1)) {
+            String trimmed = line.strip();
+            java.util.regex.Matcher multi = from.matcher(trimmed);
+            java.util.regex.Matcher single = one.matcher(trimmed);
+            java.util.regex.Matcher old = legacy.matcher(line);
+            List<String> imports = null;
+            if (multi.matches()) {
+                imports = java.util.Arrays.stream(multi.group(1).split(","))
+                        .map(String::strip).toList();
+            } else if (single.matches()) {
+                imports = List.of(single.group(1));
+            } else if (old.matches()) {
+                imports = List.of(old.group(2));
+                rewritten.append(old.group(1)).append(old.group(2))
+                        .append('(').append(old.group(3) == null ? "" : old.group(3))
                         .append(')').append('\n');
             } else {
-                if (line.stripLeading().startsWith("run_skill("))
-                    throw new IllegalArgumentException("run_skill 只能单独占一行，且第一个参数必须是双引号技能名");
+                if (trimmed.startsWith("import ") || trimmed.startsWith("from ")
+                        || trimmed.startsWith("run_skill("))
+                    throw new IllegalArgumentException("仅支持 from skills import name 或 import skills.name");
                 rewritten.append(line).append('\n');
+            }
+            if (imports != null) {
+                if (!old.matches() && !line.equals(trimmed))
+                    throw new IllegalArgumentException("技能 import 必须在脚本顶层");
+                for (String name : imports) {
+                    Skill skill = read(name).orElseThrow(() ->
+                            new IllegalArgumentException("未保存的技能：" + name));
+                    if (added.add(name)) {
+                        if (!valid(skill)) throw new IllegalArgumentException("已保存技能无效：" + name);
+                        definitions.append(skill.code()).append('\n');
+                    }
+                }
             }
         }
         if (added.isEmpty()) return script;
         String expanded = definitions.append(rewritten).toString();
-        if (expanded.length() > 24000) throw new IllegalArgumentException("展开后的技能脚本过长");
+        if (expanded.length() > 24000)
+            throw new IllegalArgumentException("展开后的技能脚本过长");
         return expanded;
     }
 
