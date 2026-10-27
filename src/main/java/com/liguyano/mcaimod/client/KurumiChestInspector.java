@@ -49,6 +49,15 @@ public final class KurumiChestInspector {
             double d = mc.player.getEyePosition().distanceToSqr(Vec3.atCenterOf(pos));
             if (d < best) { best = d; nearest = pos.immutable(); }
         }
+        if (KurumiChestBridge.selectedChest() != null) {
+            BlockPos selected = KurumiChestBridge.selectedChest();
+            if (!mc.level.hasChunkAt(selected)
+                    || !(mc.level.getBlockState(selected).getBlock() instanceof ChestBlock))
+                return "{\\"error\\":\\"selected_chest_missing\\"}";
+            if (mc.player.getEyePosition().distanceToSqr(Vec3.atCenterOf(selected)) >= 4.5 * 4.5)
+                return "{\\"error\\":\\"selected_chest_out_of_reach\\"}";
+            nearest = selected;
+        }
         if (nearest == null) return "{\"error\":\"no_chest_in_reach\"}";
         var interaction = mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND,
                 new BlockHitResult(Vec3.atCenterOf(nearest), Direction.UP, nearest, false));
