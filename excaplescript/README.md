@@ -37,3 +37,23 @@ make_sticks("minecraft:cherry_log", pos(100,64,200), pos(110,64,200))
 ```
 
 也支持 `import skills.make_sticks` 后用 `skills.make_sticks(...)`。这是 **Kurumi 限定的技能导入语法**，不会执行任意 Python import、下载模块或从 GitHub 自动加载；来源只限本机 `config/mcaimod-skills.json` 中已批准的技能。缺少参数时 AI 应先询问。现有无参快捷技能仍可运行；需要先开启 `/kurumi auto on`。以上功能尚未编译/游戏内实测。
+
+## 技能分组
+
+Kurumi Web 的「手动新增 / 编辑技能」现在新增 **分组名** 输入框，默认为 `skills`。保存到 `config/mcaimod-skills.json` 时写入 `group`，旧技能没有 group 字段的自动视为 skills，不需要迁移。分组名和函数名使用小写字母、数字、下划线（必须字母开头，最长24字符）。同一组内函数名唯一，不同组允许同名技能；快捷触发词仍必须全局唯一。
+
+例如将 `make_sticks` 保存到 `crafting` 后，AI 可以生成：
+
+```python
+from crafting import make_sticks
+make_sticks("minecraft:cherry_log", pos(100,64,200), pos(110,64,200))
+```
+
+也可以写：
+
+```python
+import crafting.make_sticks
+crafting.make_sticks("minecraft:cherry_log", pos(100,64,200), pos(110,64,200))
+```
+
+注意这是 Kurumi 的受限技能导入语法，**不是标准 Python 的任意模块加载**。不能从两个不同分组同时导入相同的函数名（解释器仅支持一份同名函数定义）。旧的 `from skills import ...` 保持可用。功能尚待编译与实际游戏验证。
