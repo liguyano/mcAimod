@@ -1,5 +1,7 @@
 # 更新日志 / Changelog
 
+- 新增仅客户端本地播放的 Edge TTS：脚本 talk() 文字异步排队，Java 通过 Python 子进程运行 JAR 内置 `kurumi_tts.py` 并在本机使用 pygame 播放；支持中日音色、配置示例和 /kurumi voice on/off/stop/test。需要用户自行安装 `edge-tts`、`pygame`，尚未编译及游戏内实测。
+
 - 修复无赋值的 `take_item("minecraft:bread")` 无法解析：任务规划器现在接受 TAKE_ITEM 数量为 0 的默认全部哨兵值，其他操作仍要求有效数量；对应容器测试覆盖两种写法。未在助手环境编译。
 
 - Kurumi 任务执行切换为一次尽量生成完整脚本、本地解释器连续执行；正常完成不再调用 LLM。只有 `observe(...)` 主动交接或脚本失败才将结果交给 LLM 重新规划剩余任务。保持任务时限、动作预算与原有脚本检查；未编译或游戏内验证。
