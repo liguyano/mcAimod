@@ -66,7 +66,8 @@ public final class KurumiDecisionParser {
             if (!"EXECUTE_SCRIPT".equals(name)) return Optional.empty();
             if ("EXECUTE_SCRIPT".equals(name)) {
                 if (!object.has("script") || !object.get("script").isJsonPrimitive()) return Optional.empty();
-                return KurumiScriptParser.parse(object.get("script").getAsString()).map(program ->
+                String script = KurumiSkillMemory.configured().expandCalls(object.get("script").getAsString());
+                return KurumiScriptParser.parse(script).map(program ->
                         new Decision(reply, Optional.empty(), "", null, null, null, "", Optional.empty(), Optional.of(program)));
             }
             return Optional.empty();
