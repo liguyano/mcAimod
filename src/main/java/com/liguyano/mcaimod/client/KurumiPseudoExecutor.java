@@ -597,6 +597,7 @@ public final class KurumiPseudoExecutor {
                             throw new IllegalArgumentException("消息内容不合法");
                         if (msg.length() > 120) msg=msg.substring(0,108)+"...(已截断)";
                         mc.getConnection().sendChat(msg);
+                        KurumiVoiceManager.speak(msg);
                         KurumiWebMonitor.log("talk(表达式): " + msg);
                         observe("talk", msg);
                         publicMessages++;
@@ -913,6 +914,7 @@ public final class KurumiPseudoExecutor {
                     return;
                 }
                 mc.getConnection().sendChat(message);
+                KurumiVoiceManager.speak(message);
                 KurumiWebMonitor.log("talk(observe): " + observation);
                 observe("工具查询 " + stmt.step().target(), observation);
                 publicMessages++;
@@ -936,6 +938,7 @@ public final class KurumiPseudoExecutor {
                     return;
                 }
                 mc.getConnection().sendChat(message);
+                KurumiVoiceManager.speak(message);
                 KurumiWebMonitor.log("talk: " + message);
                 observe("talk", message);
                 publicMessages++;
