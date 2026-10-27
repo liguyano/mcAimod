@@ -49,9 +49,57 @@ final class KurumiSkillMemory {
     }
     synchronized String titles() {
         StringBuilder out = new StringBuilder();
-        for (Skill s : all()) out.append(s.name()).append(" — ").append(s.title()).append('\n');
+        for (Skill s : all()) {
+            out.append(s.name()).append(" — ").append(s.title())
+                    .append("；用途：").append(s.description())
+                    .append("；参数：").append(signature(s))
+                    .append("；触发词：").append(String.join("、", s.triggers())).append('\n');
+        }
         return out.isEmpty() ? "（还没有保存的技能）" : out.toString();
     }
+    static String signature(Skill skill) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
+                "(?m)^def\\s+" + java.util.regex.Pattern.quote(skill.name()) + "\\(([^()]*)\\):")
+                .matcher(skill.code());
+        return matcher.find() ? "(" + matcher.group(1).strip() + ")" : "(未知)";
+    }
+
+    /**
+     * Expand only exact script lines run_skill("approved_name", ...).
+     * The model chooses values; the saved, approved code is loaded locally.
+     */
+    synchronized String expandCalls(String script) {
+        if (script == null || script.length() > 12000) throw new IllegalArgumentException("脚本过长");
+        java.util.regex.Pattern call = java.util.regex.Pattern.compile(
+                "^(\\s*)(?:run_skill)\\(\\s*\\\"([a-z][a-z0-9_]{0,23})\\\"\\s*(?:,\\s*(.*))?\\)\\s*$");
+        StringBuilder definitions = new StringBuilder();
+        StringBuilder rewritten = new StringBuilder();
+        Set<String> added = new HashSet<>();
+        for (String line : script.split("\\n", -1)) {
+            java.util.regex.Matcher matcher = call.matcher(line);
+            if (matcher.matches()) {
+                String name = matcher.group(2);
+                Skill skill = read(name).orElseThrow(() ->
+                        new IllegalArgumentException("未保存的技能：" + name));
+                if (added.add(name)) {
+                    if (!valid(skill)) throw new IllegalArgumentException("保存的技能无效：" + name);
+                    definitions.append(skill.code()).append('\\n');
+                }
+                rewritten.append(matcher.group(1)).append(name)
+                        .append('(').append(matcher.group(3) == null ? "" : matcher.group(3))
+                        .append(')').append('\\n');
+            } else {
+                if (line.stripLeading().startsWith("run_skill("))
+                    throw new IllegalArgumentException("run_skill 只能单独占一行，且第一个参数必须是双引号技能名");
+                rewritten.append(line).append('\\n');
+            }
+        }
+        if (added.isEmpty()) return script;
+        String expanded = definitions.append(rewritten).toString();
+        if (expanded.length() > 24000) throw new IllegalArgumentException("展开后的技能脚本过长");
+        return expanded;
+    }
+
     synchronized JsonObject describe(String name) {
         JsonObject result = new JsonObject();
         Optional<Skill> skill = read(name);
