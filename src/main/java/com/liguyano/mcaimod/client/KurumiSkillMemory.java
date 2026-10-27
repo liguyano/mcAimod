@@ -83,15 +83,15 @@ final class KurumiSkillMemory {
                         new IllegalArgumentException("未保存的技能：" + name));
                 if (added.add(name)) {
                     if (!valid(skill)) throw new IllegalArgumentException("保存的技能无效：" + name);
-                    definitions.append(skill.code()).append('\\n');
+                    definitions.append(skill.code()).append('\n');
                 }
                 rewritten.append(matcher.group(1)).append(name)
                         .append('(').append(matcher.group(3) == null ? "" : matcher.group(3))
-                        .append(')').append('\\n');
+                        .append(')').append('\n');
             } else {
                 if (line.stripLeading().startsWith("run_skill("))
                     throw new IllegalArgumentException("run_skill 只能单独占一行，且第一个参数必须是双引号技能名");
-                rewritten.append(line).append('\\n');
+                rewritten.append(line).append('\n');
             }
         }
         if (added.isEmpty()) return script;
