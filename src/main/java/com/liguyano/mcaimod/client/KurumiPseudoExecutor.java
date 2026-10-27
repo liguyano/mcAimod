@@ -632,7 +632,19 @@ public final class KurumiPseudoExecutor {
                     }
                     if (++actions > MAX_ACTIONS) throw new IllegalArgumentException("动作次数达到上限");
                     BaritoneBridge.Result outcome;
-                    if ("goto".equals(name)) {
+                    if ("chest_target".equals(name)) {
+                        requireArgumentCount(name, args, 3);
+                        outcome = KurumiChestBridge.target(KurumiExpressions.integer(args.get(0)),
+                                KurumiExpressions.integer(args.get(1)), KurumiExpressions.integer(args.get(2)));
+                    } else if ("close_container".equals(name)) {
+                        requireArgumentCount(name, args, 0);
+                        if (mc.player.containerMenu == mc.player.inventoryMenu)
+                            outcome = new BaritoneBridge.Result(true, "已处于背包界面");
+                        else {
+                            mc.player.closeContainer();
+                            outcome = new BaritoneBridge.Result(true, "已请求关闭容器");
+                        }
+                    } else if ("goto".equals(name)) {
                         if (args.size()!=3) throw new IllegalArgumentException("goto 需要3个坐标");
                         int x=KurumiExpressions.integer(args.get(0));
                         int y=KurumiExpressions.integer(args.get(1));
