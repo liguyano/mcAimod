@@ -53,9 +53,9 @@ public final class KurumiChestInspector {
             BlockPos selected = KurumiChestBridge.selectedChest();
             if (!mc.level.hasChunkAt(selected)
                     || !(mc.level.getBlockState(selected).getBlock() instanceof ChestBlock))
-                return "{\\"error\\":\\"selected_chest_missing\\"}";
+                return "{\"error\":\"selected_chest_missing\"}";
             if (mc.player.getEyePosition().distanceToSqr(Vec3.atCenterOf(selected)) >= 4.5 * 4.5)
-                return "{\\"error\\":\\"selected_chest_out_of_reach\\"}";
+                return "{\"error\":\"selected_chest_out_of_reach\"}";
             nearest = selected;
         }
         if (nearest == null) return "{\"error\":\"no_chest_in_reach\"}";
