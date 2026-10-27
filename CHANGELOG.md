@@ -1,5 +1,7 @@
 # 更新日志 / Changelog
 
+- 技能参数化调用：AI 看到已保存技能的 def 参数签名、用途和触发词，生成 `from skills import name` 后直接 `name(...)`，或 `import skills.name` 后使用 `skills.name(...)`；本机只加载用户批准保存的技能定义并由原解释器执行，兼容旧版 `run_skill`，无参快捷技能保留。允许导入展开后最多24000字符脚本；未编译/游戏内实测。
+
 - 新增 Kurumi `pos(x,y,z)` 坐标对象表达式，供 `.x/.y/.z` 字段访问；`excaplescript/cherry_log_to_sticks_struct.py` 用 `make_sticks(log_id, log_box, stick_box)` 三参数封装原木箱到木棍箱流水线。此前提高函数参数容量至7；均待编译及游戏内验证。
 
 - 新增 `excaplescript/cherry_log_to_sticks_loop.py` 自动樱花原木箱->工作台->木棍箱循环示例（每次最多64原木，两个箱子坐标占位），并让箱子观察报告 `free_capacity`、`empty_slots`、`full_for_item`；循环及数量验证仍受既有脚本预算限制，待游戏内测试。
