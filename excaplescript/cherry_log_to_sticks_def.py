@@ -4,6 +4,7 @@ def inspect_box(box, item_id):
     close_container()
     selected = chest_target(box.x, box.y, box.z)
     if not selected.success:
+        talk(selected.message)
         raise Exception(selected.message)
     goto(box.x, box.y, box.z)
     check_nearby_chest(item_id)
@@ -15,6 +16,7 @@ def inspect_box(box, item_id):
         result = get_nearby_chest_result(item_id)
         tries = tries + 1
     if result.status != "observed":
+        talk("箱子查询未完成")
         raise Exception("箱子查询未完成")
     return result
 
@@ -24,9 +26,11 @@ def fetch_logs(box, log_id, count):
     goto(box.x, box.y, box.z)
     result = chest_take(log_id, count)
     if not result.success:
+        talk(result.message)
         raise Exception(result.message)
     sleep(1)
     if check_inventory_item(log_id) < count:
+        talk("取出的原木不足")
         raise Exception("取出的原木不足")
     return count
 
@@ -34,22 +38,27 @@ def craft_sticks(log_id, plank_id, count):
     close_container()
     table = find_nearest_block("minecraft:crafting_table")
     if not table.found:
+        talk("附近找不到工作台")
         raise Exception("附近找不到工作台")
     goto(table.x, table.y, table.z)
     look_at(table.x, table.y, table.z)
     opened = craft_open()
     if not opened.success:
+        talk(opened.message)
         raise Exception(opened.message)
     placed = put_item(log_id, count, "grid_1")
     if not placed.success:
+        talk(placed.message)
         raise Exception(placed.message)
     sleep(1)
     planks_result = take_item(plank_id)
     if not planks_result.success:
+        talk(planks_result.message)
         raise Exception(planks_result.message)
     sleep(1)
     planks = check_inventory_item(plank_id)
     if planks < count * 4:
+        talk("木板数量不足")
         raise Exception("木板数量不足")
     while planks >= 2:
         half = planks / 2
@@ -57,17 +66,21 @@ def craft_sticks(log_id, plank_id, count):
             half = 64
         top = put_item(plank_id, half, "grid_1")
         if not top.success:
+            talk(top.message)
             raise Exception(top.message)
         bottom = put_item(plank_id, half, "grid_4")
         if not bottom.success:
+            talk(bottom.message)
             raise Exception(bottom.message)
         sleep(1)
         made = take_item("minecraft:stick")
         if not made.success:
+            talk(made.message)
             raise Exception(made.message)
         sleep(1)
         after = check_inventory_item(plank_id)
         if after >= planks:
+            talk("木板未减少，合成失败")
             raise Exception("木板未减少，合成失败")
         planks = after
     close_container()
@@ -78,6 +91,7 @@ def store_sticks(box):
     goto(box.x, box.y, box.z)
     result = chest_put_item_all("minecraft:stick")
     if not result.success:
+        talk(result.message)
         raise Exception(result.message)
     sleep(1)
     return check_inventory_item("minecraft:stick")
@@ -104,6 +118,7 @@ def make_sticks(log_id, log_box, stick_box):
     if log_id == "minecraft:pale_oak_log":
         plank_id = "minecraft:pale_oak_planks"
     if plank_id == "":
+        talk("此脚本暂未配置该原木的木板ID")
         raise Exception("此脚本暂未配置该原木的木板ID")
     talk("主人~ 开始自动加工木棍！")
     active = True
@@ -127,6 +142,7 @@ def make_sticks(log_id, log_box, stick_box):
         fetched = fetch_logs(log_box, log_id, count)
         made = craft_sticks(log_id, plank_id, fetched)
         if made < fetched * 8:
+            talk("合成木棍数量未达到预期")
             raise Exception("合成木棍数量未达到预期")
         remaining = store_sticks(stick_box)
         if remaining > 0:
