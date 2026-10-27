@@ -18,6 +18,11 @@ public final class KurumiChestBridge {
     private record Pending(String itemId, int quantity, long startedAt) {}
     private static Pending pending;
     private static BlockPos selectedChest;
+    public static BlockPos selectedChest() { return selectedChest; }
+    public static BaritoneBridge.Result clearTarget() {
+        selectedChest = null;
+        return new BaritoneBridge.Result(true, "已恢复自动选择附近箱子");
+    }
 
     /** Pin subsequent chest commands to one exact block rather than the nearest chest. */
     public static BaritoneBridge.Result target(int x, int y, int z) {
