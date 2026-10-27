@@ -455,7 +455,8 @@ public final class KurumiClientController {
             GATE.finish();
             return;
         }
-        if (pending == null && isOwner && SKILLS.findExactTrigger(message).isPresent()) {
+        if (pending == null && isOwner && SKILLS.findExactTrigger(message).isPresent()
+                && "()".equals(KurumiSkillMemory.signature(SKILLS.findExactTrigger(message).get()))) {
             KurumiSkillMemory.Skill skill = SKILLS.findExactTrigger(message).get();
             if (!autoFarmEnabled) {
                 minecraft.getConnection().sendChat("主人，请先开启 /kurumi auto on 再执行保存的快捷技能。");
@@ -762,8 +763,8 @@ public final class KurumiClientController {
         Minecraft minecraft = Minecraft.getInstance();
         String snapshot = KurumiPseudoExecutor.variablesSnapshot();
         List<ChatMessage> withSkills = new ArrayList<>(conversation);
-        withSkills.add(new ChatMessage("system", "长期技能索引（只提供标题，不包含代码）：\n" + SKILLS.titles()
-                + "\n要了解某个技能，请先执行只读脚本 skill = get_skill(\"技能英文名\")，随后 observe(skill)，"
+        withSkills.add(new ChatMessage("system", "长期已保存技能索引（名称、用途、参数签名和触发词，不包含源码）：\n" + SKILLS.titles()
+                + "\n已保存技能调用：在 EXECUTE_SCRIPT 脚本中独立写 run_skill(\"技能英文名\", 参数1, 参数2)，由本地加载已批准的源码和校验参数，禁止重新编写整份技能。坐标可使用 pos(x,y,z) 组成对象。必须按索引中的签名填参；缺少坐标或材料类型时先询问主人，不能猜测。零参数技能也支持 run_skill(\"技能英文名\")。如需查看技能实现，可先 skill = get_skill(\"技能英文名\") 并 observe(skill)。"
                 + "等待返回实际源码后再调用。"
                 + "完成任务且实际有验证成功的操作、技能值得长期复用时，可以在最终 type=finish JSON 中附加"
                 + " suggest_skill 对象，字段为 name、title、description、triggers（建议的快捷触发词数组）、code（只包含顶层 def 函数定义）。"
