@@ -1,5 +1,7 @@
 # 更新日志 / Changelog
 
+- 添加脚本 `chest_target(x,y,z)` 将 `chest_take`/`chest_put`/`chest_put_item_all`/`chest_open` 的交互固定到指定普通箱子坐标；`chest_target()` 清除目标，恢复就近选箱。`check_nearby_chest` 同样遵从所选坐标；加入 `close_container()` 关闭工作台或其他容器。箱子原有数量查询已存在，箱子剩余可容纳容量尚无专用结果。未编译验证。
+
 - 新增仅客户端本地播放的 Edge TTS：脚本 talk() 文字异步排队，Java 通过 Python 子进程运行 JAR 内置 `kurumi_tts.py` 并在本机使用 pygame 播放；支持中日音色、配置示例和 /kurumi voice on/off/stop/test。需要用户自行安装 `edge-tts`、`pygame`，尚未编译及游戏内实测。
 
 - 修复无赋值的 `take_item("minecraft:bread")` 无法解析：任务规划器现在接受 TAKE_ITEM 数量为 0 的默认全部哨兵值，其他操作仍要求有效数量；对应容器测试覆盖两种写法。未在助手环境编译。
