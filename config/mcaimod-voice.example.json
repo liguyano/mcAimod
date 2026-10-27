@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "python_command": "py",
+  "voice_zh": "zh-CN-XiaoyiNeural",
+  "voice_ja": "ja-JP-NanamiNeural",
+  "rate": "+5%",
+  "pitch": "+10Hz",
+  "volume": "0.8"
+}
