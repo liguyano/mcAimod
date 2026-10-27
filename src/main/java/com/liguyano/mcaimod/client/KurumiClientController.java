@@ -764,8 +764,10 @@ public final class KurumiClientController {
         String snapshot = KurumiPseudoExecutor.variablesSnapshot();
         List<ChatMessage> withSkills = new ArrayList<>(conversation);
         withSkills.add(new ChatMessage("system", "长期已保存技能索引（名称、用途、参数签名和触发词，不包含源码）：\n" + SKILLS.titles()
-                + "\n已保存技能调用：在 EXECUTE_SCRIPT 脚本中独立写 run_skill(\"技能英文名\", 参数1, 参数2)，由本地加载已批准的源码和校验参数，禁止重新编写整份技能。坐标可使用 pos(x,y,z) 组成对象。必须按索引中的签名填参；缺少坐标或材料类型时先询问主人，不能猜测。零参数技能也支持 run_skill(\"技能英文名\")。如需查看技能实现，可先 skill = get_skill(\"技能英文名\") 并 observe(skill)。"
-                + "等待返回实际源码后再调用。"
+                + "\n优先使用 Python 风格的已保存技能调用：先写 from skills import 技能英文名（或者 import skills.技能英文名），然后直接写 技能英文名(参数1,参数2)。技能由本地按保存的原始 def 加载，不能自己重写。"
+                + "请从上面每个技能的参数签名中读出顺序和数量，正确传入物品ID、pos(x,y,z)坐标等参数；缺少关键坐标或物品种类时先问主人，绝不能猜测。"
+                + "例如 from skills import make_sticks\\nmake_sticks(\\\"minecraft:cherry_log\\\",pos(100,64,200),pos(110,64,200))；"
+                + "若要查看源码可用 skill=get_skill(\\\"技能英文名\\\") 并 observe(skill)。"
                 + "完成任务且实际有验证成功的操作、技能值得长期复用时，可以在最终 type=finish JSON 中附加"
                 + " suggest_skill 对象，字段为 name、title、description、triggers（建议的快捷触发词数组）、code（只包含顶层 def 函数定义）。"
                 + "主人必须明确回复保存才会持久化；不要自行声称已保存。"
