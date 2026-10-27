@@ -217,7 +217,9 @@ final class KurumiSkillMemory {
         }
     }
 
-    synchronized boolean delete(String name) {
+    synchronized boolean delete(String name) { return delete("skills", name); }
+    synchronized boolean delete(String group, String name) {
+        if (group == null || !group.matches("[a-z][a-z0-9_]{0,23}")) return false;
         if (name == null || !name.matches("[a-z][a-z0-9_]{0,23}")) return false;
         try {
             JsonObject root = readRoot();
@@ -226,7 +228,7 @@ final class KurumiSkillMemory {
             boolean removed = false;
             for (JsonElement element : current) {
                 JsonObject entry = element.getAsJsonObject();
-                if (name.equals(entry.get("name").getAsString())) removed = true;
+                if (name.equals(entry.get("name").getAsString()) && group.equals(groupOf(entry))) removed = true;
                 else updated.add(entry);
             }
             if (!removed) return false;
