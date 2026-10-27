@@ -115,9 +115,10 @@ final class KurumiSkillMemory {
             if (imports != null) {
                 if (!old.matches() && !line.equals(trimmed))
                     throw new IllegalArgumentException("import 必须在脚本顶层");
+                final String importGroup = group;
                 for (String name : imports) {
-                    Skill skill = read(group, name).orElseThrow(() ->
-                            new IllegalArgumentException("技能不存在：" + group + "." + name));
+                    Skill skill = read(importGroup, name).orElseThrow(() ->
+                            new IllegalArgumentException("技能不存在：" + importGroup + "." + name));
                     if (!names.add(name))
                         throw new IllegalArgumentException("重复导入技能名：" + name);
                     if (!valid(skill)) throw new IllegalArgumentException("已保存技能无效：" + name);
