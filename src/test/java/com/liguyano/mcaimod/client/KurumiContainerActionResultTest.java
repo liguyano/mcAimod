@@ -18,12 +18,15 @@ class KurumiContainerActionResultTest {
     @Test void rejectsMissingContainerTransferArguments() {
         assertTrue(KurumiScriptParser.parse("result = put_item()").isEmpty());
         assertTrue(KurumiScriptParser.parse("result = put_item(\"minecraft:bread\")").isEmpty());
-        assertTrue(KurumiScriptParser.parse("result = take_item(\"minecraft:bread\")").isEmpty());
+        assertTrue(KurumiScriptParser.parse("result = take_item(\"minecraft:bread\")").isPresent());
+        assertTrue(KurumiScriptParser.parse("result = take_item()").isEmpty());
+        assertTrue(KurumiScriptParser.parse("result = take_item(\"minecraft:bread\",1,2)").isEmpty());
         assertTrue(KurumiScriptParser.parse("result = put_item(\"minecraft:bread\",1,\"auto\",\"extra\")").isEmpty());
     }
 
     @Test void preservesUnassignedContainerTransfers() {
         assertTrue(KurumiScriptParser.parse("put_item(\"minecraft:bread\",1,\"auto\")").isPresent());
         assertTrue(KurumiScriptParser.parse("take_item(\"minecraft:bread\",1)").isPresent());
+        assertTrue(KurumiScriptParser.parse("take_item(\"minecraft:bread\")").isPresent());
     }
 }
