@@ -1,5 +1,7 @@
 # 更新日志 / Changelog
 
+- 新增已保存技能分组：新增 group 字段，历史技能自动视为 skills；Web 技能管理增加分组输入、显示、编辑、分组删除；AI 技能索引使用 group.name 并按组生成 `from crafting import make_sticks` 或 `import crafting.make_sticks`；支持不同组同名函数但同一个脚本不能同时导入，旧导入方式兼容。尚待本地编译/游戏验证。
+
 - 技能参数化调用：AI 看到已保存技能的 def 参数签名、用途和触发词，生成 `from skills import name` 后直接 `name(...)`，或 `import skills.name` 后使用 `skills.name(...)`；本机只加载用户批准保存的技能定义并由原解释器执行，兼容旧版 `run_skill`，无参快捷技能保留。允许导入展开后最多24000字符脚本；未编译/游戏内实测。
 
 - 新增 Kurumi `pos(x,y,z)` 坐标对象表达式，供 `.x/.y/.z` 字段访问；`excaplescript/cherry_log_to_sticks_struct.py` 用 `make_sticks(log_id, log_box, stick_box)` 三参数封装原木箱到木棍箱流水线。此前提高函数参数容量至7；均待编译及游戏内验证。
