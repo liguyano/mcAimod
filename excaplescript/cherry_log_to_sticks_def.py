@@ -1,133 +1,144 @@
-# Kurumi def 技能版：樱花原木箱 -> 工作台 -> 木棍箱
-# 这是 Kurumi 的 Python 风格脚本，不是标准 Python。
-# 请在脚本底部填写两个箱子坐标；先用少量材料测试。
-
-def inspect_box(x, y, z, item_id):
+# Kurumi Python 风格伪代码；不是 CPython。坐标用 pos(x,y,z) 表示。
+# 运行前只修改文件末尾的 log_box 和 stick_box。
+def inspect_box(box, item_id):
     close_container()
-    chosen = chest_target(x, y, z)
-    if not chosen.success:
-        raise Exception(chosen.message)
-    goto(x, y, z)
-    pending = check_nearby_chest(item_id)
+    selected = chest_target(box.x, box.y, box.z)
+    if not selected.success:
+        raise Exception(selected.message)
+    goto(box.x, box.y, box.z)
+    check_nearby_chest(item_id)
     sleep(1)
-    snapshot = get_nearby_chest_result(item_id)
-    retry = 0
-    while snapshot.status == "pending" and retry < 5:
+    result = get_nearby_chest_result(item_id)
+    tries = 0
+    while result.status == "pending" and tries < 5:
         sleep(1)
-        snapshot = get_nearby_chest_result(item_id)
-        retry = retry + 1
-    if snapshot.status != "observed":
-        raise Exception("无法读取目标箱子")
-    return snapshot
+        result = get_nearby_chest_result(item_id)
+        tries = tries + 1
+    if result.status != "observed":
+        raise Exception("箱子查询未完成")
+    return result
 
-def fetch_logs(x, y, z, amount):
-    chest_target(x, y, z)
-    goto(x, y, z)
-    moved = chest_take("minecraft:cherry_log", amount)
-    if not moved.success:
-        raise Exception(moved.message)
+def fetch_logs(box, log_id, count):
+    close_container()
+    chest_target(box.x, box.y, box.z)
+    goto(box.x, box.y, box.z)
+    result = chest_take(log_id, count)
+    if not result.success:
+        raise Exception(result.message)
     sleep(1)
-    total = check_inventory_item("minecraft:cherry_log")
-    if total < amount:
-        raise Exception("背包原木不足，可能是箱子取物失败")
-    return total
+    if check_inventory_item(log_id) < count:
+        raise Exception("取出的原木不足")
+    return count
 
-def craft_batch(amount):
+def craft_sticks(log_id, plank_id, count):
     close_container()
     table = find_nearest_block("minecraft:crafting_table")
     if not table.found:
-        raise Exception("附近未找到工作台")
+        raise Exception("附近找不到工作台")
     goto(table.x, table.y, table.z)
     look_at(table.x, table.y, table.z)
     opened = craft_open()
     if not opened.success:
         raise Exception(opened.message)
-    before = check_inventory_item("minecraft:cherry_planks")
-    placed = put_item("minecraft:cherry_log", amount, "grid_1")
+    placed = put_item(log_id, count, "grid_1")
     if not placed.success:
         raise Exception(placed.message)
     sleep(1)
-    collected = take_item("minecraft:cherry_planks")
-    if not collected.success:
-        raise Exception(collected.message)
+    planks_result = take_item(plank_id)
+    if not planks_result.success:
+        raise Exception(planks_result.message)
     sleep(1)
-    planks = check_inventory_item("minecraft:cherry_planks")
-    if planks < before + amount * 4:
-        raise Exception("未取得预期数量的木板")
+    planks = check_inventory_item(plank_id)
+    if planks < count * 4:
+        raise Exception("木板数量不足")
     while planks >= 2:
         half = planks / 2
         if half > 64:
             half = 64
-        top = put_item("minecraft:cherry_planks", half, "grid_1")
+        top = put_item(plank_id, half, "grid_1")
         if not top.success:
             raise Exception(top.message)
-        bottom = put_item("minecraft:cherry_planks", half, "grid_4")
+        bottom = put_item(plank_id, half, "grid_4")
         if not bottom.success:
             raise Exception(bottom.message)
         sleep(1)
-        sticks = take_item("minecraft:stick")
-        if not sticks.success:
-            raise Exception(sticks.message)
+        made = take_item("minecraft:stick")
+        if not made.success:
+            raise Exception(made.message)
         sleep(1)
-        remaining = check_inventory_item("minecraft:cherry_planks")
-        if remaining >= planks:
-            raise Exception("木板未减少，合成可能失败")
-        planks = remaining
+        after = check_inventory_item(plank_id)
+        if after >= planks:
+            raise Exception("木板未减少，合成失败")
+        planks = after
     close_container()
     return check_inventory_item("minecraft:stick")
 
-def store_sticks(x, y, z):
-    chest_target(x, y, z)
-    goto(x, y, z)
-    moved = chest_put_item_all("minecraft:stick")
-    if not moved.success:
-        raise Exception(moved.message)
+def store_sticks(box):
+    chest_target(box.x, box.y, box.z)
+    goto(box.x, box.y, box.z)
+    result = chest_put_item_all("minecraft:stick")
+    if not result.success:
+        raise Exception(result.message)
     sleep(1)
     return check_inventory_item("minecraft:stick")
 
-# 主程序：改成你的两个箱子坐标
-log_x = 0
-log_y = 0
-log_z = 0
-stick_x = 0
-stick_y = 0
-stick_z = 0
+# 一键调用：原木ID、原木箱坐标对象、木棍箱坐标对象
+def make_sticks(log_id, log_box, stick_box):
+    plank_id = ""
+    if log_id == "minecraft:cherry_log":
+        plank_id = "minecraft:cherry_planks"
+    if log_id == "minecraft:oak_log":
+        plank_id = "minecraft:oak_planks"
+    if log_id == "minecraft:spruce_log":
+        plank_id = "minecraft:spruce_planks"
+    if log_id == "minecraft:birch_log":
+        plank_id = "minecraft:birch_planks"
+    if log_id == "minecraft:jungle_log":
+        plank_id = "minecraft:jungle_planks"
+    if log_id == "minecraft:acacia_log":
+        plank_id = "minecraft:acacia_planks"
+    if log_id == "minecraft:dark_oak_log":
+        plank_id = "minecraft:dark_oak_planks"
+    if log_id == "minecraft:mangrove_log":
+        plank_id = "minecraft:mangrove_planks"
+    if log_id == "minecraft:pale_oak_log":
+        plank_id = "minecraft:pale_oak_planks"
+    if plank_id == "":
+        raise Exception("此脚本暂未配置该原木的木板ID")
+    talk("主人~ 开始自动加工木棍！")
+    active = True
+    while active:
+        room = inspect_box(stick_box, "minecraft:stick")
+        if room.free_capacity < 8:
+            talk("木棍箱剩余空间不足，结束任务！")
+            break
+        source = inspect_box(log_box, log_id)
+        if source.count == 0:
+            talk("原木箱没有原木啦，任务完成！")
+            break
+        count = source.count
+        if count > 64:
+            count = 64
+        capacity_limit = room.free_capacity / 8
+        if count > capacity_limit:
+            count = capacity_limit
+        if count < 1:
+            break
+        fetched = fetch_logs(log_box, log_id, count)
+        made = craft_sticks(log_id, plank_id, fetched)
+        if made < fetched * 8:
+            raise Exception("合成木棍数量未达到预期")
+        remaining = store_sticks(stick_box)
+        if remaining > 0:
+            talk("木棍箱已满，结束任务！")
+            break
+    close_container()
+    chest_target()
+    return True
 
-if log_y == 0 or stick_y == 0:
-    raise Exception("请先填写原木箱和木棍箱坐标")
+# === 只需修改下面三个变量 ===
+log_id = "minecraft:cherry_log"
+log_box = pos(100, 64, 200)
+stick_box = pos(110, 64, 200)
 
-talk("主人~ Kurumi 开始自动制作木棍啦！")
-working = True
-while working:
-    capacity = inspect_box(stick_x, stick_y, stick_z, "minecraft:stick")
-    if capacity.free_capacity < 8:
-        talk("木棍箱没有足够的空间，结束任务！")
-        break
-
-    source = inspect_box(log_x, log_y, log_z, "minecraft:cherry_log")
-    if source.count == 0:
-        talk("樱花原木用完啦，任务完成！")
-        break
-
-    amount = source.count
-    if amount > 64:
-        amount = 64
-    limit = capacity.free_capacity / 8
-    if amount > limit:
-        amount = limit
-    if amount < 1:
-        break
-
-    taken = fetch_logs(log_x, log_y, log_z, amount)
-    produced = craft_batch(amount)
-    if produced < amount * 8:
-        raise Exception("木棍数量不足，请检查工作台")
-
-    left = store_sticks(stick_x, stick_y, stick_z)
-    if left > 0:
-        talk("木棍箱已无法完全存入木棍，停止加工！")
-        break
-
-close_container()
-chest_target()
-talk("主人~ Kurumi 的木棍加工任务结束啦！")
+make_sticks(log_id, log_box, stick_box)
