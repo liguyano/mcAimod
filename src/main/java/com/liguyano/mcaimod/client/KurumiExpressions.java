@@ -200,6 +200,17 @@ public final class KurumiExpressions {
         }
     }
     private JsonElement call(String name,java.util.List<JsonElement> args) {
+        if ("pos".equals(name)) {
+            if (args.size() != 3) throw new IllegalArgumentException("pos 需要 x、y、z 三个整数");
+            int x = integer(args.get(0)), y = integer(args.get(1)), z = integer(args.get(2));
+            if (y < -64 || y > 320 || Math.abs((long)x) > 30000000 || Math.abs((long)z) > 30000000)
+                throw new IllegalArgumentException("位置超出世界范围");
+            JsonObject result = new JsonObject();
+            result.addProperty("x", x);
+            result.addProperty("y", y);
+            result.addProperty("z", z);
+            return result;
+        }
         if ("get_fishing_status".equals(name)) {
             if (!args.isEmpty()) throw new IllegalArgumentException("get_fishing_status 不接受参数");
             return new JsonPrimitive(KurumiFishingBridge.status());
