@@ -76,16 +76,26 @@ public final class KurumiChestInspector {
     }
     private static String snapshot(ChestMenu menu, String id, boolean close) {
         int count = 0;
+        int freeCapacity = 0;
+        int emptySlots = 0;
         int chestSlots = menu.getRowCount() * 9;
         for (int i = 0; i < chestSlots; i++) {
             var stack = menu.getSlot(i).getItem();
-            if (!stack.isEmpty() && id.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()))
+            if (stack.isEmpty()) {
+                emptySlots++;
+                freeCapacity += 64; // minecraft:stick and minecraft:cherry_log are stackable to 64
+            } else if (id.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString())) {
                 count += stack.getCount();
+                freeCapacity += Math.max(0, stack.getMaxStackSize() - stack.getCount());
+            }
         }
         JsonObject result = new JsonObject();
         result.addProperty("status", "observed");
         result.addProperty("item_id", id);
         result.addProperty("count", count);
+        result.addProperty("free_capacity", freeCapacity);
+        result.addProperty("empty_slots", emptySlots);
+        result.addProperty("full_for_item", freeCapacity == 0);
         result.addProperty("has_item", count > 0);
         result.addProperty("enough_for_one", count >= 1);
         result.addProperty("source", "server_synced_chest_menu");
