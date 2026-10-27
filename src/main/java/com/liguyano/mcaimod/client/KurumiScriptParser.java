@@ -149,7 +149,7 @@ public final class KurumiScriptParser {
             if (definition.matches()) {
                 if (indent != 0) throw new IllegalArgumentException("函数只能定义在顶层");
                 String[] params = definition.group(2).isBlank() ? new String[0] : definition.group(2).split(",", -1);
-                if (params.length > 6) throw new IllegalArgumentException("函数参数最多6个");
+                if (params.length > 7) throw new IllegalArgumentException("函数参数最多7个");
                 if (KurumiTaskPlanner.assignableAction(definition.group(1))
                         || java.util.Set.of("talk", "observe", "sleep", "range", "len", "return").contains(definition.group(1)))
                     throw new IllegalArgumentException("函数名与现有命令冲突");
