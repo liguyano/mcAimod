@@ -633,9 +633,12 @@ public final class KurumiPseudoExecutor {
                     if (++actions > MAX_ACTIONS) throw new IllegalArgumentException("动作次数达到上限");
                     BaritoneBridge.Result outcome;
                     if ("chest_target".equals(name)) {
+                        if (args.isEmpty()) outcome = KurumiChestBridge.clearTarget();
+                        else {
                         requireArgumentCount(name, args, 3);
                         outcome = KurumiChestBridge.target(KurumiExpressions.integer(args.get(0)),
                                 KurumiExpressions.integer(args.get(1)), KurumiExpressions.integer(args.get(2)));
+                        }
                     } else if ("close_container".equals(name)) {
                         requireArgumentCount(name, args, 0);
                         if (mc.player.containerMenu == mc.player.inventoryMenu)
