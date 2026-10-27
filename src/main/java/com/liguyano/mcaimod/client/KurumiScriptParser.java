@@ -57,8 +57,8 @@ public final class KurumiScriptParser {
     private static final class Cursor { int at; }
     public static Optional<KurumiTaskPlanner.Program> parse(String source) {
         LAST_ERROR.set("");
-        if (source == null || source.length() > 8192) {
-            LAST_ERROR.set("脚本为空或超过8192字");
+        if (source == null || source.length() > 24000) {
+            LAST_ERROR.set("脚本为空或超过24000字");
             return Optional.empty();
         }
         try {
