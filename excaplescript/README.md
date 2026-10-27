@@ -26,3 +26,14 @@
 ## `cherry_log_to_sticks_struct.py`
 
 坐标使用 `pos(x,y,z)` 构造包含 `.x/.y/.z` 的对象。总技能 `make_sticks(log_id, log_box, stick_box)` 只接收三项参数：原木 ID、原木箱位置、木棍箱位置；示例支持常见九种原木（其余需扩展木板映射）。`pos()` 是 Mod 新增的 Kurumi 表达式，不是标准 Python 的函数。请修改文件最下方两个 `pos(...)` 坐标。首次建议少量测试，原本的解释器动作次数/循环上限和背包净空限制仍适用。未编译实测。
+
+## 技能库 import 调用
+
+保存技能时保留仅顶层 `def make_sticks(log_id, log_box, stick_box):` 等定义代码（不要把示例尾部的调用行一起保存为技能）。经主人批准保存后，Kurumi 的大模型可从技能列表查看名称、描述和参数签名，生成以下脚本：
+
+```python
+from skills import make_sticks
+make_sticks("minecraft:cherry_log", pos(100,64,200), pos(110,64,200))
+```
+
+也支持 `import skills.make_sticks` 后用 `skills.make_sticks(...)`。这是 **Kurumi 限定的技能导入语法**，不会执行任意 Python import、下载模块或从 GitHub 自动加载；来源只限本机 `config/mcaimod-skills.json` 中已批准的技能。缺少参数时 AI 应先询问。现有无参快捷技能仍可运行；需要先开启 `/kurumi auto on`。以上功能尚未编译/游戏内实测。
