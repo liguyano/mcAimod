@@ -80,6 +80,7 @@ final class KurumiSkillMemory {
         StringBuilder definitions = new StringBuilder();
         StringBuilder rewritten = new StringBuilder();
         Set<String> added = new HashSet<>();
+        Set<String> namespaces = new HashSet<>();
         for (String line : script.split("\n", -1)) {
             String trimmed = line.strip();
             java.util.regex.Matcher multi = from.matcher(trimmed);
@@ -91,6 +92,7 @@ final class KurumiSkillMemory {
                         .map(String::strip).toList();
             } else if (single.matches()) {
                 imports = List.of(single.group(1));
+                namespaces.add(single.group(1));
             } else if (old.matches()) {
                 imports = List.of(old.group(2));
                 rewritten.append(old.group(1)).append(old.group(2))
@@ -116,7 +118,10 @@ final class KurumiSkillMemory {
             }
         }
         if (added.isEmpty()) return script;
-        String expanded = definitions.append(rewritten).toString();
+        String calls = rewritten.toString();
+        for (String name : namespaces)
+            calls = calls.replaceAll("(?m)\\bskills\\." + java.util.regex.Pattern.quote(name) + "\\s*\\(", name + "(");
+        String expanded = definitions.append(calls).toString();
         if (expanded.length() > 24000)
             throw new IllegalArgumentException("展开后的技能脚本过长");
         return expanded;
