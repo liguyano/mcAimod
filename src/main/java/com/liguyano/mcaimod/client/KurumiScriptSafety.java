@@ -8,7 +8,7 @@ public final class KurumiScriptSafety {
         if (statements.isEmpty()) return false;
         for (var statement : statements) {
             boolean safe = switch (statement.op()) {
-                case "TALK", "OBSERVE_TALK", "EXPR_ASSIGN" -> true;
+                case "TALK", "OBSERVE_TALK", "EXPR_ASSIGN", "EXPR_EVAL" -> true;
                 case "EXPR_CALL" -> "talk".equals(statement.step().action())
                         || "observe".equals(statement.step().action());
                 case "EXPR_IF", "EXPR_WHILE" -> isReadOnly(statement.body())

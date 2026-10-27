@@ -400,6 +400,11 @@ public final class KurumiScriptParser {
                 node.addProperty("op", "EXPR_CALL");
                 node.addProperty("method", m.group(1));
                 node.addProperty("expression", m.group(2));
+            } else if (SIMPLE_CALL.matcher(code).matches()
+                    && java.util.Set.of("check_nearby_chest", "get_nearby_chest_result").contains(
+                            code.substring(0, code.indexOf('(')))) {
+                node.addProperty("op", "EXPR_EVAL");
+                node.addProperty("expression", code);
             } else if (TALK.matcher(code).matches()) {
                 node.addProperty("op", "TALK");
                 node.addProperty("message", TALK.matcher(code).replaceFirst("$1"));

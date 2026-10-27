@@ -192,6 +192,11 @@ public final class KurumiTaskPlanner {
                     throw new IllegalArgumentException("invalid assigned action");
                 statements.add(new Statement(op, new Step(method, args, 1,
                         null, null, null, name), null, List.of(), List.of()));
+            } else if ("EXPR_EVAL".equals(op)) {
+                String expression = node.get("expression").getAsString();
+                if (expression.length() > 500) throw new IllegalArgumentException("invalid query expression");
+                statements.add(new Statement(op, new Step(op, expression, 1,
+                        null, null, null, ""), null, List.of(), List.of()));
             } else if ("EXPR_CALL".equals(op)) {
                 String method = node.get("method").getAsString();
                 String args = node.get("expression").getAsString();

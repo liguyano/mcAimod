@@ -9,6 +9,16 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class KurumiExpressionsTest {
+    @Test void permitsStandaloneChestQueriesInsideSkillFunctions() {
+        assertTrue(KurumiScriptParser.parse("""
+                def inspect(item_id):
+                    check_nearby_chest(item_id)
+                    sleep(1)
+                    get_nearby_chest_result(item_id)
+                inspect("minecraft:cherry_log")
+                """).isPresent(), KurumiScriptParser.lastError());
+        assertTrue(KurumiScriptParser.parse("unknown_query(1)").isEmpty());
+    }
     @Test void nearestChestDistanceSentinelIsAllowedButUnsafeMagnitudeIsRejected() {
         Map<String, JsonElement> vars = new HashMap<>();
         vars.put("best_d", KurumiExpressions.evaluate("999999999", vars));

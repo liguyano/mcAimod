@@ -538,6 +538,15 @@ public final class KurumiPseudoExecutor {
                     frames.push(new Frame(stmt, start, end, step));
                 }
             }
+            case "EXPR_EVAL" -> {
+                try {
+                    KurumiExpressions.evaluate(stmt.step().itemId(), variables);
+                    frame.index++;
+                } catch (RuntimeException ex) {
+                    KurumiWebMonitor.log("查询调用失败：" + ex.getMessage());
+                    cancel();
+                }
+            }
             case "EXPR_ASSIGN" -> {
                 try {
                     String name = stmt.step().target();
