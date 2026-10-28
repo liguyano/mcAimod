@@ -97,11 +97,19 @@ def harvest_trees(center, log_id, box):
         raise Exception(moved.message)
     chest_target(box.x, box.y, box.z)
     # 只存本次树种对应的产物；不清空背包其他物品。
-    chest_put_item_all(log_id)
-    chest_put_item_all(sapling_id)
-    chest_put_item_all("minecraft:stick")
+    stored = chest_put_item_all(log_id)
+    if not stored.success:
+        raise Exception(stored.message)
+    stored = chest_put_item_all(sapling_id)
+    if not stored.success:
+        raise Exception(stored.message)
+    stored = chest_put_item_all("minecraft:stick")
+    if not stored.success:
+        raise Exception(stored.message)
     if log_id == "minecraft:oak_log" or log_id == "minecraft:dark_oak_log":
-        chest_put_item_all("minecraft:apple")
+        stored = chest_put_item_all("minecraft:apple")
+        if not stored.success:
+            raise Exception(stored.message)
     close_container()
     chest_target()
     chain_off()
