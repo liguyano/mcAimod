@@ -43,9 +43,13 @@ public final class DashscopeMultimodalProvider implements ModelProvider {
                 Constants.baseHttpApiUrl = QWEN_ENDPOINT;
                 List<MultiModalMessage> input = new ArrayList<>();
                 for (ChatMessage message : List.copyOf(messages)) {
+                    List<Map<String, Object>> parts = new ArrayList<>();
+                    parts.add(Collections.singletonMap("text", message.content()));
+                    if (message.imageDataUri() != null)
+                        parts.add(Collections.singletonMap("image", message.imageDataUri()));
                     input.add(MultiModalMessage.builder()
                             .role(message.role())
-                            .content(List.of(Collections.singletonMap("text", message.content())))
+                            .content(parts)
                             .build());
                 }
                 MultiModalConversationParam param = MultiModalConversationParam.builder()

@@ -51,7 +51,22 @@ public final class OpenAiCompatibleProvider implements ModelProvider {
             for (ChatMessage message : List.copyOf(messages)) {
                 JsonObject entry = new JsonObject();
                 entry.addProperty("role", message.role());
-                entry.addProperty("content", message.content());
+                if (message.imageDataUri() == null) {
+                    entry.addProperty("content", message.content());
+                } else {
+                    JsonArray parts = new JsonArray();
+                    JsonObject text = new JsonObject();
+                    text.addProperty("type", "text");
+                    text.addProperty("text", message.content());
+                    parts.add(text);
+                    JsonObject picture = new JsonObject();
+                    picture.addProperty("type", "image_url");
+                    JsonObject imageUrl = new JsonObject();
+                    imageUrl.addProperty("url", message.imageDataUri());
+                    picture.add("image_url", imageUrl);
+                    parts.add(picture);
+                    entry.add("content", parts);
+                }
                 array.add(entry);
             }
             payload.add("messages", array);

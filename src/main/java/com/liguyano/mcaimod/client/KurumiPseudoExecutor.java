@@ -47,6 +47,8 @@ public final class KurumiPseudoExecutor {
     private static boolean finishedRunSucceeded;
     private static String finishedRunReport = "";
     private static boolean finishedRunObserved;
+    private static long finishedRunVisionId;
+    private static long awaitingVisionId;
     private static final StringBuilder observations = new StringBuilder();
     private static int observationCount;
     public static long activeRunId() { return activeRunId; }
@@ -54,6 +56,7 @@ public final class KurumiPseudoExecutor {
     public static boolean finishedRunSucceeded() { return finishedRunSucceeded; }
     public static String finishedRunReport() { return finishedRunReport; }
     public static boolean finishedRunObserved() { return finishedRunObserved; }
+    public static long finishedRunVisionId() { return finishedRunVisionId; }
 
     private static void observe(String category, String value) {
         if (observationCount >= 18 || observations.length() >= 32000) return;
@@ -138,6 +141,8 @@ public final class KurumiPseudoExecutor {
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiPseudoExecutor::tick); }
     public static boolean busy() { return running; }
     public static void cancel() {
+        KurumiScreenshotBridge.reset();
+        awaitingVisionId = 0;
         if (comeFollowing) BaritoneBridge.stop();
         comeFollowing = false;
         comeTarget = null;
@@ -196,6 +201,8 @@ public final class KurumiPseudoExecutor {
         }
         activeRunId = ++runSequence;
         finishedRunObserved = false;
+        finishedRunVisionId = 0;
+        awaitingVisionId = 0;
         observations.setLength(0);
         observationCount = 0;
         frames.push(new Frame(program.statements(), null));
@@ -305,6 +312,25 @@ public final class KurumiPseudoExecutor {
         if (System.currentTimeMillis() - started > TIMEOUT) {
             say("脚本超过20分钟，已停止");
             cancel();
+            return;
+        }
+        if (awaitingVisionId != 0) {
+            int state = KurumiScreenshotBridge.status(awaitingVisionId);
+            if (state == 0) return;
+            if (state < 0) {
+                KurumiWebMonitor.log("截图失败或等待超时");
+                cancel();
+                return;
+            }
+            finishedRunVisionId = awaitingVisionId;
+            awaitingVisionId = 0;
+            observe("AI视觉观察", "已获取当前游戏截图；图像将通过单独的多模态消息传输");
+            restoreFunctionScopesOnPause();
+            finishedRunObserved = true;
+            finishRun(true, "observe(image) 主动交还截图给 AI");
+            running = false;
+            frames.clear();
+            KurumiWebMonitor.state("等待 AI 分析截图");
             return;
         }
         if (sleepUntil > 0) {
@@ -600,6 +626,13 @@ public final class KurumiPseudoExecutor {
                     var args = KurumiExpressions.arguments(stmt.step().itemId(), variables);
                     if ("observe".equals(name)) {
                         if (args.size() != 1) throw new IllegalArgumentException("observe 需要一个参数");
+                        if (args.get(0).isJsonObject() && args.get(0).getAsJsonObject().has("kind")
+                                && "screenshot".equals(args.get(0).getAsJsonObject().get("kind").getAsString())) {
+                            awaitingVisionId = args.get(0).getAsJsonObject().get("id").getAsLong();
+                            if (KurumiScreenshotBridge.status(awaitingVisionId) < 0)
+                                throw new IllegalArgumentException("截图已过期或不可用，请重新截图");
+                            return;
+                        }
                         String value = KurumiExpressions.text(args.get(0));
                         observe("AI观察", value);
                         restoreFunctionScopesOnPause();

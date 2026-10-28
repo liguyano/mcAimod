@@ -7,7 +7,7 @@ import java.util.Map;
 public final class KurumiExpressions {
     /** Expression functions also permitted as standalone (discarded-result) statements. */
     public static boolean isExpressionFunction(String name) {
-        return java.util.Set.of("pos", "get_fishing_status", "get_agent_observation", "len",
+        return java.util.Set.of("pos", "screenshot", "get_fishing_status", "get_agent_observation", "len",
                 "search_all_block", "check_inventory", "check_distance", "list_remembered_blocks",
                 "get_remembered_block_at", "get_remembered_block", "get_skill", "remember_block",
                 "get_chest_search_result", "find_nearest_block", "check_inventory_item",
@@ -216,6 +216,10 @@ public final class KurumiExpressions {
         }
     }
     private JsonElement call(String name,java.util.List<JsonElement> args) {
+        if ("screenshot".equals(name)) {
+            if (!args.isEmpty()) throw new IllegalArgumentException("screenshot 不接受参数");
+            return KurumiScreenshotBridge.capture();
+        }
         if ("pos".equals(name)) {
             if (args.size() != 3) throw new IllegalArgumentException("pos 需要 x、y、z 三个整数");
             int x = integer(args.get(0)), y = integer(args.get(1)), z = integer(args.get(2));

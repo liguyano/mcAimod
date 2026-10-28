@@ -151,6 +151,7 @@ public final class KurumiClientController {
         KurumiFishingBridge.cancel();
         KurumiItemUseBridge.cancel();
         KurumiTakeAllBridge.cancel();
+        KurumiScreenshotBridge.reset();
     }
 
     /** Immediate local emergency stop; never invokes or waits for the language model. */
@@ -175,6 +176,7 @@ public final class KurumiClientController {
         KurumiFishingBridge.cancel();
         KurumiItemUseBridge.cancel();
         KurumiTakeAllBridge.cancel();
+        KurumiScreenshotBridge.reset();
         KurumiBedShortcut.cancel();
         KurumiChestBridge.cancel();
         KurumiInteractionBridge.cancel();
@@ -267,10 +269,14 @@ public final class KurumiClientController {
         KurumiWebMonitor.requestReceived(stage.originalRequest() + "（工具反馈阶段 "
                 + stage.stage() + "）");
         List<ChatMessage> next = new ArrayList<>(stage.conversation());
+        String screenshotData = stage.generation() == generation
+                ? KurumiScreenshotBridge.consume(KurumiPseudoExecutor.finishedRunVisionId()) : null;
         next.add(new ChatMessage("user", "脚本发生异常或主动 observe() 请求进一步决策，以下是客户端实际反馈，"
                 + "不是推测：\n" + report
                 + "\n根据异常原因恢复尚未完成的任务，或根据 observe() 结果决定必要的后续行动。请优先生成可连续运行的完整剩余脚本。"
-                + "不要重复已证实成功的步骤。"));
+                + "不要重复已证实成功的步骤。"
+                + (screenshotData == null ? "" : "\n本消息附有当前游戏真实截图，请基于画面回答，不确定时明确说明。"),
+                screenshotData));
         appendPendingMessages(next);
         KurumiWebMonitor.log("第 " + stage.stage() + " 阶段工具结果回传："
                 + report.substring(0, Math.min(report.length(), 1800)));
@@ -702,6 +708,8 @@ public final class KurumiClientController {
                 + "才会发送观察与错误报告给你并要求修订未完成部分。"
                 + "不要为已能自行检查的正常状态调用 observe；未知且无法在本地决策的信息才 observe。"
                 + "observe(value) 将结束当前脚本，丢弃之后的语句；本地能够使用查询值时直接赋值判断。"
+                + "需要真正观察屏幕时使用 image = screenshot()，随后 observe(image)，"
+                + "这会把客户端当前画面以图片形式交给支持视觉的模型；截图仅按需生成，不要频繁调用。"
                 + "脚本阶段恢复后仍优先输出一份可运行至任务完成的剩余脚本，"
                 + "确实无需动作时才返回 {\"type\":\"finish\",\"reason\":\"完成理由\"}。"
                 + "连续执行仍受动作数、运行时间及调用预算保护。"));
