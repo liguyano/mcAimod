@@ -8,11 +8,27 @@ import java.util.Optional;
 public final class KurumiDecisionParser {
     public record Decision(String reply, Optional<KurumiActionValidator.Action> action, String target, Integer x, Integer y, Integer z, String blockId, Optional<KurumiTaskPlanner.Plan> plan, Optional<KurumiTaskPlanner.Program> program) {}
 
+    /**
+     * Accept exactly one JSON response, optionally wrapped in a complete tool_call tag.
+     * Do not extract JSON from arbitrary prose or reasoning: that could execute an
+     * unintended command embedded inside an otherwise invalid model response.
+     */
+    private static String normalizedJson(String raw) {
+        if (raw == null || raw.length() > 8192) return null;
+        String value = raw.strip();
+        final String open = "<tool_call>";
+        final String close = "</tool_call>";
+        if (value.startsWith(open) && value.endsWith(close)) {
+            value = value.substring(open.length(), value.length() - close.length()).strip();
+        }
+        return value;
+    }
+
     /** Completion requires an explicit model decision, never merely end-of-script. */
     public static boolean isFinish(String raw) {
         if (raw == null || raw.length() > 8192) return false;
         try {
-            JsonObject object = JsonParser.parseString(raw.strip()).getAsJsonObject();
+            JsonObject object = JsonParser.parseString(normalizedJson(raw)).getAsJsonObject();
             return object.has("type") && "finish".equals(object.get("type").getAsString())
                     && !object.has("script") && !object.has("action")
                     && object.has("reason") && object.get("reason").isJsonPrimitive()
@@ -24,7 +40,7 @@ public final class KurumiDecisionParser {
     public static Optional<String> clarification(String raw) {
         if (raw == null || raw.length() > 8192) return Optional.empty();
         try {
-            JsonObject object = JsonParser.parseString(raw.strip()).getAsJsonObject();
+            JsonObject object = JsonParser.parseString(normalizedJson(raw)).getAsJsonObject();
             if (!object.has("type") || !"clarify".equals(object.get("type").getAsString())
                     || !object.has("question") || !object.get("question").isJsonPrimitive())
                 return Optional.empty();
@@ -42,7 +58,7 @@ public final class KurumiDecisionParser {
     public static boolean wantsContinuation(String raw) {
         if (raw == null || raw.length() > 8192) return false;
         try {
-            JsonObject object = JsonParser.parseString(raw.strip()).getAsJsonObject();
+            JsonObject object = JsonParser.parseString(normalizedJson(raw)).getAsJsonObject();
             return object.has("continue") && object.get("continue").isJsonPrimitive()
                     && object.get("continue").getAsJsonPrimitive().isBoolean()
                     && object.get("continue").getAsBoolean();
@@ -54,7 +70,7 @@ public final class KurumiDecisionParser {
     public static Optional<Decision> parse(String raw) {
         if (raw == null || raw.length() > 8192) return Optional.empty();
         try {
-            JsonObject object = JsonParser.parseString(raw.strip()).getAsJsonObject();
+            JsonObject object = JsonParser.parseString(normalizedJson(raw)).getAsJsonObject();
             if (!object.has("reply") || !object.get("reply").isJsonPrimitive()) return Optional.empty();
             String reply = object.get("reply").getAsString().strip().replaceAll("[\\r\\n]+", " ");
             if (reply.isEmpty() || reply.length() > 160 || reply.startsWith("/")) return Optional.empty();
