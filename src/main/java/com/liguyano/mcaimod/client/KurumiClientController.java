@@ -115,11 +115,23 @@ public final class KurumiClientController {
         KurumiSurvivalBridge.reset();
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
-        int[] target = KurumiSurvivalPolicy.fleeTarget(mc.player.getX(), mc.player.getZ(), attackerX, attackerZ);
+        List<KurumiSurvivalPolicy.NearbyPlayer> players = new ArrayList<>();
+        for (var other : mc.level.players()) {
+            if (other.getUUID().equals(mc.player.getUUID()) || !other.isAlive()) continue;
+            // Never seek help from the player who just attacked Kurumi.
+            boolean isAttacker = Math.hypot(other.getX() - attackerX, other.getZ() - attackerZ) < 1.5;
+            players.add(new KurumiSurvivalPolicy.NearbyPlayer(
+                    other.getGameProfile().name(), other.getX(), other.getZ(), isAttacker));
+        }
+        var ally = KurumiSurvivalPolicy.selectAlly(mc.player.getX(), mc.player.getZ(), players);
+        int[] target = ally == null
+                ? KurumiSurvivalPolicy.fleeTarget(mc.player.getX(), mc.player.getZ(), attackerX, attackerZ)
+                : KurumiSurvivalPolicy.towardAlly(mc.player.getX(), mc.player.getZ(), ally);
         var movement = BaritoneBridge.gotoCoordinates(target[0], mc.player.blockPosition().getY(), target[1]);
-        KurumiWebMonitor.log("受到攻击，紧急逃离：" + movement.message());
+        String direction = ally == null ? "远离攻击者" : "向玩家 " + ally.name() + " 靠近";
+        KurumiWebMonitor.log("受到攻击，紧急逃离（" + direction + "）：" + movement.message());
         if (mc.getConnection() != null) mc.getConnection().sendChat(movement.success()
-                ? "主人~ 我被攻击了！先逃跑，暂时停止手上的工作！"
+                ? "主人~ 我被攻击了！先" + direction + "，暂时停止手上的工作！"
                 : "主人~ 我被攻击了！已停止任务，但逃跑寻路失败了！");
         survivalRecovery = hadTask && profile != null && sender != null
                 ? new SurvivalRecovery(profile, conversation, sender, original, now, step) : null;
