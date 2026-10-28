@@ -2,6 +2,32 @@
 # 复制 def 部分保存为技能；文件末尾是直接执行的示例。
 # 中心点周围水平16格、上下8格；每种方块最多处理12次。
 # 注意：连锁破坏本身的波及范围由连锁模组决定，未必受16格约束。
+def harvest_block_type(center, target_id):
+    # 先计算长度：Kurumi 的 range 不接受嵌套的 len(...)。
+    for attempt in range(12):
+        blocks = search_all_block(target_id)
+        size = len(blocks)
+        found = False
+        target = center
+        for i in range(size):
+            p = blocks[i]
+            if p.x >= center.x - 16 and p.x <= center.x + 16 and p.z >= center.z - 16 and p.z <= center.z + 16 and p.y >= center.y - 8 and p.y <= center.y + 8:
+                target = p
+                found = True
+                break
+        if not found:
+            break
+        moved = goto(target.x, target.y, target.z)
+        if not moved.success:
+            talk(moved.message)
+            break
+        broken = break_block(target_id, target.x, target.y, target.z)
+        if not broken.success:
+            talk(broken.message)
+            break
+        sleep(1)
+
+
 def harvest_trees(center, log_id, box):
     leaf_id = ""
     sapling_id = ""
@@ -51,33 +77,8 @@ def harvest_trees(center, log_id, box):
         raise Exception(enabled.message)
 
     # 每次重新扫描；仅选择中心点附近的坐标，避免 mine(ID) 无边界寻路。
-    for phase in range(2):
-        target_id = log_id
-        if phase == 1:
-            target_id = leaf_id
-        for attempt in range(12):
-            blocks = search_all_block(target_id)
-            found = False
-            target = center
-            for i in range(len(blocks)):
-                p = blocks[i]
-                if p.x >= center.x - 16 and p.x <= center.x + 16:
-                    if p.z >= center.z - 16 and p.z <= center.z + 16:
-                        if p.y >= center.y - 8 and p.y <= center.y + 8:
-                            target = p
-                            found = True
-                            break
-            if not found:
-                break
-            moved = goto(target.x, target.y, target.z)
-            if not moved.success:
-                talk(moved.message)
-                break
-            broken = break_block(target_id, target.x, target.y, target.z)
-            if not broken.success:
-                talk(broken.message)
-                break
-            sleep(1)
+    harvest_block_type(center, log_id)
+    harvest_block_type(center, leaf_id)
 
     # 先砍树叶再拾取；给树苗和苹果掉落较长时间。
     sleep(8)
