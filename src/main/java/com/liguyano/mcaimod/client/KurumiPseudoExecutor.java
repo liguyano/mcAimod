@@ -81,6 +81,7 @@ public final class KurumiPseudoExecutor {
     private static boolean awaitingCome;
     private static boolean awaitingBed;
     private static boolean awaitingItemUse;
+    private static boolean awaitingContainerTransfer;
     private static boolean awaitingExternal;
     private static boolean awaitingMenu;
     private static long menuStarted;
@@ -153,6 +154,8 @@ public final class KurumiPseudoExecutor {
         awaitingBed = false;
         if (awaitingItemUse) KurumiItemUseBridge.cancel();
         awaitingItemUse = false;
+        if (awaitingContainerTransfer) KurumiInteractionBridge.cancel();
+        awaitingContainerTransfer = false;
         sleepUntil = 0;
         awaitingExternal = false;
         awaitingMenu = false;
@@ -209,6 +212,7 @@ public final class KurumiPseudoExecutor {
         awaitingCome = false;
         awaitingBed = false;
         awaitingItemUse = false;
+        awaitingContainerTransfer = false;
         awaitingExternal = false;
         awaitingMenu = false;
         awaitingChestSearch = false;
@@ -307,6 +311,16 @@ public final class KurumiPseudoExecutor {
             if (System.currentTimeMillis() < sleepUntil) return;
             sleepUntil = 0;
             KurumiWebMonitor.log("sleep(): 等待结束，继续执行");
+        }
+        if (awaitingContainerTransfer) {
+            if (KurumiInteractionBridge.busy()) return;
+            awaitingContainerTransfer = false;
+            BaritoneBridge.Result transfer = KurumiInteractionBridge.lastTransfer();
+            lastResultSuccess = transfer.success();
+            finishPendingAction(transfer.success(), transfer.message());
+            KurumiWebMonitor.log("put_item 完成校验：" + transfer.message());
+            if (!transfer.success() && !assignedResult) cancel();
+            return;
         }
         if (awaitingItemUse) {
             if (KurumiItemUseBridge.busy()) return;
@@ -881,12 +895,14 @@ public final class KurumiPseudoExecutor {
                                 args.size()==4 ? KurumiExpressions.integer(args.get(2)) : null,
                                 args.size()==4 ? KurumiExpressions.integer(args.get(3)) : null);
                     } else throw new IllegalArgumentException("函数不在动作白名单");
+                    if ("put_item".equals(name) && outcome.success() && KurumiInteractionBridge.busy())
+                        awaitingContainerTransfer = true;
                     KurumiWebMonitor.log(name + "(变量): " + outcome.message());
                     observe("动作 " + name, outcome.success() + "; " + outcome.message());
                     lastResultSuccess=outcome.success();
                     if (assign) {
                         if (outcome.success() && (awaitingAction || awaitingBlockBreak || awaitingChestSearch
-                                || awaitingItemUse || awaitingBed || awaitingMenu || awaitingExternal)) {
+                                || awaitingItemUse || awaitingContainerTransfer || awaitingBed || awaitingMenu || awaitingExternal)) {
                             pendingActionVariable = resultVariable;
                         } else {
                             // For move()/place_block()/interact()/put_item()/take_item() the bridge only confirms that
