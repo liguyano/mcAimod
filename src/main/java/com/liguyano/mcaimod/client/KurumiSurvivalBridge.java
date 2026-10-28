@@ -61,12 +61,20 @@ public final class KurumiSurvivalBridge {
         // Compare actual health loss, rather than hurtTime (which lasts multiple ticks).
         if (previousHealth >= 0 && health < previousHealth && mc.player.hurtTime > 0) {
             var attacker = mc.player.getLastHurtByMob();
-            if (attacker != null && attacker.isAlive() && mc.player.distanceToSqr(attacker) < 32 * 32) {
-                if (eating) finishEating(false);
-                previousHealth = health;
-                KurumiClientController.onSurvivalAttack(attacker.getX(), attacker.getZ());
-                return;
+            // LastHurtByMob is often null for projectiles, players, environmental
+            // damage, and on some multiplayer servers. Never require it to flee.
+            double attackerX = mc.player.getX() - Math.cos(Math.toRadians(mc.player.getYRot())) * 2;
+            double attackerZ = mc.player.getZ() - Math.sin(Math.toRadians(mc.player.getYRot())) * 2;
+            if (attacker != null && attacker.isAlive()) {
+                attackerX = attacker.getX();
+                attackerZ = attacker.getZ();
             }
+            KurumiWebMonitor.log("生存检测：血量 " + previousHealth + " -> " + health
+                    + "；攻击者=" + (attacker == null ? "未知" : attacker.getName().getString()));
+            if (eating) finishEating(false);
+            previousHealth = health;
+            KurumiClientController.onSurvivalAttack(attackerX, attackerZ);
+            return;
         }
         previousHealth = health;
         if (eating) { tickEating(); return; }
