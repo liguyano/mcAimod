@@ -712,6 +712,7 @@ public final class KurumiPseudoExecutor {
                         if (y < -64 || y > 320 || Math.abs((long)x)>30000000 || Math.abs((long)z)>30000000)
                             throw new IllegalArgumentException("坐标超出世界范围");
                         var destination = new net.minecraft.core.BlockPos(x,y,z);
+                        outcome = null;
                         // If the coordinate is an occupied block, walk beside it instead of into it.
                         if (mc.level != null && mc.level.hasChunkAt(destination)
                                 && !mc.level.getBlockState(destination)
@@ -729,14 +730,17 @@ public final class KurumiPseudoExecutor {
                                 double distance=pos.distSqr(mc.player.blockPosition());
                                 if (distance<best) {best=distance;nearest=pos;}
                             }
-                            if (nearest==null) throw new IllegalArgumentException("目标周围没有可站立位置");
-                            destination=nearest;
+                            if (nearest == null) {
+                                outcome = new BaritoneBridge.Result(false, "目标周围没有可站立位置");
+                            } else destination=nearest;
                         }
+                        if (outcome == null) {
                         var step=new KurumiTaskPlanner.Step("GOTO","",1,destination.getX(),
                                 destination.getY(),destination.getZ(),"");
                         var plan=new KurumiTaskPlanner.Plan(List.of(step),1,1,1,List.of());
                         outcome=KurumiPlanExecutor.start(plan);
                         if (outcome.success()) awaitingAction=true;
+                        }
                     } else if ("look".equals(name)) {
                         if (args.size()!=2) throw new IllegalArgumentException("look 需要 yaw 和 pitch 两个角度");
                         outcome=KurumiLookBridge.look(args.get(0).getAsDouble(),args.get(1).getAsDouble());
