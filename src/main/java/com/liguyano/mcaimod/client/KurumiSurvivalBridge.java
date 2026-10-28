@@ -59,7 +59,7 @@ public final class KurumiSurvivalBridge {
         }
         float health = mc.player.getHealth();
         // Compare actual health loss, rather than hurtTime (which lasts multiple ticks).
-        if (previousHealth >= 0 && health < previousHealth && mc.player.hurtTime > 0) {
+        if (previousHealth >= 0 && health < previousHealth) {
             var attacker = mc.player.getLastHurtByMob();
             // LastHurtByMob is often null for projectiles, players, environmental
             // damage, and on some multiplayer servers. Never require it to flee.
