@@ -21,18 +21,24 @@ import net.neoforged.neoforge.common.NeoForge;
 /** Nearby block interaction and bounded item transfers into supported container menus. */
 public final class KurumiInteractionBridge {
     private static final class PendingSplit {
-        final int menuId, source, destination, amount, sourceBefore, destinationBefore;
+        final int menuId, destination, requested;
         final String itemId;
         final long started = System.currentTimeMillis();
-        int phase, deposited;
-        PendingSplit(CraftingMenu menu, int source, int destination, int amount, String itemId) {
+        int source, amount, sourceBefore, destinationBefore, phase, deposited, moved;
+        PendingSplit(CraftingMenu menu, int source, int destination, int requested, String itemId) {
             this.menuId = menu.containerId;
-            this.source = source;
             this.destination = destination;
-            this.amount = amount;
+            this.requested = requested;
             this.itemId = itemId;
-            this.sourceBefore = menu.getSlot(source).getItem().getCount();
-            this.destinationBefore = menu.getSlot(destination).getItem().getCount();
+            beginBatch(menu, source);
+        }
+        void beginBatch(CraftingMenu menu, int nextSource) {
+            source = nextSource;
+            sourceBefore = menu.getSlot(source).getItem().getCount();
+            destinationBefore = menu.getSlot(destination).getItem().getCount();
+            amount = Math.min(sourceBefore, requested - moved);
+            phase = 0;
+            deposited = 0;
         }
     }
     private static PendingSplit pending;
@@ -142,21 +148,26 @@ public final class KurumiInteractionBridge {
         Minecraft mc = Minecraft.getInstance();
         if (!menu.getCarried().isEmpty())
             return new BaritoneBridge.Result(false, "鼠标光标上有物品，先清空光标");
+        int total = 0;
         int source = -1;
+        ItemStack sourceStack = ItemStack.EMPTY;
         for (int i = 10; i < menu.slots.size(); i++) {
             Slot inventorySlot = menu.getSlot(i);
             if (inventorySlot.container != mc.player.getInventory() || !inventorySlot.hasItem()
                     || !inventorySlot.mayPickup(mc.player)) continue;
             ItemStack stack = inventorySlot.getItem();
-            if (itemId.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString())
-                    && stack.getCount() >= quantity) {
+            if (!itemId.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString())) continue;
+            total += stack.getCount();
+            if (source < 0) {
                 source = i;
-                break;
+                sourceStack = stack;
+            } else if (!ItemStack.isSameItemSameComponents(sourceStack, stack)) {
+                return new BaritoneBridge.Result(false, "同一物品 ID 存在不同组件的物品组，无法安全合并");
             }
         }
-        if (source < 0)
-            return new BaritoneBridge.Result(false, "背包里没有单组数量足够的 " + itemId);
-        ItemStack sourceStack = menu.getSlot(source).getItem();
+        if (total < quantity)
+            return new BaritoneBridge.Result(false, "背包中 " + itemId + " 总数不足：需要 "
+                    + quantity + "，实际 " + total);
         int destination = -1;
         for (int i = targetSlot > 0 ? targetSlot : 1;
              i <= (targetSlot > 0 ? targetSlot : 9); i++) {
@@ -173,20 +184,11 @@ public final class KurumiInteractionBridge {
         }
         if (destination < 0)
             return new BaritoneBridge.Result(false, "工作台目标格子已占用、容量不足或不接受该物品");
-        int sourceCount = sourceStack.getCount();
-        if (quantity == sourceCount) {
-            mc.gameMode.handleContainerInput(menu.containerId, source, 0, ContainerInput.PICKUP, mc.player);
-            mc.gameMode.handleContainerInput(menu.containerId, destination, 0, ContainerInput.PICKUP, mc.player);
-        } else {
-            // A partial stack needs many right-clicks. Sending them all in one tick and
-            // immediately continuing the script can leave the server-side cursor occupied.
-            // Schedule one click per client tick and wait for the cursor to be clear.
-            pending = new PendingSplit(menu, source, destination, quantity, itemId);
-            return new BaritoneBridge.Result(true, "已排队拆分 " + itemId + " × " + quantity
-                    + "，等待光标归位及服务器同步");
-        }
-        return new BaritoneBridge.Result(true, "已尝试向工作台第 " + destination
-                + " 格放入 " + itemId + " × " + quantity + "（等待服务器同步确认；未自动领取产物）");
+        // Always use the tick-driven, verified transfer. It handles split stacks
+        // and prevents a partially completed cursor operation from being ignored.
+        pending = new PendingSplit(menu, source, destination, quantity, itemId);
+        return new BaritoneBridge.Result(true, "已排队从背包多组取出 " + itemId + " × " + quantity
+                + " 放入工作台第 " + destination + " 格，等待服务器核验");
     }
 
     /** Take a matching result stack from the currently open furnace or crafting table. */
@@ -349,7 +351,7 @@ public final class KurumiInteractionBridge {
             finishSplit(false, "合成界面已关闭或改变，无法确认拆分结果");
             return;
         }
-        if (System.currentTimeMillis() - task.started > 8000L) {
+        if (System.currentTimeMillis() - task.started > 30000L) {
             finishSplit(false, "拆分物品等待超时；请检查光标和原物品槽位");
             return;
         }
@@ -406,7 +408,28 @@ public final class KurumiInteractionBridge {
         if (menu.getCarried().isEmpty()
                 && menu.getSlot(task.destination).getItem().getCount() >= task.destinationBefore + task.amount
                 && menu.getSlot(task.source).getItem().getCount() <= task.sourceBefore - task.amount) {
-            finishSplit(true, "已确认拆分 " + task.itemId + " × " + task.amount + "，光标已清空");
+            task.moved += task.amount;
+            if (task.moved >= task.requested) {
+                finishSplit(true, "已确认从多组放入 " + task.itemId + " × " + task.moved + "，光标已清空");
+            } else {
+                int nextSource = -1;
+                for (int i = 10; i < menu.slots.size(); i++) {
+                    Slot candidate = menu.getSlot(i);
+                    if (candidate.container == mc.player.getInventory() && candidate.hasItem()
+                            && candidate.mayPickup(mc.player)
+                            && task.itemId.equals(BuiltInRegistries.ITEM.getKey(candidate.getItem().getItem()).toString())
+                            && ItemStack.isSameItemSameComponents(menu.getSlot(task.destination).getItem(), candidate.getItem())) {
+                        nextSource = i;
+                        break;
+                    }
+                }
+                if (nextSource < 0) {
+                    finishSplit(false, "已放入 " + task.moved + " / " + task.requested
+                            + "，其余背包物品不可用；光标已清空");
+                } else {
+                    task.beginBatch(menu, nextSource);
+                }
+            }
         }
     }
     private static void finishSplit(boolean success, String message) {
