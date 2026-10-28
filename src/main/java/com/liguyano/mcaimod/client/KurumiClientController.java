@@ -52,6 +52,79 @@ public final class KurumiClientController {
     private static boolean autoFarmEnabled = false;
     private static long generation = 0;
     private static boolean requestInFlight = false;
+    private record SurvivalRecovery(ModelProfile profile, List<ChatMessage> conversation, UUID sender,
+                                    String originalRequest, long started, int stage) {}
+    private static SurvivalRecovery survivalRecovery;
+    private static long fleeingUntil;
+    private static long lastSurvivalAttack;
+
+    static boolean hasSurvivalTask() {
+        return requestInFlight || awaitedStage != null || quickStage != null
+                || KurumiPseudoExecutor.busy() || KurumiPlanExecutor.busy()
+                || KurumiFishingBridge.busy() || KurumiLongTaskBridge.busy();
+    }
+
+    /** The model only decides whether to interrupt; it never controls the food-use implementation. */
+    static void requestHungerDecision(int foodLevel) {
+        ModelProfile profile;
+        try { profile = ModelProfiles.load(FMLPaths.CONFIGDIR.get()
+                .resolve("mcaimod-models.json")).first().orElse(null); }
+        catch (Exception e) { profile = null; }
+        if (profile == null) { KurumiSurvivalBridge.hungerDecision(false); return; }
+        long currentGeneration = generation;
+        Minecraft mc = Minecraft.getInstance();
+        KurumiWebMonitor.log("饥饿值 " + foodLevel + "，等待 AI 判断是否立即吃饭");
+        PROVIDER.chat(profile, List.of(
+                new ChatMessage("system", "你是 Minecraft AI 伙伴 Kurumi 的生存决策器。只允许返回一个单词 EAT 或 WAIT。"
+                        + "如果需要立即打断当前工作补充饥饿值，返回 EAT；否则返回 WAIT。"
+                        + "不生成脚本，不输出解释。"),
+                new ChatMessage("user", "当前饥饿值=" + foodLevel + "/20，当前有未完成任务。是否立即中断吃饭？")))
+                .whenComplete((reply, error) -> mc.execute(() -> {
+                    if (currentGeneration != generation) return;
+                    KurumiSurvivalBridge.hungerDecision(error == null && reply != null
+                            && "EAT".equalsIgnoreCase(reply.strip()));
+                }));
+    }
+
+    /** Called synchronously by the local damage watcher; never waits for a model response. */
+    static void onSurvivalAttack(double attackerX, double attackerZ) {
+        long now = System.currentTimeMillis();
+        if (now - lastSurvivalAttack < 8_000) return;
+        lastSurvivalAttack = now;
+        AwaitedStage stage = awaitedStage;
+        QuickStage quick = quickStage;
+        ModelProfile profile = stage == null ? null : stage.profile();
+        List<ChatMessage> conversation = stage == null ? new ArrayList<>() : new ArrayList<>(stage.conversation());
+        UUID sender = stage == null ? activeSender : stage.sender();
+        String original = stage == null ? "执行中任务" : stage.originalRequest();
+        int step = stage == null ? 0 : stage.stage();
+        if (quick != null) {
+            original = quick.skill().title();
+            sender = quick.sender();
+            conversation.add(new ChatMessage("user", "原快捷技能：" + quick.skill().title()
+                    + "\n技能代码：\n" + quick.skill().code()));
+        }
+        if (profile == null && sender != null) {
+            try { profile = ModelProfiles.load(FMLPaths.CONFIGDIR.get()
+                    .resolve("mcaimod-models.json")).first().orElse(null); }
+            catch (Exception ignored) { /* Survival must still work offline. */ }
+        }
+        boolean hadTask = sender != null && (stage != null || quick != null || requestInFlight
+                || KurumiPseudoExecutor.busy() || KurumiPlanExecutor.busy() || KurumiFishingBridge.busy());
+        stopAll();
+        KurumiSurvivalBridge.reset();
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+        int[] target = KurumiSurvivalPolicy.fleeTarget(mc.player.getX(), mc.player.getZ(), attackerX, attackerZ);
+        var movement = BaritoneBridge.gotoCoordinates(target[0], mc.player.blockPosition().getY(), target[1]);
+        KurumiWebMonitor.log("受到攻击，紧急逃离：" + movement.message());
+        if (mc.getConnection() != null) mc.getConnection().sendChat(movement.success()
+                ? "主人~ 我被攻击了！先逃跑，暂时停止手上的工作！"
+                : "主人~ 我被攻击了！已停止任务，但逃跑寻路失败了！");
+        survivalRecovery = hadTask && profile != null && sender != null
+                ? new SurvivalRecovery(profile, conversation, sender, original, now, step) : null;
+        fleeingUntil = movement.success() ? now + 12_000 : now;
+    }
 
     private static boolean containsPlayerAttack(List<KurumiTaskPlanner.Statement> statements) {
         for (var s : statements) {
@@ -98,6 +171,7 @@ public final class KurumiClientController {
         KurumiChestSearch.install();
         KurumiFishingBridge.install();
         KurumiItemUseBridge.install();
+        // Local hunger and attack interrupts run before any agent-stage processing.
         KurumiTakeAllBridge.install();
         restoreSavedSwitches();
     }
@@ -152,10 +226,13 @@ public final class KurumiClientController {
         KurumiItemUseBridge.cancel();
         KurumiTakeAllBridge.cancel();
         KurumiScreenshotBridge.reset();
+        KurumiSurvivalBridge.reset();
     }
 
     /** Immediate local emergency stop; never invokes or waits for the language model. */
     private static BaritoneBridge.Result stopAll() {
+        fleeingUntil = 0;
+        survivalRecovery = null;
         // Invalidate in-flight AI callbacks before releasing any executor state.
         generation++;
         requestInFlight = false;
@@ -192,6 +269,26 @@ public final class KurumiClientController {
     }
 
     private static void onAgentTick(net.neoforged.neoforge.client.event.ClientTickEvent.Post event) {
+        KurumiSurvivalBridge.tick(enabled && autoFarmEnabled);
+        if (fleeingUntil != 0) {
+            if (System.currentTimeMillis() < fleeingUntil) return;
+            fleeingUntil = 0;
+            BaritoneBridge.stop();
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.getConnection() != null) mc.getConnection().sendChat("主人~ 我已经尝试远离危险，正在确认下一步。");
+            SurvivalRecovery recovery = survivalRecovery;
+            survivalRecovery = null;
+            if (recovery != null && autoFarmEnabled && enabled) {
+                List<ChatMessage> messages = new ArrayList<>(recovery.conversation());
+                messages.add(new ChatMessage("user", "紧急生存中断：Kurumi 受到生物攻击，本地已立即取消原任务"
+                        + "并执行约20格逃离，无须重新执行已完成动作。当前是否安全尚未确认。"
+                        + "请先观察环境和生命值，再决定能否恢复原任务：" + recovery.originalRequest()));
+                requestInFlight = true;
+                activeSender = recovery.sender();
+                runAgent(recovery.profile(), messages, recovery.sender(),
+                        recovery.originalRequest(), generation, recovery.stage());
+            }
+        }
         BaritoneBridge.tickWaterAvoidance();
         QuickStage quick = quickStage;
         if (quick != null && quick.generation() == generation) {

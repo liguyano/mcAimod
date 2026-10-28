@@ -307,6 +307,7 @@ public final class KurumiPseudoExecutor {
     }
     private static void tick(ClientTickEvent.Post event) {
         if (!running) return;
+        if (KurumiSurvivalBridge.eating()) return;
         var mc = Minecraft.getInstance();
         if (mc.player == null || mc.getConnection() == null) { cancel(); return; }
         if (System.currentTimeMillis() - started > TIMEOUT) {
