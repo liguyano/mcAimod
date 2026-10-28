@@ -130,9 +130,10 @@ public final class KurumiClientController {
         var movement = BaritoneBridge.gotoCoordinates(target[0], mc.player.blockPosition().getY(), target[1]);
         String direction = ally == null ? "远离攻击者" : "向玩家 " + ally.name() + " 靠近";
         KurumiWebMonitor.log("受到攻击，紧急逃离（" + direction + "）：" + movement.message());
-        if (mc.getConnection() != null) mc.getConnection().sendChat(movement.success()
-                ? "主人~ 我被攻击了！先" + direction + "，暂时停止手上的工作！"
-                : "主人~ 我被攻击了！已停止任务，但逃跑寻路失败了！");
+        if (mc.getConnection() != null) mc.getConnection().sendChat(!movement.success()
+                ? "主人~ 我被攻击了！已停止任务，但逃跑寻路失败了！"
+                : ally != null ? ally.name() + "，救我！有东西在攻击我！"
+                : "主人~ 我被攻击了！附近没人能帮忙，我先逃跑！");
         survivalRecovery = hadTask && profile != null && sender != null
                 ? new SurvivalRecovery(profile, conversation, sender, original, now, step) : null;
         fleeingUntil = movement.success() ? now + 12_000 : now;
