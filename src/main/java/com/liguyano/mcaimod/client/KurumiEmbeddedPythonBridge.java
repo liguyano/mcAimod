@@ -162,6 +162,8 @@ public final class KurumiEmbeddedPythonBridge {
             }
             case "take_item" -> { require(a, 2); action = KurumiInteractionBridge.takeItem(str(a,0),num(a,1)); }
             case "take_all_items" -> { require(a, 0); action = KurumiTakeAllBridge.start(); }
+            case "search_chests" -> { require(a,1); action = KurumiChestSearch.search(str(a,0)); }
+            case "take_from_memory" -> { require(a,3); action = KurumiChestSearch.take(str(a,0),str(a,1),num(a,2)); }
             case "chest_target" -> {
                 if (a.length == 0) action = KurumiChestBridge.clearTarget();
                 else { require(a, 3); action = KurumiChestBridge.target(num(a,0),num(a,1),num(a,2)); }
@@ -264,7 +266,7 @@ public final class KurumiEmbeddedPythonBridge {
                     "interact", "put_item", "take_item", "take_all_items",
                     "chest_target", "chest_open", "chest_put", "chest_take",
                     "chest_put_all", "chest_take_all", "chest_put_item_all",
-                    "close_container", "craft_open", "equip_main_hand",
+                    "close_container", "craft_open", "equip_main_hand", "search_chests", "take_from_memory",
                     "mine", "break_block", "place_block", "pickup_all",
                     "pickup_item_all", "drop", "drop_all", "drop_item_all",
                     "chain_on", "chain_off", "farm", "fish", "stop_fishing",
