@@ -111,6 +111,25 @@ public final class KurumiEmbeddedPythonBridge {
         if (count > 200) throw new IllegalStateException("Python 工具调用超过200次");
         BaritoneBridge.Result action;
         switch (name) {
+            case "look" -> { require(a, 2); action = KurumiLookBridge.look(a[0].asDouble(), a[1].asDouble()); }
+            case "look_at" -> {
+                if (a.length == 1) action = KurumiLookBridge.lookAtId(str(a,0));
+                else if (a.length == 3) action = KurumiLookBridge.lookAt(a[0].asDouble(),a[1].asDouble(),a[2].asDouble());
+                else throw new IllegalArgumentException("look_at(id) 或 look_at(x,y,z)");
+            }
+            case "attack" -> {
+                require(a, 1);
+                String target = str(a,0);
+                action = target.contains(":") ? KurumiCombatBridge.attackMob(target)
+                        : KurumiCombatBridge.attackPlayer(target);
+            }
+            case "use_item" -> { require(a,1); action = KurumiItemUseBridge.use(str(a,0)); }
+            case "hold_use_item" -> { require(a,2); action = KurumiItemUseBridge.hold(str(a,0),num(a,1)); }
+            case "sleep_in_bed" -> { require(a,0); action = KurumiBedShortcut.start(); }
+            case "sleep" -> {
+                require(a,1);
+                throw new UnsupportedOperationException("sleep 需要异步调度，不可阻塞游戏线程");
+            }
             case "goto" -> { require(a, 3); action = BaritoneBridge.gotoCoordinates(num(a,0),num(a,1),num(a,2)); }
             case "move" -> { require(a, 2); action = BaritoneBridge.moveRelative(str(a,0), num(a,1)); }
             case "come" -> { require(a, 1); action = BaritoneBridge.comeToPlayer(str(a,0)); }
@@ -224,7 +243,7 @@ public final class KurumiEmbeddedPythonBridge {
                     "search_all_block", "find_nearest_block", "check_inventory_item",
                     "check_inventory_count", "get_crafting_recipe", "inspect_slot",
                     "get_distance", "get_tool_help", "get_skill",
-                    "goto", "move", "come", "follow", "stop",
+                    "goto", "move", "come", "follow", "stop", "look", "look_at", "attack", "use_item", "hold_use_item", "sleep_in_bed", "sleep",
                     "interact", "put_item", "take_item", "take_all_items",
                     "chest_target", "chest_open", "chest_put", "chest_take",
                     "chest_put_all", "chest_take_all", "chest_put_item_all",
