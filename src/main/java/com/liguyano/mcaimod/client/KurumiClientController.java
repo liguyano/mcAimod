@@ -207,11 +207,13 @@ public final class KurumiClientController {
     }
 
     private static void onLogin(ClientPlayerNetworkEvent.LoggingIn event) {
+        KurumiAgentProcess.launch();
         KurumiBedShortcut.resetWorld();
         restoreSavedSwitches();
     }
 
     private static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
+        KurumiAgentProcess.shutdown();
         KurumiAgentToolServer.invalidatePending();
         generation++;
         requestInFlight = false;
@@ -250,6 +252,7 @@ public final class KurumiClientController {
     /** Immediate local emergency stop; never invokes or waits for the language model. */
     private static BaritoneBridge.Result stopAll() {
         KurumiAgentToolServer.invalidatePending();
+        KurumiAgentProcess.stop();
         fleeingUntil = 0;
         survivalRecovery = null;
         // Invalidate in-flight AI callbacks before releasing any executor state.
@@ -621,6 +624,32 @@ public final class KurumiClientController {
         if (pending == null && !KurumiFishingBridge.busy()
                 && KurumiLocationMemory.handle(message, senderNameForMemory)) {
             GATE.finish();
+            return;
+        }
+        // 0.6: prefer LangGraph for normal chat. Java retains emergency stop,
+        // exact shortcuts and the legacy fallback when Python is unavailable.
+        if (!"legacy".equalsIgnoreCase(System.getProperty("mcaimod.agentEngine", "langgraph"))
+                && KurumiAgentProcess.available()) {
+            requestInFlight = true;
+            activeSender = event.getSender();
+            long agentGeneration = generation;
+            String agentSender = senderNameForMemory.isBlank() ? event.getSender().toString() : senderNameForMemory;
+            KurumiWebMonitor.requestReceived(message);
+            minecraft.getConnection().sendChat("好的，我听到了。");
+            KurumiAgentProcess.chat(agentSender, message).whenComplete((answer, error) ->
+                minecraft.execute(() -> {
+                    if (agentGeneration != generation || !requestInFlight) return;
+                    if (error != null || answer == null || !answer.has("success")
+                            || !answer.get("success").getAsBoolean()) {
+                        KurumiWebMonitor.requestFailed("LangGraph 执行失败");
+                        minecraft.getConnection().sendChat("LangGraph 执行失败，请查看 Kurumi 日志。");
+                    } else {
+                        String reply = answer.has("reply") ? answer.get("reply").getAsString() : "";
+                        if (!reply.isBlank())
+                            minecraft.getConnection().sendChat(reply.length() > 120 ? reply.substring(0, 120) : reply);
+                    }
+                    finishRequest();
+                }));
             return;
         }
         requestInFlight = true;
