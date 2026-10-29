@@ -88,8 +88,9 @@ public final class KurumiDecisionParser {
                         line.startsWith("from ") || line.startsWith("import ")
                                 || line.startsWith("run_skill(")))
                     script = KurumiSkillMemory.configured().expandCalls(script);
-                return KurumiScriptParser.parse(script).map(program ->
-                        new Decision(reply, Optional.empty(), "", null, null, null, "", Optional.empty(), Optional.of(program), script));
+                final String validatedScript = script;
+                return KurumiScriptParser.parse(validatedScript).map(program ->
+                        new Decision(reply, Optional.empty(), "", null, null, null, "", Optional.empty(), Optional.of(program), validatedScript));
             }
             return Optional.empty();
         } catch (RuntimeException error) {
