@@ -249,6 +249,7 @@ public final class KurumiClientController {
 
     /** Immediate local emergency stop; never invokes or waits for the language model. */
     private static BaritoneBridge.Result stopAll() {
+        KurumiAgentToolServer.invalidatePending();
         fleeingUntil = 0;
         survivalRecovery = null;
         // Invalidate in-flight AI callbacks before releasing any executor state.
