@@ -49,3 +49,25 @@ have been tested. A Python thread in the same JVM is not a security boundary.
 The next blocking tasks are: robust NeoForge packaging, asynchronous action
 completion, AI/skill routing, safety parity with the old AST verifier and
 end-to-end in-game tests.
+
+
+## Tool bridge expansion (experimental, 0.5.0)
+
+The in-Mod `KurumiEmbeddedPythonBridge` now registers a broad set of game
+functions (observations, movement, interaction, inventory/chests, mining,
+farming, fishing, TPA and chat) by forwarding all access to the Minecraft
+client thread. Python calls use `tools.goto(x, y, z)` syntax. Observation
+APIs currently return JSON **strings**, not Python dictionaries; consumers
+must decode them using `json.loads` if the standard library is available.
+
+**This is not full migration**: some tools remain missing (e.g. selected
+look/combat/long-task and memory operations), and several asynchronous
+actions currently report request acceptance rather than verified completion.
+The prototype has no model-output routing, full Java authorization parity,
+or verified NeoForge distributable runtime packaging. It remains disabled
+for AI-supplied scripts.
+
+The worker guards tool counts (200) and elapsed time (5 minutes) between
+calls, but these checks **cannot stop infinite pure-Python loops**. Never
+execute untrusted model output with this prototype until forced termination
+or process isolation is implemented and tested.
