@@ -53,8 +53,15 @@ public final class KurumiEmbeddedPythonBridge {
         cancelled = true;
         Thread task = worker;
         if (task != null) task.interrupt();
-        // Context.close(true) is only safe off-thread after the guest execution
-        // is terminated. Avoid closing a context on the Minecraft tick thread.
+        Context context = activeContext;
+        if (context != null) {
+            Thread closer = new Thread(() -> {
+                try { context.close(true); }
+                catch (RuntimeException ignored) { /* Context may already be closing. */ }
+            }, "Kurumi-GraalPy-Cancel");
+            closer.setDaemon(true);
+            closer.start();
+        }
     }
 
     public static BaritoneBridge.Result start(String script) {
@@ -126,6 +133,8 @@ public final class KurumiEmbeddedPythonBridge {
     private static int num(Object[] args, int i) { return ((Number) args[i]).intValue(); }
     private static final java.util.concurrent.atomic.AtomicInteger TOOL_CALLS = new java.util.concurrent.atomic.AtomicInteger();
     private static volatile long scriptStartedNanos;
+    private static final java.util.concurrent.atomic.AtomicInteger CHAT_MESSAGES = new java.util.concurrent.atomic.AtomicInteger();
+    private static volatile long lastChatAt;
 
     private static Object callGameTool(String name, Object[] a) {
         if (!RUNNING.get() || cancelled || worker == null || worker.isInterrupted())
@@ -232,6 +241,12 @@ public final class KurumiEmbeddedPythonBridge {
             case "tpa_accept" -> { require(a, 0); action = KurumiTpaBridge.accept(); }
             case "talk" -> {
                 require(a, 1);
+                if (CHAT_MESSAGES.incrementAndGet() > 12)
+                    throw new IllegalStateException("Python 脚本公屏消息超过12条");
+                long now = System.currentTimeMillis();
+                if (now - lastChatAt < 2_000L)
+                    throw new IllegalStateException("公屏聊天需要至少间隔2秒");
+                lastChatAt = now;
                 String message = str(a,0);
                 if (message.length() > 120) throw new IllegalArgumentException("聊天内容过长");
                 var connection = Minecraft.getInstance().getConnection();
@@ -267,6 +282,8 @@ public final class KurumiEmbeddedPythonBridge {
         long started = System.nanoTime();
         scriptStartedNanos = started;
         TOOL_CALLS.set(0);
+        CHAT_MESSAGES.set(0);
+        lastChatAt = 0;
         try (Context context = Context.newBuilder("python")
                 .allowHostAccess(HostAccess.NONE)
                 .allowHostClassLookup(name -> false)
