@@ -1,10 +1,20 @@
 # Install CPython dependencies for the Kurumi 0.6.0 LangGraph agent.
 # The Mod automatically extracts the Python sources to this directory at game startup.
 param(
-    [string]$Instance = 'E:\sync\软件\.minecraft\versions\26.2-NeoForge_26.2.0.93',
+    [string]$Instance = '',
     [string]$Python = 'py'
 )
 $ErrorActionPreference = 'Stop'
+# Windows PowerShell 5.1 may decode UTF-8 scripts without BOM as ANSI.
+# Construct the non-ASCII directory name from Unicode code points instead.
+if ([string]::IsNullOrWhiteSpace($Instance)) {
+    $software = [string][char]0x8F6F + [char]0x4EF6
+    $Instance = Join-Path (Join-Path 'E:\sync' $software) '.minecraft\versions\26.2-NeoForge_26.2.0.93'
+}
+# Ask native Python processes to use UTF-8 for console output.
+$env:PYTHONIOENCODING = 'utf-8'
+try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false) } catch { }
+$OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $target = Join-Path $Instance 'config\mcaimod-agent'
 New-Item -Path $target -ItemType Directory -Force | Out-Null
 $requirements = Join-Path $PSScriptRoot 'python-agent\requirements.txt'
