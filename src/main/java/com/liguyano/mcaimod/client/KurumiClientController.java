@@ -840,8 +840,10 @@ public final class KurumiClientController {
                 + "确实无需动作时才返回 {\"type\":\"finish\",\"reason\":\"完成理由\"}。"
                 + "连续执行仍受动作数、运行时间及调用预算保护。"));
         conversation.add(new ChatMessage("system",
-                "脚本引擎采用嵌入式 Python 3（GraalPy），但目前必须通过旧白名单语法校验。"
-                + "生成标准 Python 的 if/for/while/def/try 兼容语法时，禁止在脚本顶层写 return。"
+                "默认脚本引擎是嵌入式 Python 3（GraalPy），Java 负责 Agent 决策、游戏工具及执行反馈；"
+                + "仅当 GraalPy 不可用或启动参数显式指定 legacy 时回退旧 Java 伪代码执行器。"
+                + "普通脚本当前仍须通过旧白名单解析校验，因此不要假定所有 Python 3 语法都已放行；"
+                + "主人导入预安装本地模块时可使用受限真实 Python import。不要在脚本顶层写 return。"
                 + "工具可以直接调用 get_position()、goto(x,y,z)、talk(message)、observe(value)，"
                 + "返回值支持 dict 键访问，例如 result['success']，以及兼容 result.success 的字段访问。"
                 + "异步动作收到 success=true 通常仅代表请求已受理，必须通过再次观察确认完成。"
