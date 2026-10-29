@@ -89,6 +89,15 @@ public final class KurumiDecisionParser {
                                 || line.startsWith("run_skill(")))
                     script = KurumiSkillMemory.configured().expandCalls(script);
                 final String validatedScript = script;
+                // Local module imports use GraalPy, not the old pseudocode AST.
+                // Restrict this path to locally installed modules; actual game
+                // authorization is additionally checked in the controller.
+                if ("python".equalsIgnoreCase(System.getProperty("mcaimod.scriptEngine", "legacy"))
+                        && KurumiPythonModulePolicy.isApprovedImportScript(validatedScript)) {
+                    return KurumiScriptParser.parse("observe(get_position())").map(program ->
+                            new Decision(reply, Optional.empty(), "", null, null, null, "",
+                                    Optional.empty(), Optional.of(program), validatedScript));
+                }
                 return KurumiScriptParser.parse(validatedScript).map(program ->
                         new Decision(reply, Optional.empty(), "", null, null, null, "", Optional.empty(), Optional.of(program), validatedScript));
             }
