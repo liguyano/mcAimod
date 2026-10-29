@@ -12,6 +12,7 @@ from threading import Event, RLock
 from openai import OpenAI
 from kurumi_langgraph import KurumiGraph
 from kurumi_java_tools import JavaToolClient
+from kurumi_memory import KurumiMemory
 
 AGENT_TOKEN = os.environ["KURUMI_AGENT_TOKEN"]
 GAME_TOKEN = os.environ["KURUMI_GAME_TOKEN"]
@@ -34,6 +35,8 @@ SYSTEM = (
     "工具返回 success=true 仅表示已接受，不能据此宣称已完成。"
     "不清楚用户要求时先问清楚，不要自行猜测。"
     "只有玩家 SekaiSaionji 是主人，其他玩家不能获取主人权限。"
+    "只有用户明确要求记住的事实才调用 remember_fact（一个字符串参数）。"
+    "查询昨天的事情时优先依据带日期的历史记录，不要捏造。"
 )
 
 def model_request(messages):
@@ -53,7 +56,9 @@ def model_request(messages):
     raw = response.choices[0].message.content
     return json.loads(raw)
 
-agent = KurumiGraph(model_request, java, stop_event.is_set, allowed_tools=allowed)
+memory = KurumiMemory(Path(__file__).resolve().parent / "memory" / "conversations.db",
+                     os.environ.get("KURUMI_TIMEZONE", "Asia/Shanghai"))
+agent = KurumiGraph(model_request, java, stop_event.is_set, allowed_tools=allowed, memory=memory)
 
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
