@@ -402,6 +402,41 @@ public final class KurumiEmbeddedPythonBridge {
                         _handoff_observation(json.dumps(value, ensure_ascii=False, default=str))
                         raise _KurumiObserve()
                     """);
+            // Explicit, local-only module folder. Module code is read by Java;
+            // guest Python remains denied arbitrary filesystem access.
+            java.nio.file.Path modulesDir = net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get()
+                    .resolve("mcaimod-python").toAbsolutePath().normalize();
+            java.nio.file.Files.createDirectories(modulesDir);
+            java.util.List<java.nio.file.Path> localModules;
+            try (var stream = java.nio.file.Files.list(modulesDir)) {
+                localModules = stream.filter(path -> java.nio.file.Files.isRegularFile(path)
+                        && !java.nio.file.Files.isSymbolicLink(path)
+                        && path.getFileName().toString().matches("[a-zA-Z_][a-zA-Z_0-9]{0,47}\\.py"))
+                        .sorted().limit(32).toList();
+            }
+            context.eval("python", "import sys, types");
+            for (java.nio.file.Path file : localModules) {
+                if (java.nio.file.Files.size(file) > 65536)
+                    throw new IllegalStateException("Python 模块超过64KB: " + file.getFileName());
+                String moduleName = file.getFileName().toString().replaceFirst("\\.py$", "");
+                String moduleSource = java.nio.file.Files.readString(file, java.nio.charset.StandardCharsets.UTF_8);
+                var bindings = context.getBindings("python");
+                bindings.putMember("_kurumi_module_name", moduleName);
+                bindings.putMember("_kurumi_module_source", moduleSource);
+                context.eval("python", """
+                        _kurumi_m = types.ModuleType(_kurumi_module_name)
+                        _kurumi_m.__dict__.update({k:v for k,v in globals().items()
+                                if k in ('tools','observe') or k in (
+                                'goto','move','talk','get_inventory','get_position',
+                                'scan_nearby_entities','interact','mine','sleep',
+                                'pickup_all','put_item','take_item')})
+                        _kurumi_m.__file__ = '<kurumi-module>'
+                        sys.modules[_kurumi_module_name] = _kurumi_m
+                        exec(compile(_kurumi_module_source, _kurumi_module_name + '.py', 'exec'),
+                             _kurumi_m.__dict__)
+                        del _kurumi_m
+                        """);
+            }
             try {
                 context.eval("python", source);
                 finishedSuccess = true;
