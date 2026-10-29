@@ -6,7 +6,7 @@ import java.util.Optional;
 
 /** Parse a model response as data, never as an executable command. */
 public final class KurumiDecisionParser {
-    public record Decision(String reply, Optional<KurumiActionValidator.Action> action, String target, Integer x, Integer y, Integer z, String blockId, Optional<KurumiTaskPlanner.Plan> plan, Optional<KurumiTaskPlanner.Program> program) {}
+    public record Decision(String reply, Optional<KurumiActionValidator.Action> action, String target, Integer x, Integer y, Integer z, String blockId, Optional<KurumiTaskPlanner.Plan> plan, Optional<KurumiTaskPlanner.Program> program, String script) {}
 
     /**
      * Accept exactly one JSON response, optionally wrapped in a complete tool_call tag.
@@ -89,7 +89,7 @@ public final class KurumiDecisionParser {
                                 || line.startsWith("run_skill(")))
                     script = KurumiSkillMemory.configured().expandCalls(script);
                 return KurumiScriptParser.parse(script).map(program ->
-                        new Decision(reply, Optional.empty(), "", null, null, null, "", Optional.empty(), Optional.of(program)));
+                        new Decision(reply, Optional.empty(), "", null, null, null, "", Optional.empty(), Optional.of(program), script));
             }
             return Optional.empty();
         } catch (RuntimeException error) {
