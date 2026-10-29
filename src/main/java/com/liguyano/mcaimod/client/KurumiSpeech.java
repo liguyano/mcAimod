@@ -14,7 +14,6 @@ public final class KurumiSpeech {
         if (message.startsWith("/")) return;
         String sent = message.length() > 120 ? message.substring(0, 120) : message;
         mc.getConnection().sendChat(sent);
-        KurumiWebMonitor.publishSpeech(sent);
         KurumiVoiceManager.speak(sent);
     }
 }
