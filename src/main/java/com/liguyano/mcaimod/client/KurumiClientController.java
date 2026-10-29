@@ -60,7 +60,7 @@ public final class KurumiClientController {
 
     static boolean hasSurvivalTask() {
         return requestInFlight || awaitedStage != null || quickStage != null
-                || KurumiPseudoExecutor.busy() || KurumiPlanExecutor.busy()
+                || KurumiPseudoExecutor.busy() || KurumiEmbeddedPythonBridge.busy() || KurumiPlanExecutor.busy()
                 || KurumiFishingBridge.busy() || KurumiLongTaskBridge.busy();
     }
 
@@ -232,6 +232,7 @@ public final class KurumiClientController {
         KurumiLongTaskBridge.cancel();
         KurumiChestCraftTask.cancel();
         KurumiPseudoExecutor.cancel();
+        KurumiEmbeddedPythonBridge.cancel();
         KurumiChestInspector.cancel();
         KurumiChestSearch.cancel();
         KurumiTaskRecovery.cancel();
@@ -259,6 +260,7 @@ public final class KurumiClientController {
         PENDING_CLARIFICATIONS.clear();
         KurumiWebActions.cancelPending();
         KurumiPseudoExecutor.cancel();
+        KurumiEmbeddedPythonBridge.cancel();
         KurumiPlanExecutor.cancel();
         KurumiLongTaskBridge.cancel();
         KurumiChestCraftTask.cancel();
@@ -308,6 +310,7 @@ public final class KurumiClientController {
             if (System.currentTimeMillis() - quick.started() > AGENT_DEADLINE_MS) {
                 quickStage = null;
                 KurumiPseudoExecutor.cancel();
+        KurumiEmbeddedPythonBridge.cancel();
                 publicFailure("快捷技能执行超时，已取消");
                 return;
             }
@@ -350,6 +353,7 @@ public final class KurumiClientController {
         if (System.currentTimeMillis() - stage.started() > AGENT_DEADLINE_MS) {
             awaitedStage = null;
             KurumiPseudoExecutor.cancel();
+        KurumiEmbeddedPythonBridge.cancel();
             finishRequest();
             notice("Kurumi 多轮工具任务达到20分钟总时限，已停止");
             return;
@@ -553,6 +557,7 @@ public final class KurumiClientController {
                     KurumiWebMonitor.log("主人提供新指令：中断当前脚本并重新规划");
                     KurumiPlanExecutor.cancel();
                     KurumiPseudoExecutor.cancel();
+        KurumiEmbeddedPythonBridge.cancel();
                 }
             }
             return;
@@ -1058,7 +1063,7 @@ public final class KurumiClientController {
                             publicFailure("已有长任务进行中，请先 /kurumi stop");
                             return;
                         }
-                        if (KurumiPlanExecutor.busy() || KurumiPseudoExecutor.busy()) {
+                        if (KurumiPlanExecutor.busy() || KurumiPseudoExecutor.busy() || KurumiEmbeddedPythonBridge.busy()) {
                             publicFailure("自由组合任务执行中，请先 /kurumi stop");
                             return;
                         }
