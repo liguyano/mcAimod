@@ -49,8 +49,7 @@ def model_request(messages):
                 timeout=min(max(int(profile.get("request_timeout", 120)), 5), 300)) as client:
         response = client.chat.completions.create(
             model=profile["model_id"], messages=messages,
-            max_tokens=int(profile.get("max_output_tokens", 1024)),
-            response_format={"type": "json_object"})
+            max_tokens=int(profile.get("max_output_tokens", 1024)))
     raw = response.choices[0].message.content
     return json.loads(raw)
 
