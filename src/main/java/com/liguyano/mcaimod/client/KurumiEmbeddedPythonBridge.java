@@ -35,18 +35,22 @@ public final class KurumiEmbeddedPythonBridge {
     private static volatile boolean finishedObserved;
     private static volatile String finishedReport = "";
     private static volatile String pendingObservation;
+    private static volatile boolean cancelled;
+    private static volatile long finishedVisionId;
 
     public static long activeRunId() { return runSequence; }
     public static long finishedRunId() { return finishedSequence; }
     public static boolean finishedRunSucceeded() { return finishedSuccess; }
     public static boolean finishedRunObserved() { return finishedObserved; }
     public static String finishedRunReport() { return finishedReport; }
+    public static long finishedRunVisionId() { return finishedVisionId; }
 
     private KurumiEmbeddedPythonBridge() {}
 
     public static boolean busy() { return RUNNING.get(); }
 
     public static void cancel() {
+        cancelled = true;
         Thread task = worker;
         if (task != null) task.interrupt();
         // Context.close(true) is only safe off-thread after the guest execution
@@ -63,6 +67,8 @@ public final class KurumiEmbeddedPythonBridge {
         finishedObserved = false;
         finishedReport = "";
         pendingObservation = null;
+        cancelled = false;
+        finishedVisionId = 0;
         worker = new Thread(() -> execute(script, run), "Kurumi-GraalPy-Worker");
         worker.setDaemon(true);
         worker.start();
@@ -73,6 +79,10 @@ public final class KurumiEmbeddedPythonBridge {
         Minecraft mc = Minecraft.getInstance();
         CompletableFuture<Object> done = new CompletableFuture<>();
         mc.execute(() -> {
+            if (cancelled || Thread.currentThread().isInterrupted()) {
+                done.completeExceptionally(new IllegalStateException("Python 任务已取消"));
+                return;
+            }
             try { done.complete(operation.get()); }
             catch (Throwable error) { done.completeExceptionally(error); }
         });
@@ -118,7 +128,7 @@ public final class KurumiEmbeddedPythonBridge {
     private static volatile long scriptStartedNanos;
 
     private static Object callGameTool(String name, Object[] a) {
-        if (!RUNNING.get() || worker == null || worker.isInterrupted())
+        if (!RUNNING.get() || cancelled || worker == null || worker.isInterrupted())
             throw new IllegalStateException("Python 脚本已取消或不在有效执行上下文");
         if (System.nanoTime() - scriptStartedNanos > TimeUnit.MINUTES.toNanos(5))
             throw new IllegalStateException("Python 脚本超过5分钟");
@@ -158,10 +168,7 @@ public final class KurumiEmbeddedPythonBridge {
             case "use_item" -> { require(a,1); action = KurumiItemUseBridge.use(str(a,0)); }
             case "hold_use_item" -> { require(a,2); action = KurumiItemUseBridge.hold(str(a,0),num(a,1)); }
             case "sleep_in_bed" -> { require(a,0); action = KurumiBedShortcut.start(); }
-            case "sleep" -> {
-                require(a,1);
-                throw new UnsupportedOperationException("sleep 需要异步调度，不可阻塞游戏线程");
-            }
+            case "sleep" -> throw new IllegalStateException("sleep 由 Python 工作线程处理");
             case "goto" -> { require(a, 3); action = BaritoneBridge.gotoCoordinates(num(a,0),num(a,1),num(a,2)); }
             case "move" -> { require(a, 2); action = BaritoneBridge.moveRelative(str(a,0), num(a,1)); }
             case "come" -> { require(a, 1); action = BaritoneBridge.comeToPlayer(str(a,0)); }
@@ -297,6 +304,19 @@ public final class KurumiEmbeddedPythonBridge {
                         else if (args[i].isBoolean()) frozen[i] = args[i].asBoolean();
                         else throw new IllegalArgumentException("工具参数只允许基本类型");
                     }
+                    if ("sleep".equals(name)) {
+                        if (frozen.length != 1 || !(frozen[0] instanceof Number))
+                            throw new IllegalArgumentException("sleep(seconds) 需要数字");
+                        double seconds = ((Number) frozen[0]).doubleValue();
+                        if (!Double.isFinite(seconds) || seconds < 0 || seconds > 60)
+                            throw new IllegalArgumentException("sleep 范围为0到60秒");
+                        try { Thread.sleep((long)(seconds * 1000)); }
+                        catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new IllegalStateException("Python 等待已取消", e);
+                        }
+                        return "null";
+                    }
                     return asJson(onGameThread(() -> callGameTool(name, frozen)));
                 });
             }
@@ -334,7 +354,9 @@ public final class KurumiEmbeddedPythonBridge {
                 finishedSuccess = true;
                 finishedReport = "Python 脚本已执行完毕";
             } catch (PolyglotException error) {
-                if (pendingObservation == null || !error.isGuestException()) throw error;
+                if (pendingObservation == null || !error.isGuestException()
+                        || !"_KurumiObserve".equals(error.getGuestObject().getMetaObject().getMetaSimpleName()))
+                    throw error;
                 finishedObserved = true;
                 finishedSuccess = true;
                 finishedReport = "AI观察：" + pendingObservation;
@@ -354,6 +376,11 @@ public final class KurumiEmbeddedPythonBridge {
             activeContext = null;
             TOOL_CALLS.set(0);
             worker = null;
+            if (cancelled) {
+                finishedSuccess = false;
+                finishedObserved = false;
+                finishedReport = "Python 任务已取消";
+            }
             RUNNING.set(false);
             finishedSequence = run;
         }
