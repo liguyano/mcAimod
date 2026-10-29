@@ -681,6 +681,7 @@ public final class KurumiClientController {
                         + "while 循环最多20轮，任务最多20分钟、动作最多200个；不确定时先观察，不要假称动作已完成。"));
                 String selectedToolGuide = taskToolGuide(effectiveMessage);
         if (selectedToolGuide != null) conversation.add(new ChatMessage("system", selectedToolGuide));
+        conversation.add(new ChatMessage("system", "工具签名目录由本地注册表提供。需要核对某个工具时，调用 observe(get_tool_help(\\\"函数名\\\")) 查询；不存在时 found=false，禁止猜测函数或参数。"));
         else {
             conversation.add(new ChatMessage("system",
                         "常用动作：come(\\\"玩家名\\\") 到玩家附近停止；follow(\\\"玩家名\\\") 持续跟随；"
@@ -877,7 +878,7 @@ public final class KurumiClientController {
 
     private static String taskToolGuide(String request) {
         String input = request == null ? "" : request.toLowerCase(java.util.Locale.ROOT);
-        StringBuilder guide = new StringBuilder("工具目录：观察 scan_nearby_entities/get_inventory/get_position/inspect_container/inspect_slot/get_distance；移动 goto/come/follow/move/stop/look_at；交互 interact/use_item/hold_use_item；容器 chest_target/chest_open/chest_take/chest_put/chest_take_all/chest_put_all/chest_put_item_all/take_all_items；采集 mine/break_block/chain_on/chain_off/pickup_all/search_all_block/farm；制作 craft_open/put_item/take_item/get_crafting_recipe；其他 fish/stop_fishing/sleep_in_bed/attack/tpa_request/search_chests/remember_block。所有操作先读 success/completed/message，不能把已接受误认作执行完毕。");
+        StringBuilder guide = new StringBuilder(KurumiToolRegistry.catalog());
         boolean matched = false;
         if (input.contains("尸体") || input.contains("遗体") || input.contains("corpse") || input.contains("实体") || input.contains("上船") || input.contains("村民")) {
             guide.append("\n").append("实体与尸体：scan_nearby_entities() 返回 entities 数组（按距离排序），每项有 type/uuid/x/y/z。找最近的 corpse:corpse，记录 UUID；goto 到附近后重新扫描确认 UUID，interact(\"corpse:corpse\",uuid) 精确交互；inspect_container() 检查界面，再 take_all_items()，观察剩余物品。交互默认不自动转头。");
