@@ -98,3 +98,23 @@ memory deletion and review UI.
 6. Replace the old Java runAgent route only after end-to-end tests and successful NeoForge startup validation.
 
 **This is an incremental 0.6.0 source implementation, not a ready-to-install working LangGraph Mod.**
+
+## Official LangGraph persistence (0.6.0)
+
+- `langgraph-checkpoint-sqlite` provides `SqliteSaver` at
+  `config/mcaimod-agent/memory/checkpoints.db`. The graph uses a stable
+  sender-specific `thread_id` on each call, allowing inspection and
+  interruption-resistant snapshots of graph state. Checkpoints alone do not
+  resume in-flight Minecraft actions automatically.
+- `SqliteStore` persists explicit `remember_fact` entries at
+  `config/mcaimod-agent/memory/store.db`. Old facts are copied from
+  `conversations.db` at startup without deleting their originals.
+- `conversations.db` continues storing timestamped conversation turns and
+  supporting date-scoped lookups. The prompt uses recent messages and only
+  requests yesterday's log on relevant questions, not the full checkpoint.
+- The Store is currently key-based, **not** vector-semantic memory search or
+  automatic model-driven summarization. Those require a separate memory
+  management node and embeddings or explicitly configured heuristics.
+- This SQLite setup is intended for one local Kurumi Agent process; keep the
+  database private, back it up before upgrading, and do not expose its files
+  to untrusted code. Full in-game integration still needs end-to-end testing.
