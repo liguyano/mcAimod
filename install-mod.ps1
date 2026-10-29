@@ -63,6 +63,7 @@ if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
 # Independent, lightweight check so -SkipBuild cannot accidentally install
 # the old JAR that compiled but lacked the GraalPy language libraries.
 Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zip = [System.IO.Compression.ZipFile]::OpenRead($source)
 try {
     $entries = @($zip.Entries | ForEach-Object { $_.FullName })
