@@ -79,7 +79,18 @@ public final class KurumiEmbeddedPythonBridge {
     }
     private static String str(org.graalvm.polyglot.Value[] args, int i) { return args[i].asString(); }
     private static int num(org.graalvm.polyglot.Value[] args, int i) { return args[i].asInt(); }
+    private static final ThreadLocal<Integer> TOOL_CALLS = ThreadLocal.withInitial(() -> 0);
+    private static final ThreadLocal<Long> SCRIPT_STARTED = new ThreadLocal<>();
+
     private static Object callGameTool(String name, org.graalvm.polyglot.Value[] a) {
+        Long started = SCRIPT_STARTED.get();
+        if (started == null || Thread.currentThread().isInterrupted())
+            throw new IllegalStateException("Python 脚本已取消或不在有效执行上下文");
+        if (System.nanoTime() - started > TimeUnit.MINUTES.toNanos(5))
+            throw new IllegalStateException("Python 脚本超过5分钟");
+        int count = TOOL_CALLS.get() + 1;
+        TOOL_CALLS.set(count);
+        if (count > 200) throw new IllegalStateException("Python 工具调用超过200次");
         BaritoneBridge.Result action;
         switch (name) {
             case "goto" -> { require(a, 3); action = BaritoneBridge.gotoCoordinates(num(a,0),num(a,1),num(a,2)); }
@@ -176,6 +187,8 @@ public final class KurumiEmbeddedPythonBridge {
 
     private static void execute(String source) {
         long started = System.nanoTime();
+        SCRIPT_STARTED.set(started);
+        TOOL_CALLS.set(0);
         try (Context context = Context.newBuilder("python")
                 .allowHostAccess(HostAccess.NONE)
                 .allowHostClassLookup(name -> false)
@@ -215,6 +228,8 @@ public final class KurumiEmbeddedPythonBridge {
             KurumiWebMonitor.log("GraalPy 运行时加载或执行失败：" + error);
         } finally {
             activeContext = null;
+            SCRIPT_STARTED.remove();
+            TOOL_CALLS.remove();
             worker = null;
             RUNNING.set(false);
         }
