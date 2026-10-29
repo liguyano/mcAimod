@@ -28,14 +28,19 @@ public final class KurumiWebMonitor {
     private static HttpServer server;
     private static long speechId;
     private static final Deque<String> SPEECH = new ArrayDeque<>();
-    /** Called only from KurumiSpeech.say, never from incoming player messages. */
-    public static synchronized void publishSpeech(String spoken) {
-        if (spoken == null || spoken.isBlank()) return;
+    private static final java.util.Map<Long, byte[]> AUDIO = new java.util.LinkedHashMap<>();
+    /** Called after successful Edge TTS synthesis; only Kurumi-authored speech enters here. */
+    public static synchronized void publishAudio(String spoken, byte[] mp3) {
+        if (spoken == null || spoken.isBlank() || mp3 == null || mp3.length == 0 || mp3.length > 2_000_000) return;
+        long id = ++speechId;
+        AUDIO.put(id, mp3);
         JsonObject event = new JsonObject();
-        event.addProperty("id", ++speechId);
+        event.addProperty("id", id);
         event.addProperty("text", spoken.substring(0, Math.min(200, spoken.length())));
+        event.addProperty("audio", "/api/audio/" + id);
         SPEECH.addLast(event.toString());
-        while (SPEECH.size() > 30) SPEECH.removeFirst();
+        while (SPEECH.size() > 20) SPEECH.removeFirst();
+        while (AUDIO.size() > 20) AUDIO.remove(AUDIO.keySet().iterator().next());
     }
     private static synchronized String speechEvents(long after) {
         JsonObject result = new JsonObject();
@@ -48,7 +53,6 @@ public final class KurumiWebMonitor {
         result.add("events", entries);
         return result.toString();
     }
-
     private static JsonObject skillJson(KurumiSkillMemory.Skill skill) {
         JsonObject item = new JsonObject();
         item.addProperty("name", skill.name());
@@ -313,6 +317,20 @@ public final class KurumiWebMonitor {
         if (server != null) return;
         try {
             server = HttpServer.create(new InetSocketAddress("0.0.0.0", 8765), 0);
+            server.createContext("/api/audio/", exchange -> {
+                if (!"GET".equals(exchange.getRequestMethod())) { exchange.sendResponseHeaders(405, -1); exchange.close(); return; }
+                String idString = exchange.getRequestURI().getPath().substring("/api/audio/".length());
+                long id;
+                try { id = Long.parseLong(idString); }
+                catch (NumberFormatException e) { exchange.sendResponseHeaders(404, -1); exchange.close(); return; }
+                byte[] mp3;
+                synchronized (KurumiWebMonitor.class) { mp3 = AUDIO.get(id); }
+                if (mp3 == null) { exchange.sendResponseHeaders(404, -1); exchange.close(); return; }
+                exchange.getResponseHeaders().set("Content-Type", "audio/mpeg");
+                exchange.getResponseHeaders().set("Cache-Control", "no-store");
+                exchange.sendResponseHeaders(200, mp3.length);
+                try (var out = exchange.getResponseBody()) { out.write(mp3); }
+            });
             server.createContext("/api/speech", exchange -> {
                 if (!"GET".equals(exchange.getRequestMethod())) { exchange.sendResponseHeaders(405, -1); exchange.close(); return; }
                 long after = 0;
@@ -364,50 +382,31 @@ public final class KurumiWebMonitor {
     }
     private static final String VOICE_PAGE = """
         <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-        <title>Kurumi Voice Player</title>
-        <style>body{font:16px system-ui,sans-serif;background:#121624;color:#f0eaff;max-width:650px;margin:40px auto;padding:20px}
-        button,select,input{font:inherit;margin:7px;padding:9px;border-radius:8px}button{cursor:pointer}
-        section{padding:20px;background:#20263b;border-radius:18px}#last{white-space:pre-wrap;min-height:60px}</style></head>
-        <body><h1>くるみ ♡ Voice Player</h1><section>
-        <p>この端末でくるみの声を再生します。最初に「再生開始」を押してください。</p>
+        <title>Kurumi Voice</title><style>
+        body{font:16px system-ui,sans-serif;background:#121624;color:#f0eaff;max-width:650px;margin:40px auto;padding:20px}
+        button,input{font:inherit;margin:7px;padding:9px;border-radius:8px}button{cursor:pointer}
+        section{padding:20px;background:#20263b;border-radius:18px}#last{white-space:pre-wrap;min-height:60px}
+        </style></head><body><h1>くるみ ♡ Voice Player</h1><section>
+        <p>くるみの MP3 をこの端末で再生します。再生開始を押してくださいね♪</p>
         <button id="start">▶ 再生開始</button><button id="stop">■ 停止</button>
-        <p id="status">停止中</p>
-        <label>声 <select id="voice"></select></label>
-        <label>速度 <input id="rate" type="range" min="0.7" max="1.4" step="0.05" value="1.12"></label>
-        <label>高さ <input id="pitch" type="range" min="0.8" max="1.7" step="0.05" value="1.25"></label>
-        <h3>最後のメッセージ</h3><div id="last">まだありません</div>
+        <label>音量 <input id="volume" type="range" min="0" max="1" step="0.05" value="0.8"></label>
+        <p id="status">停止中</p><h3>最後のメッセージ</h3><div id="last">まだありません</div>
         </section><script>
-        const synth=window.speechSynthesis,voiceBox=document.getElementById('voice');
-        let active=false,last=0,initialized=false;const pending=[];
-        function voices(){
-          const list=synth.getVoices();
-          const previous=voiceBox.value;voiceBox.replaceChildren();
-          for(const v of list){const opt=document.createElement('option');opt.value=v.voiceURI;
-            opt.textContent=v.name+' ('+v.lang+')';voiceBox.appendChild(opt);}
-          const preferred=list.find(v=>v.lang.toLowerCase().startsWith('ja')&&/nanami|female|japan/i.test(v.name))
-            ||list.find(v=>v.lang.toLowerCase().startsWith('ja'));
-          voiceBox.value=list.some(v=>v.voiceURI===previous)?previous:(preferred?.voiceURI||'');
+        const player=new Audio(),pending=[];let active=false,last=0,initialized=false,playing=false;
+        player.onended=()=>{playing=false;playNext();};
+        player.onerror=()=>{playing=false;playNext();};
+        function playNext(){
+          if(!active||playing||!pending.length)return;
+          playing=true;player.src=pending.shift();player.volume=Number(document.getElementById('volume').value);
+          player.play().catch(()=>{playing=false;document.getElementById('status').textContent='再生を許可してください';});
         }
-        voices();synth.onvoiceschanged=voices;
-        function speakNext(){
-          if(!active||synth.speaking||!pending.length)return;
-          const value=pending.shift(),u=new SpeechSynthesisUtterance(value);
-          const candidates=synth.getVoices();
-          u.voice=candidates.find(v=>v.voiceURI===voiceBox.value)||null;
-          u.lang=u.voice?.lang||(/[\\u3040-\\u30ff]/.test(value)?'ja-JP':'zh-CN');
-          u.rate=Number(document.getElementById('rate').value);
-          u.pitch=Number(document.getElementById('pitch').value);
-          u.onend=()=>{setTimeout(speakNext,30);};
-          u.onerror=()=>{setTimeout(speakNext,30);};
-          synth.speak(u);
-        }
+        document.getElementById('volume').oninput=e=>{player.volume=Number(e.target.value);};
         document.getElementById('start').onclick=()=>{
-          active=true;document.getElementById('status').textContent='再生中';
-          // Discard earlier events when the page is started for the first time.
-          speakNext();
+          active=true;document.getElementById('status').textContent='再生中';playNext();
         };
         document.getElementById('stop').onclick=()=>{
-          active=false;pending.length=0;synth.cancel();document.getElementById('status').textContent='停止中';
+          active=false;pending.length=0;player.pause();player.removeAttribute('src');playing=false;
+          document.getElementById('status').textContent='停止中';
         };
         async function poll(){
           try{
@@ -416,9 +415,9 @@ public final class KurumiWebMonitor {
             if(!initialized){initialized=true;last=data.latest||0;return;}
             for(const e of data.events||[]){if(e.id<=last)continue;
               last=e.id;document.getElementById('last').textContent=e.text;
-              if(active){pending.push(e.text);if(pending.length>10)pending.shift();}
+              if(active&&e.audio){pending.push(e.audio);if(pending.length>10)pending.shift();}
             }
-            last=Math.max(last,data.latest||0);speakNext();
+            last=Math.max(last,data.latest||0);playNext();
           }catch(e){document.getElementById('status').textContent='接続確認中';}
         }
         setInterval(poll,650);poll();
