@@ -46,7 +46,7 @@ public final class KurumiAgentProcess {
             // Ship source inside the JAR, extract it on startup. A standalone
             // CPython environment is still necessary for LangGraph dependencies.
             for (String file : new String[]{"kurumi_server.py", "kurumi_langgraph.py",
-                    "kurumi_java_tools.py", "kurumi_skills.py", "requirements.txt"}) {
+                    "kurumi_java_tools.py", "kurumi_skills.py", "kurumi_memory.py", "requirements.txt"}) {
                 try (var resource = KurumiAgentProcess.class.getResourceAsStream("/kurumi-agent/" + file)) {
                     if (resource != null) {
                         java.nio.file.Files.copy(resource, folder.resolve(file),
