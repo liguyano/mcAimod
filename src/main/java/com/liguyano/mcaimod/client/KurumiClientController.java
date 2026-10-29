@@ -1038,7 +1038,7 @@ public final class KurumiClientController {
                             && toolCalls + 1 <= MAX_AGENT_STAGES;
                     boolean pythonScript = decision.program().isPresent()
                             && KurumiPythonRuntime.available()
-                            && "python".equalsIgnoreCase(System.getProperty("mcaimod.scriptEngine", "legacy"));
+                            && !"legacy".equalsIgnoreCase(System.getProperty("mcaimod.scriptEngine", "python"));
                     if (decision.action().isPresent() || !decision.target().isEmpty() || decision.x() != null || !decision.blockId().isEmpty() || decision.plan().isPresent() || decision.program().isPresent()) {
                         if (KurumiPythonModulePolicy.containsImport(decision.script())) {
                             String operator = minecraft.getConnection().getPlayerInfo(sender) == null
