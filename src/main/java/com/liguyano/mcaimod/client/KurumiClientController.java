@@ -160,7 +160,10 @@ public final class KurumiClientController {
         return false;
     }
 
+    static boolean pythonAgentActionsAllowed() { return autoFarmEnabled; }
+
     public static void install() {
+        KurumiAgentToolServer.install();
         NeoForge.EVENT_BUS.addListener(KurumiClientController::onPlayerChat);
         NeoForge.EVENT_BUS.addListener(KurumiClientController::registerCommands);
         NeoForge.EVENT_BUS.addListener(KurumiClientController::onLogin);
@@ -209,6 +212,7 @@ public final class KurumiClientController {
     }
 
     private static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
+        KurumiAgentToolServer.invalidatePending();
         generation++;
         requestInFlight = false;
         awaitedStage = null;
