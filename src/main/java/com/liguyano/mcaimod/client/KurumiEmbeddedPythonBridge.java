@@ -109,6 +109,23 @@ public final class KurumiEmbeddedPythonBridge {
         int count = TOOL_CALLS.get() + 1;
         TOOL_CALLS.set(count);
         if (count > 200) throw new IllegalStateException("Python 工具调用超过200次");
+        if (java.util.Set.of("check_inventory","check_distance","get_remembered_block",
+                "get_remembered_block_at","remember_block","check_nearby_chest",
+                "get_nearby_chest_result","screenshot","get_agent_observation",
+                "list_remembered_blocks","get_chest_search_result","get_fishing_status",
+                "check_inventory_item","check_inventory_count","get_crafting_recipe",
+                "find_nearest_block","search_all_block","get_tool_help","get_skill",
+                "get_distance","inspect_slot").contains(name)) {
+            StringBuilder expression = new StringBuilder(name).append('(');
+            for (int i = 0; i < a.length; i++) {
+                if (i != 0) expression.append(',');
+                if (a[i].isString()) expression.append(new Gson().toJson(a[i].asString()));
+                else if (a[i].isNumber()) expression.append(a[i].toString());
+                else throw new IllegalArgumentException("工具仅支持字符串或数字参数");
+            }
+            expression.append(')');
+            return KurumiExpressions.evaluate(expression.toString(), Map.of());
+        }
         BaritoneBridge.Result action;
         switch (name) {
             case "look" -> { require(a, 2); action = KurumiLookBridge.look(a[0].asDouble(), a[1].asDouble()); }
@@ -242,7 +259,7 @@ public final class KurumiEmbeddedPythonBridge {
                     "get_fishing_status", "list_remembered_blocks", "get_chest_search_result",
                     "search_all_block", "find_nearest_block", "check_inventory_item",
                     "check_inventory_count", "get_crafting_recipe", "inspect_slot",
-                    "get_distance", "get_tool_help", "get_skill",
+                    "get_distance", "get_tool_help", "get_skill", "check_inventory", "check_distance", "get_remembered_block", "get_remembered_block_at", "remember_block", "check_nearby_chest", "get_nearby_chest_result", "screenshot", "get_agent_observation",
                     "goto", "move", "come", "follow", "stop", "look", "look_at", "attack", "use_item", "hold_use_item", "sleep_in_bed", "sleep",
                     "interact", "put_item", "take_item", "take_all_items",
                     "chest_target", "chest_open", "chest_put", "chest_take",
