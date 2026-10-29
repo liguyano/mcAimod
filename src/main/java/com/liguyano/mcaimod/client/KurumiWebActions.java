@@ -252,12 +252,16 @@ public final class KurumiWebActions {
         previewStatus = error.isEmpty() ? "已生成 · 未执行" : "生成失败";
     }
 
-    public static synchronized String submitRun(String source) {
+    public static synchronized String submitRun(String source) { return submitRun(source, "legacy"); }
+
+    public static synchronized String submitRun(String source, String engine) {
+        if (!List.of("legacy", "python", "langgraph").contains(engine))
+            return "无效的执行引擎";
         if (source == null || source.isBlank() || source.length() > 8192)
             return "脚本不能为空且最多8192字";
         if (runQueued) return "上一条提交正在处理";
         runQueued = true; runStatus = "检查中"; runError = "";
-        Minecraft.getInstance().execute(() -> runOnClient(source));
+        Minecraft.getInstance().execute(() -> runOnClient(source, engine));
         return null;
     }
 
@@ -270,23 +274,56 @@ public final class KurumiWebActions {
         return false;
     }
 
-    private static void runOnClient(String source) {
+    private static void runOnClient(String source, String engine) {
         String error = null;
+        boolean queuedAgent = false;
         try {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player == null || mc.level == null || mc.getConnection() == null)
                 error = "请先进入游戏";
-            else if (KurumiPseudoExecutor.busy() || KurumiPlanExecutor.busy()
-                    || KurumiLongTaskBridge.busy() || KurumiChestCraftTask.busy())
+            else if (KurumiPseudoExecutor.busy() || KurumiPythonRuntime.busy()
+                    || KurumiPlanExecutor.busy() || KurumiLongTaskBridge.busy()
+                    || KurumiChestCraftTask.busy())
                 error = "已有任务在执行";
-            else {
+            else if (!"SekaiSaionji".equals(mc.player.getName().getString()))
+                error = "Web 手动执行仅允许主人操作";
+            else if ("python".equals(engine)) {
+                if (!KurumiPythonRuntime.available()) error = "GraalPy 运行时不可用";
+                else if (!KurumiClientController.pythonAgentActionsAllowed())
+                    error = "请先开启 /kurumi auto on";
+                else {
+                    KurumiWebMonitor.requirement("Web GraalPy 脚本调试");
+                    var result = KurumiPythonRuntime.start(source);
+                    if (!result.success()) error = result.message();
+                }
+            } else if ("langgraph".equals(engine)) {
+                if (!KurumiAgentProcess.available()) error = "LangGraph Agent 未启动";
+                else if (!KurumiClientController.pythonAgentActionsAllowed())
+                    error = "请先开启 /kurumi auto on";
+                else {
+                    queuedAgent = true;
+                    KurumiWebMonitor.requirement("Web LangGraph 任务：" + source.substring(0, Math.min(80, source.length())));
+                    KurumiAgentProcess.chat("SekaiSaionji", source).whenComplete((answer, failed) ->
+                            mc.execute(() -> {
+                                String outcome = failed != null ? "Agent 请求异常" :
+                                        answer == null || !answer.has("success") || !answer.get("success").getAsBoolean()
+                                        ? "Agent 执行失败" : "";
+                                synchronized (KurumiWebActions.class) {
+                                    runError = outcome;
+                                    runStatus = outcome.isEmpty() ? "LangGraph 任务完成" : "执行失败";
+                                }
+                                KurumiWebMonitor.log(outcome.isEmpty() ?
+                                        "Web LangGraph 执行结果：" + answer : "Web LangGraph: " + outcome);
+                            }));
+                }
+            } else {
                 Optional<KurumiTaskPlanner.Program> program = KurumiScriptParser.parse(source);
                 if (program.isEmpty()) error = "脚本校验失败：" + KurumiScriptParser.lastError();
                 else if (ownerOnly(program.get().statements())
                         && !"SekaiSaionji".equals(mc.player.getName().getString()))
                     error = "该任务包含仅主人可以执行的操作";
                 else {
-                    KurumiWebMonitor.requirement("Web 控制台手动执行");
+                    KurumiWebMonitor.requirement("Web 旧解释器调试");
                     var result = KurumiPseudoExecutor.start(program.get());
                     if (!result.success()) error = result.message();
                 }
@@ -296,7 +333,8 @@ public final class KurumiWebActions {
         }
         synchronized (KurumiWebActions.class) {
             runQueued = false; runError = error == null ? "" : error;
-            runStatus = error == null ? "已提交执行" : "执行失败";
+            runStatus = error != null ? "执行失败"
+                    : queuedAgent ? "LangGraph 执行中" : "已提交执行（" + engine + "）";
         }
     }
 
