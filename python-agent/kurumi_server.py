@@ -101,7 +101,8 @@ class Handler(BaseHTTPRequestHandler):
                     stop_event.clear()
                     sender = str(body["sender"])[:48]
                     message = str(body["message"])[:2000]
-                    result = agent.run(sender, message, SYSTEM)
+                    chat_only = body.get("chat_only") is True
+                    result = agent.run(sender, message, SYSTEM, chat_only=chat_only)
             else:
                 self.send_error(404)
                 return
