@@ -51,7 +51,7 @@ public final class KurumiAgentToolServer {
     public static void invalidatePending() { epoch++; }
 
     private static void listen() {
-        try (ServerSocket server = new ServerSocket(PORT, 8, InetAddress.getLoopbackAddress())) {
+        try (ServerSocket server = new ServerSocket(PORT, 8, InetAddress.getByName("127.0.0.1"))) {
             while (active) {
                 try (Socket socket = server.accept()) {
                     socket.setSoTimeout(20_000);
