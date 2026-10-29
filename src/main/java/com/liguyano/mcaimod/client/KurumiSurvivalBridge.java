@@ -28,7 +28,7 @@ public final class KurumiSurvivalBridge {
         hungerDecisionPending = false;
         hungerApproved = eatNow;
         nextHungerReview = System.currentTimeMillis() + (eatNow ? 0 : 30_000);
-        if (!eatNow) talk("主人~ 我有点饿，不过先完成手头的事再吃。");
+        if (!eatNow) talk("ご主人さま、おなかがすいちゃいました……もう少しだけがんばりますねっ♪");
     }
 
     public static void reset() {
@@ -49,7 +49,7 @@ public final class KurumiSurvivalBridge {
     private static void talk(String message) {
         var mc = Minecraft.getInstance();
         KurumiWebMonitor.log("生存中断: " + message);
-        if (mc.getConnection() != null) mc.getConnection().sendChat(message);
+        if (mc.getConnection() != null) KurumiSpeech.say(message);
     }
 
     public static void tick(boolean enabled) {
@@ -111,7 +111,7 @@ public final class KurumiSurvivalBridge {
         if (slot == -1) {
             if (!warnedNoFood) {
                 warnedNoFood = true;
-                talk("主人~ 我饿了，但是背包里没有食物！");
+                talk("ご主人さま〜、おなかぺこぺこですぅ……食べ物がありませんっ！");
             }
             return;
         }
@@ -129,7 +129,7 @@ public final class KurumiSurvivalBridge {
         equipTicks = 2;
         wasUsing = false;
         eatingStarted = System.currentTimeMillis();
-        talk("主人~ 我饿了，先吃点东西，马上继续！");
+        talk("ご主人さま、ちょっとごはんを食べますねっ。すぐ戻ります♪");
     }
 
     private static void tickEating() {
@@ -164,6 +164,6 @@ public final class KurumiSurvivalBridge {
         swappedSlot = -1;
         foodId = null;
         tickCount = 0;
-        talk(success ? "主人~ 吃饱啦，继续做事！" : "主人~ 吃东西没有成功，稍后再试。");
+        talk(success ? "もぐもぐ……ごちそうさまですっ！ お仕事に戻りますね♪" : "あれれ、ごはんを食べられませんでした……あとでもう一度試しますね。");
     }
 }
