@@ -115,7 +115,7 @@ class KurumiGraph:
         """Serializes sessions for now; only trusted Java should call this."""
         with self.lock:
             history = self.memory.recent(sender) if self.memory else self.history.get(sender, [])
-            temporal = self.memory.context(sender) if self.memory else ""
+            temporal = self.memory.context(sender, query=message) if self.memory else ""
             messages = [{"role": "system", "content": system_prompt + "\\n" + temporal}] + history[-20:] + [
                 {"role": "user", "content": message}
             ]
