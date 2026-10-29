@@ -118,7 +118,7 @@ public final class KurumiVoiceManager {
                 Path audio = Files.createTempFile("kurumi-audio-", ".mp3");
                 ProcessBuilder builder = new ProcessBuilder(python, scriptPath().toString(), message,
                         voice, value(config, "rate", "+12%"), value(config, "pitch", "+35Hz"),
-                        value(config, "volume", "0.8"), audio.toString(), enabled() ? "1" : "0");
+                        value(config, "volume", "0.8"), audio.toString(), (enabled() && Boolean.parseBoolean(value(config, "local_playback", "false"))) ? "1" : "0");
                 builder.redirectErrorStream(true);
                 Path output = Files.createTempFile("kurumi-tts-log-", ".txt");
                 builder.redirectOutput(output.toFile());
