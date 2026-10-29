@@ -9,7 +9,7 @@ public final class KurumiExpressions {
     public static boolean isExpressionFunction(String name) {
         return java.util.Set.of("pos", "screenshot", "get_fishing_status", "get_agent_observation", "len",
                 "search_all_block", "check_inventory", "check_distance", "list_remembered_blocks",
-                "get_remembered_block_at", "get_remembered_block", "get_skill", "remember_block",
+                "get_remembered_block_at", "get_remembered_block", "get_skill", "get_tool_help", "remember_block",
                 "get_chest_search_result", "find_nearest_block", "check_inventory_item",
                 "check_inventory_count", "get_crafting_recipe", "check_nearby_chest",
                 "get_nearby_chest_result", "get_position", "get_player_status", "get_environment",
@@ -277,6 +277,10 @@ public final class KurumiExpressions {
         if ("get_remembered_block_at".equals(name)) {
             if(args.size()!=1) throw new IllegalArgumentException("get_remembered_block_at 需要从0开始的编号");
             return KurumiChestSearch.blockAt(integer(args.get(0)));
+        }
+        if ("get_tool_help".equals(name)) {
+            if (args.size() != 1) throw new IllegalArgumentException("get_tool_help 需要工具名称");
+            return KurumiToolRegistry.help(string(args.get(0)));
         }
         if ("get_skill".equals(name)) {
             if (args.size()!=1) throw new IllegalArgumentException("get_skill 需要技能名称");
