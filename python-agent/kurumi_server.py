@@ -6,6 +6,7 @@ Never bind to a public network interface.
 from __future__ import annotations
 import json
 import os
+import sqlite3
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Event, RLock
@@ -13,6 +14,8 @@ from openai import OpenAI
 from kurumi_langgraph import KurumiGraph
 from kurumi_java_tools import JavaToolClient
 from kurumi_memory import KurumiMemory
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.store.sqlite import SqliteStore
 
 AGENT_TOKEN = os.environ["KURUMI_AGENT_TOKEN"]
 GAME_TOKEN = os.environ["KURUMI_GAME_TOKEN"]
@@ -58,7 +61,26 @@ def model_request(messages):
 
 memory = KurumiMemory(Path(__file__).resolve().parent / "memory" / "conversations.db",
                      os.environ.get("KURUMI_TIMEZONE", "Asia/Shanghai"))
-agent = KurumiGraph(model_request, java, stop_event.is_set, allowed_tools=allowed, memory=memory)
+data_dir = Path(__file__).resolve().parent / "memory"
+data_dir.mkdir(parents=True, exist_ok=True)
+# Process-lifetime connections: synchronous local agent, serialized by its graph lock.
+checkpoint_conn = sqlite3.connect(data_dir / "checkpoints.db", check_same_thread=False)
+store_conn = sqlite3.connect(data_dir / "store.db", check_same_thread=False)
+checkpointer = SqliteSaver(checkpoint_conn)
+store = SqliteStore(store_conn)
+store.setup()
+# One-time copy of previously saved facts; do not remove or overwrite the legacy archive.
+with memory._connect() as migration_db:
+    legacy_senders = migration_db.execute("SELECT DISTINCT sender FROM facts").fetchall()
+for sender_row in legacy_senders:
+    sender_id = sender_row[0]
+    for fact in memory.facts(sender_id, limit=10000):
+        import hashlib
+        key = hashlib.sha256(fact.casefold().encode("utf-8")).hexdigest()[:32]
+        if store.get(("kurumi", "facts", sender_id), key) is None:
+            store.put(("kurumi", "facts", sender_id), key, {"text": fact, "date": ""})
+agent = KurumiGraph(model_request, java, stop_event.is_set, allowed_tools=allowed,
+                    memory=memory, checkpointer=checkpointer, store=store)
 
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
