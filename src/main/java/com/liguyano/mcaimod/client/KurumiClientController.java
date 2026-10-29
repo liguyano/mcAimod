@@ -628,7 +628,7 @@ public final class KurumiClientController {
         }
         // 0.6: prefer LangGraph for normal chat. Java retains emergency stop,
         // exact shortcuts and the legacy fallback when Python is unavailable.
-        if (!"legacy".equalsIgnoreCase(System.getProperty("mcaimod.agentEngine", "langgraph"))
+        if (isOwner && !"legacy".equalsIgnoreCase(System.getProperty("mcaimod.agentEngine", "langgraph"))
                 && KurumiAgentProcess.available()) {
             requestInFlight = true;
             activeSender = event.getSender();
