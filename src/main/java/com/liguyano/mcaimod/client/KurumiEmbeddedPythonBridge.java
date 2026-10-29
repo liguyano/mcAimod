@@ -74,6 +74,106 @@ public final class KurumiEmbeddedPythonBridge {
                 "message", r.message()));
     }
 
+    private static void require(org.graalvm.polyglot.Value[] args, int count) {
+        if (args.length != count) throw new IllegalArgumentException("参数数量应为 " + count);
+    }
+    private static String str(org.graalvm.polyglot.Value[] args, int i) { return args[i].asString(); }
+    private static int num(org.graalvm.polyglot.Value[] args, int i) { return args[i].asInt(); }
+    private static Object callGameTool(String name, org.graalvm.polyglot.Value[] a) {
+        BaritoneBridge.Result action;
+        switch (name) {
+            case "goto" -> { require(a, 3); action = BaritoneBridge.gotoCoordinates(num(a,0),num(a,1),num(a,2)); }
+            case "move" -> { require(a, 2); action = BaritoneBridge.moveRelative(str(a,0), num(a,1)); }
+            case "come" -> { require(a, 1); action = BaritoneBridge.comeToPlayer(str(a,0)); }
+            case "follow" -> { require(a, 1); action = BaritoneBridge.followPlayer(str(a,0)); }
+            case "stop" -> { require(a, 0); action = BaritoneBridge.stop(); }
+            case "interact" -> {
+                if (a.length < 1 || a.length > 2) throw new IllegalArgumentException("interact(id[,uuid])");
+                action = KurumiInteractionBridge.interact(str(a,0), a.length == 2 ? str(a,1) : null);
+            }
+            case "put_item" -> {
+                if (a.length < 2 || a.length > 3) throw new IllegalArgumentException("put_item(id,count[,slot])");
+                action = KurumiInteractionBridge.putItem(str(a,0),num(a,1),a.length == 3 ? str(a,2) : "auto");
+            }
+            case "take_item" -> { require(a, 2); action = KurumiInteractionBridge.takeItem(str(a,0),num(a,1)); }
+            case "take_all_items" -> { require(a, 0); action = KurumiTakeAllBridge.start(); }
+            case "chest_target" -> {
+                if (a.length == 0) action = KurumiChestBridge.clearTarget();
+                else { require(a, 3); action = KurumiChestBridge.target(num(a,0),num(a,1),num(a,2)); }
+            }
+            case "chest_open" -> { require(a, 0); action = KurumiChestBridge.open(); }
+            case "chest_put" -> { require(a, 2); action = KurumiChestBridge.put(str(a,0),num(a,1)); }
+            case "chest_take" -> { require(a, 2); action = KurumiChestBridge.takeItem(str(a,0),num(a,1)); }
+            case "chest_put_all" -> { require(a, 0); action = KurumiChestBridge.putAll(); }
+            case "chest_take_all" -> { require(a, 0); action = KurumiChestBridge.takeAll(); }
+            case "chest_put_item_all" -> { require(a, 1); action = KurumiChestBridge.putItemAll(str(a,0)); }
+            case "close_container" -> {
+                require(a, 0);
+                var mc = Minecraft.getInstance();
+                if (mc.player == null) throw new IllegalStateException("未进入世界");
+                if (mc.player.containerMenu != mc.player.inventoryMenu) mc.player.closeContainer();
+                action = new BaritoneBridge.Result(true,"已请求关闭容器");
+            }
+            case "craft_open" -> { require(a, 0); action = KurumiCraftingBridge.open(); }
+            case "equip_main_hand" -> { require(a, 1); action = KurumiEquipBridge.mainHand(str(a,0)); }
+            case "mine" -> { require(a, 1); action = BaritoneBridge.mineBlock(str(a,0)); }
+            case "break_block" -> {
+                if (a.length == 1) action = KurumiBlockBreakingBridge.start(str(a,0),null,null,null);
+                else if (a.length == 3) action = KurumiBlockBreakingBridge.start(null,num(a,0),num(a,1),num(a,2));
+                else if (a.length == 4) action = KurumiBlockBreakingBridge.start(str(a,0),num(a,1),num(a,2),num(a,3));
+                else throw new IllegalArgumentException("break_block(id[,x,y,z]) 或 break_block(x,y,z)");
+            }
+            case "place_block" -> {
+                if (a.length == 1) action = KurumiBlockPlacementBridge.place(str(a,0),null,null,null);
+                else if (a.length == 4) action = KurumiBlockPlacementBridge.place(str(a,0),num(a,1),num(a,2),num(a,3));
+                else throw new IllegalArgumentException("place_block(id[,x,y,z])");
+            }
+            case "pickup_all" -> { require(a, 0); action = KurumiPickupBridge.pickupAll(null); }
+            case "pickup_item_all" -> { require(a, 1); action = KurumiPickupBridge.pickupAll(str(a,0)); }
+            case "drop" -> { require(a, 2); action = KurumiDropBridge.drop(str(a,0),num(a,1)); }
+            case "drop_all" -> { require(a, 0); action = KurumiDropBridge.dropAll(); }
+            case "drop_item_all" -> { require(a, 1); action = KurumiDropBridge.dropItemAll(str(a,0)); }
+            case "chain_on" -> { require(a, 0); action = KurumiChainBridge.setEnabled(true); }
+            case "chain_off" -> { require(a, 0); action = KurumiChainBridge.setEnabled(false); }
+            case "farm" -> { require(a, 1); action = BaritoneBridge.farm(num(a,0)); }
+            case "fish" -> { require(a, 0); action = KurumiFishingBridge.start(); }
+            case "stop_fishing" -> { require(a, 0); action = KurumiFishingBridge.stop(); }
+            case "tpa_request" -> { require(a, 0); action = KurumiTpaBridge.request(); }
+            case "tpa_request_to" -> { require(a, 1); action = KurumiTpaBridge.requestTo(str(a,0)); }
+            case "tpa_accept" -> { require(a, 0); action = KurumiTpaBridge.accept(); }
+            case "talk" -> {
+                require(a, 1);
+                String message = str(a,0);
+                if (message.length() > 120) throw new IllegalArgumentException("聊天内容过长");
+                var connection = Minecraft.getInstance().getConnection();
+                if (connection == null) throw new IllegalStateException("未连接服务器");
+                connection.sendChat(message);
+                return true;
+            }
+            default -> {
+                String tool = name;
+                if (java.util.Set.of("search_all_block","find_nearest_block","check_inventory_item",
+                        "check_inventory_count","get_crafting_recipe","get_skill","get_tool_help").contains(name)) {
+                    require(a, 1);
+                    if ("get_tool_help".equals(name)) return KurumiToolRegistry.help(str(a,0)).toString();
+                    if ("get_skill".equals(name)) return KurumiSkillMemory.configured().describe(str(a,0)).toString();
+                    if ("search_all_block".equals(name)) return KurumiBlockScanner.search(str(a,0)).toString();
+                    tool += ":" + str(a,0);
+                } else if ("get_distance".equals(name)) {
+                    require(a, 2);
+                    tool += ":" + str(a,0) + ":" + str(a,1);
+                } else if ("inspect_slot".equals(name)) {
+                    require(a, 1);
+                    tool += ":" + num(a,0);
+                } else require(a, 0);
+                if (!tool.matches("[a-z_]+(?::[A-Za-z0-9_./-]+){0,3}"))
+                    throw new IllegalArgumentException("无效的观察参数");
+                return KurumiToolbox.observe(tool);
+            }
+        }
+        return result(action);
+    }
+
     private static void execute(String source) {
         long started = System.nanoTime();
         try (Context context = Context.newBuilder("python")
@@ -84,33 +184,27 @@ public final class KurumiEmbeddedPythonBridge {
                 .allowCreateThread(false)
                 .build()) {
             activeContext = context;
-            Map<String, Object> toolFunctions = Map.of(
-                    "get_position", (ProxyExecutable) args -> {
-                        if (args.length != 0) throw new IllegalArgumentException("get_position()");
-                        return onGameThread(() -> {
-                            var player = Minecraft.getInstance().player;
-                            if (player == null) throw new IllegalStateException("玩家尚未进入游戏");
-                            return ProxyObject.fromMap(Map.of(
-                                    "x", player.getBlockX(), "y", player.getBlockY(), "z", player.getBlockZ()));
-                        });
-                    },
-                    "goto", (ProxyExecutable) args -> {
-                        if (args.length != 3) throw new IllegalArgumentException("goto(x,y,z)");
-                        int x = args[0].asInt(), y = args[1].asInt(), z = args[2].asInt();
-                        return onGameThread(() -> result(BaritoneBridge.gotoCoordinates(x, y, z)));
-                    },
-                    "talk", (ProxyExecutable) args -> {
-                        if (args.length != 1) throw new IllegalArgumentException("talk(message)");
-                        String message = args[0].asString();
-                        if (message.length() > 120) throw new IllegalArgumentException("消息过长");
-                        return onGameThread(() -> {
-                            var connection = Minecraft.getInstance().getConnection();
-                            if (connection == null) throw new IllegalStateException("尚未连接服务器");
-                            connection.sendChat(message);
-                            return true;
-                        });
-                    }
-            );
+            Map<String, Object> toolFunctions = new java.util.LinkedHashMap<>();
+            // Every game operation is marshalled to the Minecraft thread.
+            for (String name : java.util.List.of("get_position", "get_player_status",
+                    "get_environment", "get_inventory", "scan_nearby_entities",
+                    "scan_nearby_blocks", "scan_dropped_items", "inspect_container",
+                    "get_fishing_status", "list_remembered_blocks", "get_chest_search_result",
+                    "search_all_block", "find_nearest_block", "check_inventory_item",
+                    "check_inventory_count", "get_crafting_recipe", "inspect_slot",
+                    "get_distance", "get_tool_help", "get_skill",
+                    "goto", "move", "come", "follow", "stop",
+                    "interact", "put_item", "take_item", "take_all_items",
+                    "chest_target", "chest_open", "chest_put", "chest_take",
+                    "chest_put_all", "chest_take_all", "chest_put_item_all",
+                    "close_container", "craft_open", "equip_main_hand",
+                    "mine", "break_block", "place_block", "pickup_all",
+                    "pickup_item_all", "drop", "drop_all", "drop_item_all",
+                    "chain_on", "chain_off", "farm", "fish", "stop_fishing",
+                    "tpa_request", "tpa_request_to", "tpa_accept", "talk")) {
+                toolFunctions.put(name, (ProxyExecutable) args ->
+                        onGameThread(() -> callGameTool(name, args)));
+            }
             context.getBindings("python").putMember("tools", ProxyObject.fromMap(toolFunctions));
             context.eval("python", source);
             KurumiWebMonitor.log("GraalPy 脚本执行结束，耗时 "
