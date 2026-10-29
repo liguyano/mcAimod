@@ -645,8 +645,10 @@ public final class KurumiClientController {
                         minecraft.getConnection().sendChat("LangGraph 执行失败，请查看 Kurumi 日志。");
                     } else {
                         String reply = answer.has("reply") ? answer.get("reply").getAsString() : "";
-                        if (!reply.isBlank())
+                        if (!reply.isBlank()) {
                             minecraft.getConnection().sendChat(reply.length() > 120 ? reply.substring(0, 120) : reply);
+                            KurumiVoiceManager.speak(reply);
+                        }
                     }
                     finishRequest();
                 }));
