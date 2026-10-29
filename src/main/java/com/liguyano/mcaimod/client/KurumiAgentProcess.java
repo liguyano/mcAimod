@@ -40,7 +40,20 @@ public final class KurumiAgentProcess {
         if (available()) return;
         try {
             // The Python package directory can be overridden for source checkouts.
-            Path folder = Path.of(System.getProperty("mcaimod.agentDir", "python-agent")).toAbsolutePath();
+            Path folder = Path.of(System.getProperty("mcaimod.agentDir",
+                    FMLPaths.CONFIGDIR.get().resolve("mcaimod-agent").toString())).toAbsolutePath();
+            java.nio.file.Files.createDirectories(folder);
+            // Ship source inside the JAR, extract it on startup. A standalone
+            // CPython environment is still necessary for LangGraph dependencies.
+            for (String file : new String[]{"kurumi_server.py", "kurumi_langgraph.py",
+                    "kurumi_java_tools.py", "kurumi_skills.py", "requirements.txt"}) {
+                try (var resource = KurumiAgentProcess.class.getResourceAsStream("/kurumi-agent/" + file)) {
+                    if (resource != null) {
+                        java.nio.file.Files.copy(resource, folder.resolve(file),
+                                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    }
+                }
+            }
             Path script = folder.resolve("kurumi_server.py");
             if (!java.nio.file.Files.isRegularFile(script)) {
                 KurumiWebMonitor.log("LangGraph Agent 尚未安装: " + script);
