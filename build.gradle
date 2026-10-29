@@ -240,6 +240,15 @@ tasks.register('verifyGraalPyJarJar') {
 }
 tasks.named('build') { dependsOn tasks.named('verifyGraalPyJarJar') }
 
+// Bundle the Python agent sources in the Mod so deployment does not need a Git checkout.
+// CPython + pip dependencies are installed separately; do NOT bundle a virtualenv.
+tasks.named('processResources', ProcessResources).configure {
+    from('python-agent') {
+        into 'kurumi-agent'
+        include '*.py', 'requirements.txt'
+    }
+}
+
 tasks.named('test', Test).configure {
     useJUnitPlatform()
 }
