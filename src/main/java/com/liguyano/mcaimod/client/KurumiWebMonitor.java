@@ -378,7 +378,7 @@ public final class KurumiWebMonitor {
         <h3>最後のメッセージ</h3><div id="last">まだありません</div>
         </section><script>
         const synth=window.speechSynthesis,voiceBox=document.getElementById('voice');
-        let active=false,last=0;const pending=[];
+        let active=false,last=0,initialized=false;const pending=[];
         function voices(){
           const list=synth.getVoices();
           const previous=voiceBox.value;voiceBox.replaceChildren();
@@ -413,7 +413,7 @@ public final class KurumiWebMonitor {
           try{
             const r=await fetch('/api/speech?after='+last,{cache:'no-store'});
             if(!r.ok)throw Error(r.status);const data=await r.json();
-            if(last===0){last=data.latest||0;return;}
+            if(!initialized){initialized=true;last=data.latest||0;return;}
             for(const e of data.events||[]){if(e.id<=last)continue;
               last=e.id;document.getElementById('last').textContent=e.text;
               if(active){pending.push(e.text);if(pending.length>10)pending.shift();}
