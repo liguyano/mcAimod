@@ -15,6 +15,7 @@ public final class KurumiSurvivalBridge {
     private static long nextHungerReview;
     private static long hungerDecisionStarted;
     private static int equipTicks;
+    private static boolean warnedNoFood;
     private static String foodId;
     private static long eatingStarted;
 
@@ -38,6 +39,7 @@ public final class KurumiSurvivalBridge {
         hungerDecisionStarted = 0;
         awaitingEquip = false;
         foodId = null;
+        warnedNoFood = false;
         swappedSlot = -1;
         previousHealth = -1;
         previousFood = 20;
@@ -107,9 +109,14 @@ public final class KurumiSurvivalBridge {
             }
         }
         if (slot == -1) {
-            if (tickCount % 200 == 0) talk("主人~ 我饿了，但是背包里没有食物！");
+            if (!warnedNoFood) {
+                warnedNoFood = true;
+                talk("主人~ 我饿了，但是背包里没有食物！");
+            }
             return;
         }
+        // Food is available again: allow one fresh warning if it later runs out.
+        warnedNoFood = false;
         foodId = BuiltInRegistries.ITEM.getKey(mc.player.getInventory().getItem(slot).getItem()).toString();
         previousSlot = mc.player.getInventory().getSelectedSlot();
         swappedSlot = slot >= 9 ? slot : -1;
