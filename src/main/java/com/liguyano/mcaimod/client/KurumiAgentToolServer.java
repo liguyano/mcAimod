@@ -103,10 +103,10 @@ public final class KurumiAgentToolServer {
                         }
                         case "mine" -> {
                             if (arguments.size() != 1) throw new IllegalArgumentException("mine(block_id)");
-                            result = asResult(BaritoneBridge.mine(arguments.get(0).getAsString()));
+                            result = asResult(BaritoneBridge.mineBlock(arguments.get(0).getAsString()));
                         }
                         case "pickup_all" -> result = asResult(KurumiPickupBridge.pickupAll(null));
-                        case "sleep_in_bed" -> result = asResult(KurumiSleepBridge.sleepInBed());
+                        case "sleep_in_bed" -> result = asResult(KurumiSleepBridge.sleep());
                         case "stop_fishing" -> result = asResult(KurumiFishingBridge.stop());
                         default -> {
                             if (arguments.size() != 0) throw new IllegalArgumentException("Tool takes no arguments");
