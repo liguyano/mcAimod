@@ -26,6 +26,29 @@ public final class KurumiWebMonitor {
     private static String nextRequirement = "";
     private static long nextId = 1;
     private static HttpServer server;
+    private static long speechId;
+    private static final Deque<String> SPEECH = new ArrayDeque<>();
+    /** Called only from KurumiSpeech.say, never from incoming player messages. */
+    public static synchronized void publishSpeech(String spoken) {
+        if (spoken == null || spoken.isBlank()) return;
+        JsonObject event = new JsonObject();
+        event.addProperty("id", ++speechId);
+        event.addProperty("text", spoken.substring(0, Math.min(200, spoken.length())));
+        SPEECH.addLast(event.toString());
+        while (SPEECH.size() > 30) SPEECH.removeFirst();
+    }
+    private static synchronized String speechEvents(long after) {
+        JsonObject result = new JsonObject();
+        result.addProperty("latest", speechId);
+        JsonArray entries = new JsonArray();
+        for (String encoded : SPEECH) {
+            JsonObject item = JsonParser.parseString(encoded).getAsJsonObject();
+            if (item.get("id").getAsLong() > after) entries.add(item);
+        }
+        result.add("events", entries);
+        return result.toString();
+    }
+
     private static JsonObject skillJson(KurumiSkillMemory.Skill skill) {
         JsonObject item = new JsonObject();
         item.addProperty("name", skill.name());
@@ -290,6 +313,26 @@ public final class KurumiWebMonitor {
         if (server != null) return;
         try {
             server = HttpServer.create(new InetSocketAddress("0.0.0.0", 8765), 0);
+            server.createContext("/api/speech", exchange -> {
+                if (!"GET".equals(exchange.getRequestMethod())) { exchange.sendResponseHeaders(405, -1); exchange.close(); return; }
+                long after = 0;
+                String query = exchange.getRequestURI().getRawQuery();
+                if (query != null && query.matches("after=[0-9]{1,18}")) {
+                    try { after = Long.parseLong(query.substring(6)); } catch (NumberFormatException ignored) {}
+                }
+                byte[] bytes = speechEvents(after).getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+                exchange.getResponseHeaders().set("Cache-Control", "no-store");
+                exchange.sendResponseHeaders(200, bytes.length);
+                try (var out = exchange.getResponseBody()) { out.write(bytes); }
+            });
+            server.createContext("/voice", exchange -> {
+                if (!"GET".equals(exchange.getRequestMethod())) { exchange.sendResponseHeaders(405, -1); exchange.close(); return; }
+                byte[] bytes = VOICE_PAGE.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
+                exchange.sendResponseHeaders(200, bytes.length);
+                try (var out = exchange.getResponseBody()) { out.write(bytes); }
+            });
             server.createContext("/api/skills", KurumiWebMonitor::handleSkills);
             server.createContext("/api/generate", exchange -> handlePost(exchange, true));
             server.createContext("/api/run", exchange -> handlePost(exchange, false));
@@ -319,6 +362,68 @@ public final class KurumiWebMonitor {
             System.err.println("Kurumi web monitor failed: " + e.getMessage());
         }
     }
+    private static final String VOICE_PAGE = """
+        <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Kurumi Voice Player</title>
+        <style>body{font:16px system-ui,sans-serif;background:#121624;color:#f0eaff;max-width:650px;margin:40px auto;padding:20px}
+        button,select,input{font:inherit;margin:7px;padding:9px;border-radius:8px}button{cursor:pointer}
+        section{padding:20px;background:#20263b;border-radius:18px}#last{white-space:pre-wrap;min-height:60px}</style></head>
+        <body><h1>くるみ ♡ Voice Player</h1><section>
+        <p>この端末でくるみの声を再生します。最初に「再生開始」を押してください。</p>
+        <button id="start">▶ 再生開始</button><button id="stop">■ 停止</button>
+        <p id="status">停止中</p>
+        <label>声 <select id="voice"></select></label>
+        <label>速度 <input id="rate" type="range" min="0.7" max="1.4" step="0.05" value="1.12"></label>
+        <label>高さ <input id="pitch" type="range" min="0.8" max="1.7" step="0.05" value="1.25"></label>
+        <h3>最後のメッセージ</h3><div id="last">まだありません</div>
+        </section><script>
+        const synth=window.speechSynthesis,voiceBox=document.getElementById('voice');
+        let active=false,last=0;const pending=[];
+        function voices(){
+          const list=synth.getVoices();
+          const previous=voiceBox.value;voiceBox.replaceChildren();
+          for(const v of list){const opt=document.createElement('option');opt.value=v.voiceURI;
+            opt.textContent=v.name+' ('+v.lang+')';voiceBox.appendChild(opt);}
+          const preferred=list.find(v=>v.lang.toLowerCase().startsWith('ja')&&/nanami|female|japan/i.test(v.name))
+            ||list.find(v=>v.lang.toLowerCase().startsWith('ja'));
+          voiceBox.value=list.some(v=>v.voiceURI===previous)?previous:(preferred?.voiceURI||'');
+        }
+        voices();synth.onvoiceschanged=voices;
+        function speakNext(){
+          if(!active||synth.speaking||!pending.length)return;
+          const value=pending.shift(),u=new SpeechSynthesisUtterance(value);
+          const candidates=synth.getVoices();
+          u.voice=candidates.find(v=>v.voiceURI===voiceBox.value)||null;
+          u.lang=u.voice?.lang||(/[\\u3040-\\u30ff]/.test(value)?'ja-JP':'zh-CN');
+          u.rate=Number(document.getElementById('rate').value);
+          u.pitch=Number(document.getElementById('pitch').value);
+          u.onend=()=>{setTimeout(speakNext,30);};
+          u.onerror=()=>{setTimeout(speakNext,30);};
+          synth.speak(u);
+        }
+        document.getElementById('start').onclick=()=>{
+          active=true;document.getElementById('status').textContent='再生中';
+          // Discard earlier events when the page is started for the first time.
+          speakNext();
+        };
+        document.getElementById('stop').onclick=()=>{
+          active=false;pending.length=0;synth.cancel();document.getElementById('status').textContent='停止中';
+        };
+        async function poll(){
+          try{
+            const r=await fetch('/api/speech?after='+last,{cache:'no-store'});
+            if(!r.ok)throw Error(r.status);const data=await r.json();
+            if(last===0){last=data.latest||0;return;}
+            for(const e of data.events||[]){if(e.id<=last)continue;
+              last=e.id;document.getElementById('last').textContent=e.text;
+              if(active){pending.push(e.text);if(pending.length>10)pending.shift();}
+            }
+            last=Math.max(last,data.latest||0);speakNext();
+          }catch(e){document.getElementById('status').textContent='接続確認中';}
+        }
+        setInterval(poll,650);poll();
+        </script></body></html>
+        """;
     private static final String PAGE = """
         <!doctype html>
         <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
