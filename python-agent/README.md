@@ -70,6 +70,24 @@ rather than actual game completion; the Agent must re-observe. Emergency stop
 does not yet guarantee interruption of an in-flight model HTTP call. This
 release should be treated as a development build.
 
+## Date-aware persistent memory
+
+The CPython LangGraph agent uses `kurumi_memory.py` (SQLite, standard
+library) and stores records at `config/mcaimod-agent/memory/conversations.db`.
+Conversation turns include ISO timestamps and sender identifiers; explicit
+long-term facts are stored separately. At each agent run the context contains
+the local date/time, yesterday's date, recent exchanges and up to 20 of
+yesterday's messages. `remember_fact` is a model-callable action that stores
+one explicitly requested fact; it is **not** automatic extraction of user
+preferences from all conversations. The default timezone is `Asia/Shanghai`,
+overridable through the `KURUMI_TIMEZONE` process environment variable.
+`tzdata` is a Python dependency so timezone lookup works on Windows.
+
+The model should not invent memories when no recorded evidence exists.
+The current database is not encrypted; protect the Minecraft instance's
+config folder and back it up if needed. There is not yet a user-facing
+memory deletion and review UI.
+
 ## Remaining integration work
 
 1. Start and supervise the Python process from the Java client lifecycle (Windows and cross-platform support).
