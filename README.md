@@ -74,6 +74,54 @@ The repository now contains:
 
 **Packaging attempt:** The Gradle build now resolves GraalPy runtime dependencies, registers their JARs with NeoForge Jar-in-Jar, and adds a `verifyGraalPyJarJar` verification task. This is a source change, not proof that the final Mod loads in-game. Run `./gradlew clean build verifyGraalPyJarJar --no-configuration-cache` and test the resulting JAR in Minecraft. If the build or runtime fails, keep the Java legacy engine active until resolved. Full tool parity, authorization testing, asynchronous completion and real game tests are still outstanding. Do not assume every registered tool works correctly. Native libraries such as OpenCV are not bundled or guaranteed to work.
 
+## Importing Local Python Modules (Experimental)
+
+With the embedded GraalPy runtime installed, the **owner** can place reusable Python files in the Minecraft instance's configuration directory:
+
+```text
+.minecraft/
+  config/
+    mcaimod-python/
+      farming.py
+      helpers.py
+```
+
+For example, `config/mcaimod-python/helpers.py`:
+
+```python
+class InventoryHelper:
+    def count_stacks(self):
+        inventory = get_inventory()
+        return inventory
+```
+
+Then, in a model-generated script:
+
+```python
+from helpers import InventoryHelper
+helper = InventoryHelper()
+observe(helper.count_stacks())
+```
+
+Supported top-level import declarations are `import module_name` and
+`from module_name import SymbolName`. Local filenames must be simple Python
+identifiers with a `.py` extension; no package folders, relative paths,
+aliases, wildcard imports, or external pip modules. Scripts using local imports
+are allowed only for the configured owner with `/kurumi auto on` and the JVM
+flag `-Dmcaimod.scriptEngine=python`. The module directory is resolved from
+the **actual Minecraft instance's** `config/` folder.
+
+The Java runtime reads modules from this single trusted local directory and
+preloads them into GraalPy's `sys.modules`, so these are genuine Python
+`import` statements, not pseudocode expansion. Guest Python still has
+filesystem and process access disabled; an imported module can use only the
+game tools made available through Kurumi's bridge.
+
+**Caution:** this owner-only import path bypasses the legacy pseudocode AST
+validator. Install modules only from code you trust and test in a disposable
+world. Source integration and runtime distribution have not yet been
+independently validated in a live NeoForge game.
+
 ## Requirements
 
 - Minecraft Java Edition **26.2**
