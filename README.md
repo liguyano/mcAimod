@@ -72,7 +72,7 @@ The repository now contains:
 
 **Safe default:** the Java pseudocode executor is used until GraalPy is fully packaged. To opt into GraalPy after its dependencies are available, use `-Dmcaimod.scriptEngine=python`. Missing GraalPy classes no longer cause the normal world event handler to link directly against the optional runtime.
 
-**Still incomplete:** verified NeoForge distribution of the full GraalPy runtime and its dependencies, full tool parity and authorization testing, reliable asynchronous completion, secure timeout termination, and real build/game tests. Do not assume every registered tool works correctly. Native libraries such as OpenCV are not bundled or guaranteed to work.
+**Packaging attempt:** The Gradle build now resolves GraalPy runtime dependencies, registers their JARs with NeoForge Jar-in-Jar, and adds a `verifyGraalPyJarJar` verification task. This is a source change, not proof that the final Mod loads in-game. Run `./gradlew clean build verifyGraalPyJarJar --no-configuration-cache` and test the resulting JAR in Minecraft. If the build or runtime fails, keep the Java legacy engine active until resolved. Full tool parity, authorization testing, asynchronous completion and real game tests are still outstanding. Do not assume every registered tool works correctly. Native libraries such as OpenCV are not bundled or guaranteed to work.
 
 ## Requirements
 
