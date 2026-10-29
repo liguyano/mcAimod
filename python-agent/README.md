@@ -38,6 +38,38 @@ packages. Future migration may add skill manifests, persistence, and user
 provided skills with explicit permission review. Java IPC and in-game
 integration are **still not implemented**.
 
+## Current Java ↔ Python integration (experimental)
+
+The NeoForge client now starts a local CPython process from the extracted
+`config/mcaimod-agent/` sources when it joins a world. Agent sources are
+packed inside the Mod JAR by Gradle. Configure CPython once on Windows:
+
+```powershell
+cd E:\code\mcAimod
+git pull origin main
+.\setup-agent.ps1
+```
+
+This installs third-party dependencies in the instance's
+`config/mcaimod-agent/.venv/` directory; the Mod JAR does **not** bundle
+CPython or pip wheels. When joining a world, Java launches the Python server
+on loopback port 47833 and uses a random bearer token. A second authenticated
+loopback channel on port 47832 forwards selected Python skill game-tool calls
+to the Minecraft main thread. The owner SekaiSaionji's ordinary chat goes
+to LangGraph if the Python process is alive; the old Java flow remains a
+fallback. Java direct stop invalidates pending game calls and sends a
+Python stop signal. Use `-Dmcaimod.agentEngine=legacy` to force the old
+agent, or `-Dmcaimod.python=C:\path\to\python.exe` to override Python.
+
+**Current known limits:** this has not been compiled or smoke-tested in
+Minecraft; the process can be alive before its HTTP server is ready, causing
+an initial chat failure. Python credentials are read directly from the
+instance's `mcaimod-models.json` and not printed in logs. Only a small set
+of game tools is connected. Action results generally report request accepted
+rather than actual game completion; the Agent must re-observe. Emergency stop
+does not yet guarantee interruption of an in-flight model HTTP call. This
+release should be treated as a development build.
+
 ## Remaining integration work
 
 1. Start and supervise the Python process from the Java client lifecycle (Windows and cross-platform support).
