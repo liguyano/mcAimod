@@ -10,7 +10,7 @@ import org.graalvm.polyglot.proxy.ProxyObject;
 import java.util.Map;
 
 /**
- * Embedded message bridge proof of concept. No live Minecraft calls.
+ * Embedded script executor proof of concept. No live Minecraft calls.
  * Real-game integration requires a bounded game-thread dispatch bridge.
  */
 public final class KurumiPythonPrototype {
@@ -45,31 +45,18 @@ public final class KurumiPythonPrototype {
             ));
             context.getBindings("python").putMember("tools", tools);
 
-            // This Python function owns the message dispatch. Later it can be
-            // replaced by a real model/agent loop without changing Java's API.
-            context.eval("python", """
-                    def handle_message(sender, message):
-                        if message == "测试位置":
-                            position = tools.get_position()
-                            tools.talk(f"{sender}: 当前坐标 {position.x}, {position.y}, {position.z}")
-                            return {"success": True, "handled_by": "python"}
-                        if message == "向前一格":
-                            position = tools.get_position()
-                            result = tools.goto(position.x + 1, position.y, position.z)
-                            tools.talk(f"{sender}: 寻路完成={result.completed}")
-                            return {"success": result.success, "handled_by": "python"}
-                        tools.talk(f"{sender}: 尚未接入模型，收到消息：{message}")
-                        return {"success": True, "handled_by": "python"}
-                    """);
-
-            Value handler = context.getBindings("python").getMember("handle_message");
-            // Same Java -> Python entrypoint that NeoForge will call in a later stage.
-            Value first = handler.execute("SekaiSaionji", "测试位置");
-            Value second = handler.execute("SekaiSaionji", "向前一格");
-            if (!first.getHashValue("success").asBoolean()
-                    || !second.getHashValue("success").asBoolean())
-                throw new IllegalStateException("Python message bridge failed");
-            System.out.println("Java -> embedded Python -> mock Minecraft tools: OK");
+            // Java keeps the LLM, chat handling and agent orchestration.
+            // Only scripts are delegated into the embedded Python interpreter.
+            String script = """
+                    point = tools.get_position()
+                    result = tools.goto(point.x + 1, point.y, point.z)
+                    if result.success and result.completed:
+                        tools.talk("脚本执行成功")
+                    else:
+                        tools.talk("脚本执行失败")
+                    """;
+            context.eval("python", script);
+            System.out.println("Java -> embedded Python script -> mock tools: OK");
         } catch (PolyglotException error) {
             System.err.println("GraalPy runtime failed: " + error.getMessage());
             System.exit(1);
