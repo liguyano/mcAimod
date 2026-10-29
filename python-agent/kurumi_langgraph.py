@@ -17,6 +17,7 @@ class AgentState(TypedDict):
     deadline: float
     result: dict[str, Any]
     sender: str
+    chat_only: bool
 
 
 class Stopped(Exception):
@@ -86,6 +87,8 @@ class KurumiGraph:
         if time.monotonic() > state["deadline"]:
             raise TimeoutError("Agent execution deadline reached")
         decision = state["decision"]
+        if state.get("chat_only", False):
+            raise PermissionError("Guest conversations cannot call any tools or skills")
         name, args = decision.get("name"), decision.get("args", [])
         if not isinstance(name, str):
             raise ValueError("Tool or skill name must be a string")
@@ -125,11 +128,15 @@ class KurumiGraph:
              ". Check whether the action really completed before continuing."}
         ]}
 
-    def run(self, sender: str, message: str, system_prompt: str) -> dict:
+    def run(self, sender: str, message: str, system_prompt: str, chat_only: bool = False) -> dict:
         """Serializes sessions for now; only trusted Java should call this."""
         with self.lock:
             history = self.memory.recent(sender) if self.memory else self.history.get(sender, [])
-            temporal = self.memory.context(sender, query=message) if self.memory else ""
+            temporal = self.memory.context(sender, query=message) if self.memory and not chat_only else ""
+            if chat_only:
+                system_prompt += ("\n你正在与其他玩家聊天，不是主人。"
+                                  "仅允许 type=finish 的普通聊天回复，绝不调用任何工具、技能、记忆写入、游戏操作或停止指令。"
+                                  "不要称呼对方为主人，不要暴露其他玩家的记忆或私人信息。")
             if self.store is not None:
                 items = self.store.search(("kurumi", "facts", sender), limit=20)
                 fact_text = "\n".join("- " + str(item.value.get("text", ""))[:250] for item in items)
@@ -139,7 +146,8 @@ class KurumiGraph:
             ]
             state: AgentState = {
                 "messages": messages, "decision": {}, "steps": 0,
-                "deadline": time.monotonic() + self.deadline_seconds, "result": {}, "sender": sender
+                "deadline": time.monotonic() + self.deadline_seconds, "result": {}, "sender": sender,
+                "chat_only": chat_only
             }
             if self.memory:
                 self.memory.remember_turn(sender, "user", message)
