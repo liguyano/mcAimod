@@ -92,15 +92,15 @@ public final class KurumiEmbeddedPythonBridge {
         return new Gson().toJson(value);
     }
 
-    private static void require(org.graalvm.polyglot.Value[] args, int count) {
+    private static void require(Object[] args, int count) {
         if (args.length != count) throw new IllegalArgumentException("参数数量应为 " + count);
     }
-    private static String str(org.graalvm.polyglot.Value[] args, int i) { return args[i].asString(); }
-    private static int num(org.graalvm.polyglot.Value[] args, int i) { return args[i].asInt(); }
+    private static String str(Object[] args, int i) { return (String) args[i]; }
+    private static int num(Object[] args, int i) { return ((Number) args[i]).intValue(); }
     private static final ThreadLocal<Integer> TOOL_CALLS = ThreadLocal.withInitial(() -> 0);
     private static final ThreadLocal<Long> SCRIPT_STARTED = new ThreadLocal<>();
 
-    private static Object callGameTool(String name, org.graalvm.polyglot.Value[] a) {
+    private static Object callGameTool(String name, Object[] a) {
         Long started = SCRIPT_STARTED.get();
         if (started == null || Thread.currentThread().isInterrupted())
             throw new IllegalStateException("Python 脚本已取消或不在有效执行上下文");
@@ -119,8 +119,8 @@ public final class KurumiEmbeddedPythonBridge {
             StringBuilder expression = new StringBuilder(name).append('(');
             for (int i = 0; i < a.length; i++) {
                 if (i != 0) expression.append(',');
-                if (a[i].isString()) expression.append(new Gson().toJson(a[i].asString()));
-                else if (a[i].isNumber()) expression.append(a[i].toString());
+                if (a[i] instanceof String) expression.append(new Gson().toJson(a[i]));
+                else if (a[i] instanceof Number) expression.append(a[i].toString());
                 else throw new IllegalArgumentException("工具仅支持字符串或数字参数");
             }
             expression.append(')');
@@ -128,10 +128,10 @@ public final class KurumiEmbeddedPythonBridge {
         }
         BaritoneBridge.Result action;
         switch (name) {
-            case "look" -> { require(a, 2); action = KurumiLookBridge.look(a[0].asDouble(), a[1].asDouble()); }
+            case "look" -> { require(a, 2); action = KurumiLookBridge.look(((Number)a[0]).doubleValue(), ((Number)a[1]).doubleValue()); }
             case "look_at" -> {
                 if (a.length == 1) action = KurumiLookBridge.lookAtId(str(a,0));
-                else if (a.length == 3) action = KurumiLookBridge.lookAt(a[0].asDouble(),a[1].asDouble(),a[2].asDouble());
+                else if (a.length == 3) action = KurumiLookBridge.lookAt(((Number)a[0]).doubleValue(),((Number)a[1]).doubleValue(),((Number)a[2]).doubleValue());
                 else throw new IllegalArgumentException("look_at(id) 或 look_at(x,y,z)");
             }
             case "attack" -> {
@@ -271,8 +271,19 @@ public final class KurumiEmbeddedPythonBridge {
                     "pickup_item_all", "drop", "drop_all", "drop_item_all",
                     "chain_on", "chain_off", "farm", "fish", "stop_fishing",
                     "tpa_request", "tpa_request_to", "tpa_accept", "talk")) {
-                toolFunctions.put(name, (ProxyExecutable) args ->
-                        asJson(onGameThread(() -> callGameTool(name, args))));
+                toolFunctions.put(name, (ProxyExecutable) args -> {
+                    // Freeze guest values on the GraalPy worker; never move
+                    // polyglot Value handles across to Minecraft's thread.
+                    Object[] frozen = new Object[args.length];
+                    for (int i = 0; i < args.length; i++) {
+                        if (args[i].isString()) frozen[i] = args[i].asString();
+                        else if (args[i].fitsInInt()) frozen[i] = args[i].asInt();
+                        else if (args[i].isNumber()) frozen[i] = args[i].asDouble();
+                        else if (args[i].isBoolean()) frozen[i] = args[i].asBoolean();
+                        else throw new IllegalArgumentException("工具参数只允许基本类型");
+                    }
+                    return asJson(onGameThread(() -> callGameTool(name, frozen)));
+                });
             }
             context.getBindings("python").putMember("_java_tools", ProxyObject.fromMap(toolFunctions));
             context.eval("python", """
