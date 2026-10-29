@@ -1036,6 +1036,8 @@ public final class KurumiClientController {
                     KurumiDecisionParser.Decision decision = parsed.get();
                     boolean continueAfterStage = decision.program().isPresent()
                             && toolCalls + 1 <= MAX_AGENT_STAGES;
+                    boolean pythonScript = decision.program().isPresent()
+                            && !"legacy".equalsIgnoreCase(System.getProperty("mcaimod.scriptEngine", "python"));
                     if (decision.action().isPresent() || !decision.target().isEmpty() || decision.x() != null || !decision.blockId().isEmpty() || decision.plan().isPresent() || decision.program().isPresent()) {
                         KurumiActionValidator.Action action = decision.action().orElse(null);
                         if (!autoFarmEnabled && !(decision.program().isPresent()
@@ -1077,8 +1079,6 @@ public final class KurumiClientController {
                         if (decision.target().startsWith("collect_store:"))
                             KurumiTaskRecovery.begin();
                         if (decision.program().isPresent()) KurumiWebMonitor.requirement(message);
-                        boolean pythonScript = decision.program().isPresent()
-                                && !"legacy".equalsIgnoreCase(System.getProperty("mcaimod.scriptEngine", "python"));
                         BaritoneBridge.Result result = decision.program().isPresent()
                                 ? (pythonScript ? KurumiEmbeddedPythonBridge.start(decision.script())
                                         : KurumiPseudoExecutor.start(decision.program().get(), toolCalls > 0))
