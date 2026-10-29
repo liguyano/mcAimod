@@ -191,3 +191,13 @@ Kurumi also exposes a local experimental task monitor at `http://127.0.0.1:8765/
 See [CHANGELOG.md](CHANGELOG.md) for implementation history. The project is under active development; details in older changelog entries may describe earlier versions rather than the current runtime.
 
 **Project focus:** a Minecraft companion that can **take initiative, act on real observations, and recover from mistakes**, not just generate conversational replies.
+
+### Web execution engine selector (0.6.0)
+
+The Web panel's manual execution section now offers three explicit debugging backends:
+
+- **Legacy Java**: restricted pseudocode via `KurumiScriptParser` and `KurumiPseudoExecutor`.
+- **GraalPy**: Python source via `KurumiPythonRuntime.start` (requires packaged runtime and `/kurumi auto on`).
+- **LangGraph**: **natural-language task**, not arbitrary Python evaluation, forwarded to the separate CPython Agent via `KurumiAgentProcess.chat` (requires running agent and `/kurumi auto on`).
+
+For safety, manual Web execution requires the in-game local player to be `SekaiSaionji`. The script-generation preview still produces and validates *legacy* pseudocode only. These Web changes have not yet been validated in a real game.
