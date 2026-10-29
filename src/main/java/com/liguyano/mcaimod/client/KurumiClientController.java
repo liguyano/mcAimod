@@ -130,7 +130,7 @@ public final class KurumiClientController {
         var movement = BaritoneBridge.gotoCoordinates(target[0], mc.player.blockPosition().getY(), target[1]);
         String direction = ally == null ? "远离攻击者" : "向玩家 " + ally.name() + " 靠近";
         KurumiWebMonitor.log("受到攻击，紧急逃离（" + direction + "）：" + movement.message());
-        if (mc.getConnection() != null) mc.getConnection().sendChat(!movement.success()
+        if (mc.getConnection() != null) KurumiSpeech.say(!movement.success()
                 ? "主人~ 我被攻击了！已停止任务，但逃跑寻路失败了！"
                 : ally != null ? ally.name() + "，救我！有东西在攻击我！"
                 : "主人~ 我被攻击了！附近没人能帮忙，我先逃跑！");
@@ -298,7 +298,7 @@ public final class KurumiClientController {
             fleeingUntil = 0;
             BaritoneBridge.stop();
             Minecraft mc = Minecraft.getInstance();
-            if (mc.getConnection() != null) mc.getConnection().sendChat("主人~ 我已经尝试远离危险，正在确认下一步。");
+            if (mc.getConnection() != null) KurumiSpeech.say("ご主人さまっ！ 危ないところから離れましたっ。次はどうしましょう？");
             SurvivalRecovery recovery = survivalRecovery;
             survivalRecovery = null;
             if (recovery != null && autoFarmEnabled && enabled) {
@@ -514,7 +514,7 @@ public final class KurumiClientController {
         else KurumiWebMonitor.requestFailed(result.message());
         Minecraft mc = Minecraft.getInstance();
         if (mc.getConnection() != null)
-            mc.getConnection().sendChat(result.success() ? "好的，主人~ " + result.message()
+            KurumiSpeech.say(result.success() ? "好的，主人~ " + result.message()
                     : "抱歉，主人~ " + result.message());
         return true;
     }
@@ -532,7 +532,7 @@ public final class KurumiClientController {
         // The owner can interrupt busy tasks and model requests, bypassing cooldown and gate.
         if (isOwner && ("停止".equals(message.strip()) || "stop".equalsIgnoreCase(message.strip()))) {
             BaritoneBridge.Result result = stopAll();
-            minecraft.getConnection().sendChat("已直接停止当前任务。" + result.message());
+            KurumiSpeech.say("はーいっ、いまの作業を止めました！ " + result.message());
             return;
         }
         if (isOwner && pendingSkillApproval != null
@@ -544,11 +544,11 @@ public final class KurumiClientController {
                 pendingSkillApproval = null;
                 if ("保存".equals(answer) || "记住".equals(answer)) {
                     boolean saved = SKILLS.saveApproved(approval.skill());
-                    minecraft.getConnection().sendChat(saved
+                    KurumiSpeech.say(saved
                             ? "主人，已保存技能【" + approval.skill().title() + "】和批准的快捷触发词。"
                             : "主人，技能保存失败，可能是脚本无效或快捷词重复；请查看日志。");
                 } else {
-                    minecraft.getConnection().sendChat("好的主人，这次不保存技能。");
+                    KurumiSpeech.say("はーい、ご主人さま！ 今回はスキルを保存しませんね♪");
                 }
                 return;
             }
@@ -575,7 +575,7 @@ public final class KurumiClientController {
         PendingClarification pending = PENDING_CLARIFICATIONS.get(sender);
         if (pending != null && ("取消".equals(message.strip()) || "算了".equals(message.strip()))) {
             PENDING_CLARIFICATIONS.remove(sender);
-            minecraft.getConnection().sendChat("好的，已取消刚才等待确认的任务。");
+            KurumiSpeech.say("はーいっ、確認待ちのお願いはキャンセルしましたよ♪");
             GATE.finish();
             return;
         }
@@ -588,26 +588,26 @@ public final class KurumiClientController {
                 && "()".equals(KurumiSkillMemory.signature(SKILLS.findExactTrigger(message).get()))) {
             KurumiSkillMemory.Skill skill = SKILLS.findExactTrigger(message).get();
             if (!autoFarmEnabled) {
-                minecraft.getConnection().sendChat("主人，请先开启 /kurumi auto on 再执行保存的快捷技能。");
+                KurumiSpeech.say("ご主人さま、まず /kurumi auto on を有効にしてくださいねっ。");
                 GATE.finish();
                 return;
             }
             Optional<KurumiTaskPlanner.Program> program = KurumiScriptParser.parse(
                     skill.code() + "\nresult = " + skill.name() + "()\nobserve(result)");
             if (program.isEmpty()) {
-                minecraft.getConnection().sendChat("快捷技能源码无法解析，已取消执行：" + KurumiScriptParser.lastError());
+                KurumiSpeech.say("快捷技能源码无法解析，已取消执行：" + KurumiScriptParser.lastError());
                 GATE.finish();
                 return;
             }
             if (KurumiPseudoExecutor.busy() || KurumiPlanExecutor.busy() || KurumiLongTaskBridge.busy()) {
-                minecraft.getConnection().sendChat("有任务正在执行，无法启动快捷技能。");
+                KurumiSpeech.say("あっ、いまは別のお仕事中なので、スキルを始められません……。");
                 GATE.finish();
                 return;
             }
             KurumiPseudoExecutor.clearVariables();
             BaritoneBridge.Result started = KurumiPseudoExecutor.start(program.get());
             if (!started.success()) {
-                minecraft.getConnection().sendChat("快捷技能未启动：" + started.message());
+                KurumiSpeech.say("快捷技能未启动：" + started.message());
                 GATE.finish();
                 return;
             }
@@ -618,7 +618,7 @@ public final class KurumiClientController {
             verifiedScriptCompletion = false;
             quickStage = new QuickStage(skill, sender, generation, KurumiPseudoExecutor.activeRunId(), agentStartedAt);
             KurumiWebMonitor.requestReceived("快捷技能：" + skill.title());
-            minecraft.getConnection().sendChat("主人，已直接执行快捷技能【" + skill.title() + "】。");
+            KurumiSpeech.say("ご主人さま、スキル【" + skill.title() + "】を始めましたよっ♪");
             return;
         }
         if (pending == null && !KurumiFishingBridge.busy()
@@ -635,19 +635,18 @@ public final class KurumiClientController {
             long agentGeneration = generation;
             String agentSender = senderNameForMemory.isBlank() ? event.getSender().toString() : senderNameForMemory;
             KurumiWebMonitor.requestReceived(message);
-            minecraft.getConnection().sendChat("好的，我听到了。");
+            KurumiSpeech.say("はいっ、ご主人さま！ ちゃんと聞こえましたよっ♪");
             KurumiAgentProcess.chat(agentSender, message).whenComplete((answer, error) ->
                 minecraft.execute(() -> {
                     if (agentGeneration != generation || !requestInFlight) return;
                     if (error != null || answer == null || !answer.has("success")
                             || !answer.get("success").getAsBoolean()) {
                         KurumiWebMonitor.requestFailed("LangGraph 执行失败");
-                        minecraft.getConnection().sendChat("LangGraph 执行失败，请查看 Kurumi 日志。");
+                        KurumiSpeech.say("あれれ、うまくできませんでした……ログを確認してくださいね。");
                     } else {
                         String reply = answer.has("reply") ? answer.get("reply").getAsString() : "";
                         if (!reply.isBlank()) {
-                            minecraft.getConnection().sendChat(reply.length() > 120 ? reply.substring(0, 120) : reply);
-                            KurumiVoiceManager.speak(reply);
+                            KurumiSpeech.say(reply.length() > 120 ? reply.substring(0, 120) : reply);
                         }
                     }
                     finishRequest();
@@ -684,7 +683,7 @@ public final class KurumiClientController {
             publicFailure("没有启用的模型配置，暂时无法响应。");
             return;
         }
-        minecraft.getConnection().sendChat("好的，我听到了。");
+        KurumiSpeech.say("はいっ、ご主人さま！ ちゃんと聞こえましたよっ♪");
         List<ChatMessage> conversation = new ArrayList<>();
                 conversation.add(new ChatMessage("system",
                         "Kurumi 每次仅输出一个 JSON 对象：执行阶段用 {\"type\":\"action\",\"action\":\"EXECUTE_SCRIPT\",\"reply\":\"简短回复\",\"script\":\"脚本\"}；完成时用 {\"type\":\"finish\",\"reason\":\"理由\"}。"
@@ -1021,7 +1020,7 @@ public final class KurumiClientController {
                                             : minecraft.getConnection().getPlayerInfo(sender).getProfile().name())) {
                                 KurumiSkillMemory.parseProposal(reply).ifPresent(proposal -> {
                                     pendingSkillApproval = new PendingSkillApproval(sender, proposal);
-                                    minecraft.getConnection().sendChat("主人~，这次操作验证成功了。要将【"
+                                    KurumiSpeech.say("主人~，这次操作验证成功了。要将【"
                                             + proposal.title() + "】保存成可复用技能吗？建议快捷词："
                                             + String.join("、", proposal.triggers())
                                             + "。回复『保存』或『不保存』即可。");
@@ -1053,7 +1052,7 @@ public final class KurumiClientController {
                             updated = new ArrayList<>(updated.subList(updated.size() - 20, updated.size()));
                         HISTORY.put(sender, updated);
                         KurumiWebMonitor.requestFailed("等待玩家澄清：" + question);
-                        minecraft.getConnection().sendChat(question);
+                        KurumiSpeech.say(question);
                         return;
                     }
                     Optional<KurumiDecisionParser.Decision> parsed = KurumiDecisionParser.parse(reply);
@@ -1193,7 +1192,7 @@ public final class KurumiClientController {
                                 ? "方块操作" : decision.target());
                     }
                     if (decision.action().isPresent() && (decision.action().get().type() == KurumiActionValidator.Type.PICKUP || decision.action().get().type() == KurumiActionValidator.Type.PICKUP_ALL || decision.action().get().type() == KurumiActionValidator.Type.PICKUP_ITEM_ALL)) {
-                        minecraft.getConnection().sendChat("" + "已开始前往掉落物位置，尚未确认拾取完成。");
+                        KurumiSpeech.say("" + "已开始前往掉落物位置，尚未确认拾取完成。");
                         return;
                     }
                     List<ChatMessage> updated = new ArrayList<>(HISTORY.getOrDefault(sender, List.of()));
@@ -1222,7 +1221,7 @@ public final class KurumiClientController {
         notice(reason);
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player != null && minecraft.getConnection() != null) {
-            minecraft.getConnection().sendChat("抱歉，操作失败：" + reason);
+            KurumiSpeech.say("抱歉，操作失败：" + reason);
         }
     }
 
