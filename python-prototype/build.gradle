@@ -1,0 +1,22 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+repositories { mavenCentral() }
+
+def graalVersion = '25.3.4.1'
+dependencies {
+    implementation "org.graalvm.polyglot:polyglot:${graalVersion}"
+    implementation "org.graalvm.python:python-embedding:${graalVersion}"
+}
+
+application {
+    mainClass = 'com.liguyano.mcaimod.prototype.KurumiPythonPrototype'
+}
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(25) }
+}
+
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
