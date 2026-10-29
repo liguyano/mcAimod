@@ -340,6 +340,28 @@ public final class KurumiEmbeddedPythonBridge {
                                 return json.loads(callback(*args))
                             return invoke
                     tools = _KurumiTools()
+                    for _tool_name in (
+                        "get_position", "get_player_status", "get_environment", "get_inventory",
+                        "scan_nearby_entities", "scan_nearby_blocks", "scan_dropped_items",
+                        "inspect_container", "inspect_slot", "get_distance", "search_all_block",
+                        "find_nearest_block", "check_inventory_item", "check_inventory_count",
+                        "check_inventory", "check_distance", "get_crafting_recipe",
+                        "get_skill", "get_tool_help", "get_fishing_status", "get_agent_observation",
+                        "remember_block", "get_remembered_block", "get_remembered_block_at",
+                        "list_remembered_blocks", "get_chest_search_result", "check_nearby_chest",
+                        "get_nearby_chest_result", "screenshot", "goto", "move", "come",
+                        "follow", "stop", "look", "look_at", "attack", "use_item",
+                        "hold_use_item", "sleep_in_bed", "sleep", "interact", "put_item",
+                        "take_item", "take_all_items", "chest_target", "chest_open",
+                        "chest_put", "chest_take", "chest_put_all", "chest_take_all",
+                        "chest_put_item_all", "close_container", "craft_open",
+                        "equip_main_hand", "search_chests", "take_from_memory", "mine",
+                        "break_block", "place_block", "pickup_all", "pickup_item_all",
+                        "drop", "drop_all", "drop_item_all", "chain_on", "chain_off",
+                        "farm", "fish", "stop_fishing", "tpa_request", "tpa_request_to",
+                        "tpa_accept", "talk"
+                    ):
+                        globals()[_tool_name] = getattr(tools, _tool_name)
                     """);
             context.eval("python", """
                     class _KurumiObserve(Exception):
