@@ -68,9 +68,9 @@ The repository now contains:
 - `KurumiEmbeddedPythonBridge.java`: experimental Java-to-GraalPy tool dispatch, native Python-compatible return value conversion, and an initial `observe()` stage-report mechanism.
 - GraalPy dependencies declared in the main Gradle build for integration work.
 
-**Experimental runtime switch:** The AI `EXECUTE_SCRIPT` path is now routed to GraalPy by default in the source code, with script completion and `observe(value)` handed back to the Java Agent. The old Java pseudocode validator still checks generated scripts first; it is **not unrestricted CPython**, and some valid Python programs will be rejected by the legacy validator. This source-level integration is **not yet verified in a regular NeoForge installation**.
+**Experimental runtime switch:** The AI `EXECUTE_SCRIPT` path can be routed to GraalPy when the full runtime is available, with script completion and `observe(value)` handed back to the Java Agent. The old Java pseudocode validator still checks generated scripts first; it is **not unrestricted CPython**, and some valid Python programs will be rejected by the legacy validator. This source-level integration is **not yet verified in a regular NeoForge installation**.
 
-For immediate rollback, set the JVM system property `-Dmcaimod.scriptEngine=legacy` when launching Minecraft. This restores the existing Java pseudocode execution path.
+**Safe default:** the Java pseudocode executor is used until GraalPy is fully packaged. To opt into GraalPy after its dependencies are available, use `-Dmcaimod.scriptEngine=python`. Missing GraalPy classes no longer cause the normal world event handler to link directly against the optional runtime.
 
 **Still incomplete:** verified NeoForge distribution of the full GraalPy runtime and its dependencies, full tool parity and authorization testing, reliable asynchronous completion, secure timeout termination, and real build/game tests. Do not assume every registered tool works correctly. Native libraries such as OpenCV are not bundled or guaranteed to work.
 
