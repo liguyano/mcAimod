@@ -679,7 +679,10 @@ public final class KurumiClientController {
                         + "立即以失败状态停止当前脚本，并把真实原因及行号交给下一轮 AI 分析；禁止无依据自动重试。"
                         + "for/while 内可使用 break、continue，循环变量可以在条件和工具参数中使用。"
                         + "while 循环最多20轮，任务最多20分钟、动作最多200个；不确定时先观察，不要假称动作已完成。"));
-                conversation.add(new ChatMessage("system",
+                String selectedToolGuide = taskToolGuide(effectiveMessage);
+        if (selectedToolGuide != null) conversation.add(new ChatMessage("system", selectedToolGuide));
+        else {
+            conversation.add(new ChatMessage("system",
                         "常用动作：come(\\\"玩家名\\\") 到玩家附近停止；follow(\\\"玩家名\\\") 持续跟随；"
                         + "goto(x,y,z) 坐标寻路；move(\\\"forward\\\",n)、move(\\\"back\\\",n)、"
                         + "move(\\\"left\\\",n)、move(\\\"right\\\",n) 相对朝向移动1至16格；"
@@ -806,6 +809,7 @@ public final class KurumiClientController {
                         + "较远目标需另外寻路，交互请求成功不代表服务器状态已变化。"
                         + "观察优先走 observe，不要经公屏发送大 JSON；talk 最多12条、间隔至少2秒。"
                         + "检查箱子返回 pending 时须等待并查询结果；失败、未找到、未确认都应如实说明。"));
+        }
         conversation.add(new ChatMessage("system",
                 "完整规划优先规则：收到明确任务时尽量一次生成覆盖全部目标的可执行脚本，"
                 + "用变量、条件判断、循环、结果检查和 raise Exception(原因) 在本地处理执行过程，"
@@ -869,6 +873,45 @@ public final class KurumiClientController {
         conversation.add(new ChatMessage("user", "发言者玩家名：" + senderName + "；消息：" + effectiveMessage));
         runAgent(profile.get(), conversation, sender, pending == null ? message : pending.request(),
                 requestGeneration, 0);
+    }
+
+    private static String taskToolGuide(String request) {
+        String input = request == null ? "" : request.toLowerCase(java.util.Locale.ROOT);
+        StringBuilder guide = new StringBuilder("工具目录：观察 scan_nearby_entities/get_inventory/get_position/inspect_container/inspect_slot/get_distance；移动 goto/come/follow/move/stop/look_at；交互 interact/use_item/hold_use_item；容器 chest_target/chest_open/chest_take/chest_put/chest_take_all/chest_put_all/chest_put_item_all/take_all_items；采集 mine/break_block/chain_on/chain_off/pickup_all/search_all_block/farm；制作 craft_open/put_item/take_item/get_crafting_recipe；其他 fish/stop_fishing/sleep_in_bed/attack/tpa_request/search_chests/remember_block。所有操作先读 success/completed/message，不能把已接受误认作执行完毕。");
+        boolean matched = false;
+        if (input.contains("尸体") || input.contains("遗体") || input.contains("corpse") || input.contains("实体") || input.contains("上船") || input.contains("村民")) {
+            guide.append("\n").append("实体与尸体：scan_nearby_entities() 返回 entities 数组（按距离排序），每项有 type/uuid/x/y/z。找最近的 corpse:corpse，记录 UUID；goto 到附近后重新扫描确认 UUID，interact(\"corpse:corpse\",uuid) 精确交互；inspect_container() 检查界面，再 take_all_items()，观察剩余物品。交互默认不自动转头。");
+            matched = true;
+        }
+        if (input.contains("箱") || input.contains("仓库") || input.contains("容器") || input.contains("背包") || input.contains("拿取") || input.contains("取出") || input.contains("放入") || input.contains("物品") || input.contains("存放")) {
+            guide.append("\n").append("容器：chest_target(x,y,z) 锁定箱子，close_container() 关闭菜单。chest_put_item_all(item_id) 放入指定物品。take_all_items() 从当前菜单取所有可取物品。inspect_container()/inspect_slot(i) 检查槽位。put_item(item_id,n,\"input\"/\"fuel\"/\"auto\"/\"grid_1\") 放入，take_item(item_id,n) 取出，需确认服务器同步。");
+            matched = true;
+        }
+        if (input.contains("砍") || input.contains("挖") || input.contains("采") || input.contains("农") || input.contains("树") || input.contains("原木") || input.contains("矿") || input.contains("连锁") || input.contains("拾取") || input.contains("收集")) {
+            guide.append("\n").append("采集：search_all_block(block_id) 返回最多64个坐标（已加载区域），blocks[i].x/y/z 可读取；goto(x,y,z) 移动，break_block(block_id,x,y,z) 破坏近处单方块，mine(block_id) 自主搜索采集。连锁采集先 chain_on()，结束 chain_off()，pickup_all() 捡取掉落物。目标寻路失败时切换目标，不要误判完成。");
+            matched = true;
+        }
+        if (input.contains("合成") || input.contains("制作") || input.contains("酿造") || input.contains("工作台") || input.contains("熔炉") || input.contains("烧") || input.contains("配方")) {
+            guide.append("\n").append("合成：get_crafting_recipe(item_id) 查看配方，craft_open() 或 interact(\"minecraft:crafting_table\") 打开工作台。inspect_container() 核实菜单；put_item(item_id,n,\"grid_1\") 放入，take_item(item_id,n) 取产物。熔炉槽 input/fuel，工作台槽 grid_1 至 grid_9/auto；success 只表示受理，应核验产物。");
+            matched = true;
+        }
+        if (input.contains("走") || input.contains("来") || input.contains("跟") || input.contains("移动") || input.contains("寻路") || input.contains("回家") || input.contains("睡觉") || input.contains("床") || input.contains("视角") || input.contains("去")) {
+            guide.append("\n").append("移动：goto(x,y,z) 坐标寻路；come(\"玩家名\") 到附近停止；follow(\"玩家名\") 持续跟随；move(\"forward\",n) 等相对移动1至16格；stop() 停止。look_at(x,y,z) 可选转头，interact(id) 默认不需看向目标但需在交互距离内。sleep(n) 只是等待，sleep_in_bed() 才是真睡觉。");
+            matched = true;
+        }
+        if (input.contains("打") || input.contains("攻击") || input.contains("怪") || input.contains("战斗") || input.contains("逃跑") || input.contains("救命")) {
+            guide.append("\n").append("战斗：attack(\"minecraft:zombie\") 攻击生物，attack(\"玩家名\") 攻击玩家仅在主人明确授权时使用；危险操作不得猜测。遇袭由客户端本地生存中断处理。");
+            matched = true;
+        }
+        if (input.contains("钓鱼") || input.contains("鱼竿") || input.contains("fish")) {
+            guide.append("\n").append("钓鱼：fish() 开始后台自动钓鱼；observe(get_fishing_status()) 查询结果，stop_fishing() 停止；转向别的移动采集任务前先停止。");
+            matched = true;
+        }
+        if (input.contains("记忆") || input.contains("地图") || input.contains("地点") || input.contains("路标") || input.contains("导航")) {
+            guide.append("\n").append("记忆：remember_block(\"名称\",x,y,z) 保存地点，get_remembered_block(\"名称\") 查看；list_remembered_blocks() 和 get_remembered_block_at(i) 枚举。search_chests(item_id) 搜索箱子，get_chest_search_result() 查看，take_from_memory(\"chest_1\",item_id,n) 回指定箱取物。");
+            matched = true;
+        }
+        return matched ? guide.toString() : null;
     }
 
     private static void runAgent(ModelProfile profile, List<ChatMessage> conversation, UUID sender,
