@@ -7,6 +7,7 @@ import time
 from typing import Any, Callable, TypedDict
 
 from langgraph.graph import END, START, StateGraph
+from kurumi_skills import SkillRegistry, default_skills
 
 
 class AgentState(TypedDict):
@@ -40,6 +41,7 @@ class KurumiGraph:
     ):
         self.model, self.tool, self.stopped = model, tool, stopped
         self.allowed_tools = frozenset(allowed_tools)
+        self.skills = default_skills(SkillRegistry(tool, allowed_tools, stopped))
         self.max_steps, self.deadline_seconds = max_steps, deadline_seconds
         graph = StateGraph(AgentState)
         graph.add_node("think", self._think)
@@ -76,11 +78,20 @@ class KurumiGraph:
         self._guard(state)
         decision = state["decision"]
         name, args = decision.get("name"), decision.get("args", [])
-        if name not in self.allowed_tools:
-            raise PermissionError(f"Unapproved game tool: {name!r}")
+        if not isinstance(name, str):
+            raise ValueError("Tool or skill name must be a string")
         if not isinstance(args, list) or len(args) > 16:
             raise ValueError("Tool args must be a list of up to 16 values")
-        outcome = self.tool(name, args)
+        if name == "list_skills":
+            if args:
+                raise ValueError("list_skills takes no arguments")
+            outcome = self.skills.catalog()
+        elif name in {skill["name"] for skill in self.skills.catalog()}:
+            outcome = self.skills.invoke(name, *args)
+        elif name in self.allowed_tools:
+            outcome = self.skills.tool(name, *args)
+        else:
+            raise PermissionError(f"Unapproved game tool or skill: {name!r}")
         if self.stopped():
             raise Stopped("Emergency stop requested")
         return {"messages": state["messages"] + [
