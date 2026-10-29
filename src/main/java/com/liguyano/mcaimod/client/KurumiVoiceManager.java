@@ -110,7 +110,11 @@ public final class KurumiVoiceManager {
                 String voice = message.matches(".*[\\u3040-\\u30ff\\u31f0-\\u31ff].*")
                         ? value(config, "voice_ja", "ja-JP-NanamiNeural")
                         : value(config, "voice_zh", "zh-CN-XiaoyiNeural");
-                String python = value(config, "python_command", "py");
+                Path agentPython = FMLPaths.CONFIGDIR.get().resolve("mcaimod-agent")
+                        .resolve(".venv").resolve("Scripts").resolve("python.exe");
+                String defaultPython = Files.isRegularFile(agentPython)
+                        ? agentPython.toAbsolutePath().toString() : "py";
+                String python = value(config, "python_command", defaultPython);
                 ProcessBuilder builder = new ProcessBuilder(python, scriptPath().toString(), message,
                         voice, value(config, "rate", "+5%"), value(config, "pitch", "+10Hz"),
                         value(config, "volume", "0.8"));
