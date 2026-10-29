@@ -16,6 +16,7 @@ class AgentState(TypedDict):
     steps: int
     deadline: float
     result: dict[str, Any]
+    sender: str
 
 
 class Stopped(Exception):
@@ -38,8 +39,10 @@ class KurumiGraph:
         allowed_tools: set[str],
         max_steps: int = 64,
         deadline_seconds: int = 1200,
+        memory=None,
     ):
         self.model, self.tool, self.stopped = model, tool, stopped
+        self.memory = memory
         self.allowed_tools = frozenset(allowed_tools)
         self.skills = default_skills(SkillRegistry(tool, allowed_tools, stopped))
         self.max_steps, self.deadline_seconds = max_steps, deadline_seconds
@@ -82,7 +85,14 @@ class KurumiGraph:
             raise ValueError("Tool or skill name must be a string")
         if not isinstance(args, list) or len(args) > 16:
             raise ValueError("Tool args must be a list of up to 16 values")
-        if name == "list_skills":
+        if name == "remember_fact":
+            if self.memory is None:
+                raise RuntimeError("Persistent memory unavailable")
+            if len(args) != 1 or not isinstance(args[0], str):
+                raise ValueError("remember_fact requires one string")
+            self.memory.remember_fact(state["sender"], args[0])
+            outcome = {"success": True, "message": "Fact saved"}
+        elif name == "list_skills":
             if args:
                 raise ValueError("list_skills takes no arguments")
             outcome = self.skills.catalog()
@@ -104,17 +114,22 @@ class KurumiGraph:
     def run(self, sender: str, message: str, system_prompt: str) -> dict:
         """Serializes sessions for now; only trusted Java should call this."""
         with self.lock:
-            history = self.history.get(sender, [])
-            messages = [{"role": "system", "content": system_prompt}] + history[-20:] + [
+            history = self.memory.recent(sender) if self.memory else self.history.get(sender, [])
+            temporal = self.memory.context(sender) if self.memory else ""
+            messages = [{"role": "system", "content": system_prompt + "\\n" + temporal}] + history[-20:] + [
                 {"role": "user", "content": message}
             ]
             state: AgentState = {
                 "messages": messages, "decision": {}, "steps": 0,
-                "deadline": time.monotonic() + self.deadline_seconds, "result": {}
+                "deadline": time.monotonic() + self.deadline_seconds, "result": {}, "sender": sender
             }
+            if self.memory:
+                self.memory.remember_turn(sender, "user", message)
             output = self.graph.invoke(state, config={"recursion_limit": self.max_steps * 3 + 5})
             decision = output["decision"]
             response = str(decision.get("message", ""))[:1200]
+            if self.memory:
+                self.memory.remember_turn(sender, "assistant", response)
             self.history[sender] = (output["messages"] +
                                     [{"role": "assistant", "content": response}])[-20:]
             return {"success": True, "reply": response, "steps": output["steps"]}
