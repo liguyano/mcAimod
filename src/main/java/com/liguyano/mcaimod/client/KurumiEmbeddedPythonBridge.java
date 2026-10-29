@@ -97,17 +97,15 @@ public final class KurumiEmbeddedPythonBridge {
     }
     private static String str(Object[] args, int i) { return (String) args[i]; }
     private static int num(Object[] args, int i) { return ((Number) args[i]).intValue(); }
-    private static final ThreadLocal<Integer> TOOL_CALLS = ThreadLocal.withInitial(() -> 0);
-    private static final ThreadLocal<Long> SCRIPT_STARTED = new ThreadLocal<>();
+    private static final java.util.concurrent.atomic.AtomicInteger TOOL_CALLS = new java.util.concurrent.atomic.AtomicInteger();
+    private static volatile long scriptStartedNanos;
 
     private static Object callGameTool(String name, Object[] a) {
-        Long started = SCRIPT_STARTED.get();
-        if (started == null || Thread.currentThread().isInterrupted())
+        if (!RUNNING.get() || worker == null || worker.isInterrupted())
             throw new IllegalStateException("Python 脚本已取消或不在有效执行上下文");
-        if (System.nanoTime() - started > TimeUnit.MINUTES.toNanos(5))
+        if (System.nanoTime() - scriptStartedNanos > TimeUnit.MINUTES.toNanos(5))
             throw new IllegalStateException("Python 脚本超过5分钟");
-        int count = TOOL_CALLS.get() + 1;
-        TOOL_CALLS.set(count);
+        int count = TOOL_CALLS.incrementAndGet();
         if (count > 200) throw new IllegalStateException("Python 工具调用超过200次");
         if (java.util.Set.of("check_inventory","check_distance","get_remembered_block",
                 "get_remembered_block_at","remember_block","check_nearby_chest",
@@ -243,7 +241,7 @@ public final class KurumiEmbeddedPythonBridge {
 
     private static void execute(String source) {
         long started = System.nanoTime();
-        SCRIPT_STARTED.set(started);
+        scriptStartedNanos = started;
         TOOL_CALLS.set(0);
         try (Context context = Context.newBuilder("python")
                 .allowHostAccess(HostAccess.NONE)
@@ -305,8 +303,7 @@ public final class KurumiEmbeddedPythonBridge {
             KurumiWebMonitor.log("GraalPy 运行时加载或执行失败：" + error);
         } finally {
             activeContext = null;
-            SCRIPT_STARTED.remove();
-            TOOL_CALLS.remove();
+            TOOL_CALLS.set(0);
             worker = null;
             RUNNING.set(false);
         }
