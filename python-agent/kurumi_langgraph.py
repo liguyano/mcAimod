@@ -40,9 +40,12 @@ class KurumiGraph:
         max_steps: int = 64,
         deadline_seconds: int = 1200,
         memory=None,
+        checkpointer=None,
+        store=None,
     ):
         self.model, self.tool, self.stopped = model, tool, stopped
         self.memory = memory
+        self.store = store
         self.allowed_tools = frozenset(allowed_tools)
         self.skills = default_skills(SkillRegistry(tool, allowed_tools, stopped))
         self.max_steps, self.deadline_seconds = max_steps, deadline_seconds
@@ -52,7 +55,7 @@ class KurumiGraph:
         graph.add_edge(START, "think")
         graph.add_conditional_edges("think", self._route, {"act": "act", "end": END})
         graph.add_edge("act", "think")
-        self.graph = graph.compile()
+        self.graph = graph.compile(checkpointer=checkpointer, store=store)
         self.lock = threading.RLock()
         self.history: dict[str, list[dict[str, str]]] = {}
 
@@ -90,7 +93,15 @@ class KurumiGraph:
                 raise RuntimeError("Persistent memory unavailable")
             if len(args) != 1 or not isinstance(args[0], str):
                 raise ValueError("remember_fact requires one string")
-            self.memory.remember_fact(state["sender"], args[0])
+            if self.store is not None:
+                import hashlib
+                fact = args[0].strip()[:1200]
+                if not fact:
+                    raise ValueError("Empty fact")
+                key = hashlib.sha256(fact.casefold().encode("utf-8")).hexdigest()[:32]
+                self.store.put(("kurumi", "facts", state["sender"]), key, {"text": fact, "date": self.memory.now().isoformat() if self.memory else ""})
+            else:
+                self.memory.remember_fact(state["sender"], args[0])
             outcome = {"success": True, "message": "Fact saved"}
         elif name == "list_skills":
             if args:
@@ -116,6 +127,10 @@ class KurumiGraph:
         with self.lock:
             history = self.memory.recent(sender) if self.memory else self.history.get(sender, [])
             temporal = self.memory.context(sender, query=message) if self.memory else ""
+            if self.store is not None:
+                items = self.store.search(("kurumi", "facts", sender), limit=20)
+                fact_text = "\n".join("- " + str(item.value.get("text", ""))[:250] for item in items)
+                temporal = temporal.split("\n长期事实（可能不完整）：")[0] + "\n长期事实（Store）：\n" + fact_text[:2500]
             messages = [{"role": "system", "content": system_prompt + "\\n" + temporal}] + history[-20:] + [
                 {"role": "user", "content": message}
             ]
@@ -125,7 +140,10 @@ class KurumiGraph:
             }
             if self.memory:
                 self.memory.remember_turn(sender, "user", message)
-            output = self.graph.invoke(state, config={"recursion_limit": self.max_steps * 3 + 5})
+            output = self.graph.invoke(state, config={
+                "recursion_limit": self.max_steps * 3 + 5,
+                "configurable": {"thread_id": "kurumi:" + sender}
+            })
             decision = output["decision"]
             response = str(decision.get("message", ""))[:1200]
             if self.memory:
