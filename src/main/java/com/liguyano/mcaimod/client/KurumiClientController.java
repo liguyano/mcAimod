@@ -687,7 +687,7 @@ public final class KurumiClientController {
         }
         conversation.add(new ChatMessage("system",
                 "本地工具签名目录列出了所有可用函数及参数。若不确定具体调用方式，"
-                + "使用 observe(get_tool_help(\\"工具名\\")) 查询；found=false 时不得猜测函数或参数。"));
+                + "使用 observe(get_tool_help(\"工具名\")) 查询；found=false 时不得猜测函数或参数。"));
         if (selectedToolGuide == null) {
             conversation.add(new ChatMessage("system",
                         "常用动作：come(\\\"玩家名\\\") 到玩家附近停止；follow(\\\"玩家名\\\") 持续跟随；"
