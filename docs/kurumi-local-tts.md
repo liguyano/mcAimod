@@ -74,3 +74,13 @@ Mod 通过现有 8765 Web 服务保存最近 20 条音频，提供 `/api/speech`
 安全提示：现有 8765 Web 面板还包含运行任务/脚本的控制 API，
 只应在可信的局域网使用，不应直接公网映射该端口。音频仅保存在 Java 内存中，
 队列和缓存有容量限制，重启后清空。
+
+## pygame 安装失败（远程 MP3 模式）
+
+远程网页播放只需要 `edge-tts`，不需要 pygame。
+`python-agent/requirements.txt` 已去掉 pygame，默认本地播放关闭，
+Edge TTS 继续生成 MP3 并由网页播放。若明确想同时在 Kurumi 电脑本地
+播放，安装兼容当前 Python 的 pygame wheel，再在
+`mcaimod-voice.json` 中加入 `"local_playback": true`。
+`/kurumi voice off` 仍能关闭本地语音选项，但不影响远程 MP3。
+运行 `git pull origin main` 后重新执行 `./setup-agent.ps1`。
