@@ -1,6 +1,8 @@
 package com.liguyano.mcaimod.client;
 
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.google.gson.Gson;
 import net.minecraft.client.Minecraft;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.HostAccess;
@@ -67,11 +69,27 @@ public final class KurumiEmbeddedPythonBridge {
         }
     }
 
-    private static Object result(BaritoneBridge.Result r) {
-        return ProxyObject.fromMap(Map.of(
-                "success", r.success(),
-                "completed", false,
-                "message", r.message()));
+    private static String result(BaritoneBridge.Result r) {
+        JsonObject result = new JsonObject();
+        result.addProperty("success", r.success());
+        result.addProperty("completed", false);
+        result.addProperty("message", r.message());
+        return result.toString();
+    }
+
+    // Every value crossing into Python is a JSON encoded scalar, dict or list.
+    // Python's json.loads converts them to native types; no Java proxies leak.
+    private static String asJson(Object value) {
+        if (value == null) return "null";
+        if (value instanceof com.google.gson.JsonElement json) return json.toString();
+        if (value instanceof String str) {
+            try {
+                var parsed = JsonParser.parseString(str);
+                if (parsed.isJsonArray() || parsed.isJsonObject()) return parsed.toString();
+            } catch (RuntimeException ignored) { }
+            return new Gson().toJson(str);
+        }
+        return new Gson().toJson(value);
     }
 
     private static void require(org.graalvm.polyglot.Value[] args, int count) {
@@ -216,9 +234,19 @@ public final class KurumiEmbeddedPythonBridge {
                     "chain_on", "chain_off", "farm", "fish", "stop_fishing",
                     "tpa_request", "tpa_request_to", "tpa_accept", "talk")) {
                 toolFunctions.put(name, (ProxyExecutable) args ->
-                        onGameThread(() -> callGameTool(name, args)));
+                        asJson(onGameThread(() -> callGameTool(name, args))));
             }
-            context.getBindings("python").putMember("tools", ProxyObject.fromMap(toolFunctions));
+            context.getBindings("python").putMember("_java_tools", ProxyObject.fromMap(toolFunctions));
+            context.eval("python", """
+                    import json
+                    class _KurumiTools:
+                        def __getattr__(self, name):
+                            callback = _java_tools[name]
+                            def invoke(*args):
+                                return json.loads(callback(*args))
+                            return invoke
+                    tools = _KurumiTools()
+                    """);
             context.eval("python", source);
             KurumiWebMonitor.log("GraalPy 脚本执行结束，耗时 "
                     + TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started) + "ms");
