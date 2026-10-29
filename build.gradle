@@ -147,6 +147,12 @@ dependencies {
     jarJar(implementation('org.jetbrains.kotlin:kotlin-stdlib:1.8.21')) {
         version { strictly '[1.8.21]'; prefer '1.8.21' }
     }
+    // GraalPy language runtime: included in the development runtime only.
+    // Do not claim NeoForge JarJar distribution works until its transitive
+    // Truffle and Python language dependencies have been packaged and verified.
+    implementation 'org.graalvm.polyglot:polyglot:25.3.4.1'
+    runtimeOnly 'org.graalvm.polyglot:python:25.3.4.1'
+    implementation 'org.graalvm.python:python-embedding:25.3.4.1'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     // Minecraft supplies Gson at runtime; plain JUnit launches need it explicitly.
