@@ -49,7 +49,7 @@ public final class KurumiVoiceManager {
             config.addProperty("enabled", enabled);
             Files.createDirectories(file.getParent());
             Files.writeString(file, config.toString(), StandardCharsets.UTF_8);
-            if (!enabled) stop();
+            // Disabling local speakers does not stop remote MP3 delivery.
         } catch (Exception ex) {
             System.err.println("Kurumi voice save: " + ex.getMessage());
         }
@@ -64,7 +64,7 @@ public final class KurumiVoiceManager {
     }
 
     public static void speak(String message) {
-        if (!enabled() || message == null || message.isBlank() || message.startsWith("/")) return;
+        if (message == null || message.isBlank() || message.startsWith("/")) return;
         install();
         String trimmed = message.strip();
         if (trimmed.length() > 200) trimmed = trimmed.substring(0, 200);
@@ -79,7 +79,7 @@ public final class KurumiVoiceManager {
         install();
         if (!QUEUE.offer("ご主人さま〜！ くるみの声、聞こえますか？ えへへっ♪")) {
             QUEUE.poll();
-            QUEUE.offer("主人~ Kurumi 的语音测试开始啦！");
+            QUEUE.offer("ご主人さま〜！ くるみの声、聞こえますか？ えへへっ♪");
         }
     }
 
@@ -115,23 +115,32 @@ public final class KurumiVoiceManager {
                 String defaultPython = Files.isRegularFile(agentPython)
                         ? agentPython.toAbsolutePath().toString() : "py";
                 String python = value(config, "python_command", defaultPython);
+                Path audio = Files.createTempFile("kurumi-audio-", ".mp3");
                 ProcessBuilder builder = new ProcessBuilder(python, scriptPath().toString(), message,
                         voice, value(config, "rate", "+12%"), value(config, "pitch", "+35Hz"),
-                        value(config, "volume", "0.8"));
+                        value(config, "volume", "0.8"), audio.toString(), enabled() ? "1" : "0");
                 builder.redirectErrorStream(true);
                 Path output = Files.createTempFile("kurumi-tts-log-", ".txt");
                 builder.redirectOutput(output.toFile());
-                Process process = builder.start();
+                Process process;
+                try { process = builder.start(); }
+                catch (IOException error) { Files.deleteIfExists(audio); throw error; }
                 playback = process;
                 if (!process.waitFor(45, TimeUnit.SECONDS)) {
                     process.destroyForcibly();
                     System.err.println("Kurumi voice timeout");
+                } else if (process.exitValue() == 0 && generation == epoch) {
+                    try {
+                        if (Files.size(audio) <= 2_000_000)
+                            KurumiWebMonitor.publishAudio(message, Files.readAllBytes(audio));
+                    } catch (IOException e) { System.err.println("Kurumi MP3 publish failed: " + e.getMessage()); }
                 } else if (process.exitValue() != 0 && generation == epoch) {
                     String log = Files.readString(output, StandardCharsets.UTF_8);
                     System.err.println("Kurumi voice error: " + log.substring(0, Math.min(log.length(), 1000)));
                 }
                 if (playback == process) playback = null;
                 Files.deleteIfExists(output);
+                Files.deleteIfExists(audio);
             } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
                 return;
