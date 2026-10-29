@@ -350,11 +350,25 @@ public final class KurumiEmbeddedPythonBridge {
             context.getBindings("python").putMember("_java_tools", ProxyObject.fromMap(toolFunctions));
             context.eval("python", """
                     import json
+                    class _KurumiDict(dict):
+                        def __getattr__(self, key):
+                            try:
+                                return self[key]
+                            except KeyError:
+                                raise AttributeError(key) from None
+
+                    def _kurumi_native(value):
+                        if isinstance(value, dict):
+                            return _KurumiDict({key: _kurumi_native(item) for key, item in value.items()})
+                        if isinstance(value, list):
+                            return [_kurumi_native(item) for item in value]
+                        return value
+
                     class _KurumiTools:
                         def __getattr__(self, name):
                             callback = _java_tools[name]
                             def invoke(*args):
-                                return json.loads(callback(*args))
+                                return _kurumi_native(json.loads(callback(*args)))
                             return invoke
                     tools = _KurumiTools()
                     for _tool_name in (
