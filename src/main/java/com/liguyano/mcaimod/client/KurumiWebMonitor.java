@@ -273,8 +273,9 @@ public final class KurumiWebMonitor {
             JsonObject payload = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8))
                     .getAsJsonObject();
             String value = payload.get(preview ? "requirement" : "script").getAsString();
+            String engine = preview ? "legacy" : payload.has("engine") ? payload.get("engine").getAsString() : "legacy";
             String error = preview ? KurumiWebActions.submitGenerate(value)
-                    : KurumiWebActions.submitRun(value);
+                    : KurumiWebActions.submitRun(value, engine);
             JsonObject result = new JsonObject();
             result.addProperty("accepted", error == null);
             if (error != null) result.addProperty("error", error);
@@ -367,11 +368,13 @@ public final class KurumiWebMonitor {
             <div class="controls"><button class="secondary" id="copyPreviewBtn">复制到执行区</button></div>
           </section>
           <section class="card">
-            <h2>直接执行脚本</h2>
-            <p class="muted">编辑或粘贴受支持的脚本，然后手动确认执行；会在当前游戏世界中进行真实操作。</p>
+            <h2>手动执行 · 引擎调试</h2>
+            <p class="muted">选择执行引擎。旧解释器和 GraalPy 接收脚本；LangGraph 接收自然语言任务，不会直接执行粘贴的 Python 代码。</p>
+            <label for="runEngine">执行引擎</label>
+            <select id="runEngine"><option value="legacy">旧 Java 伪代码（Legacy）</option><option value="python">GraalPy · Python 脚本</option><option value="langgraph">LangGraph · 自然语言任务</option></select>
             <textarea id="runScript" placeholder="talk(get_player_status())"></textarea>
             <div class="controls"><button id="runBtn">确认并执行</button><span id="runStatus" class="feedback">空闲</span></div>
-            <p class="muted">通过原有解释器校验；执行后可在下方当前任务查看进度。</p>
+            <p class="muted" id="engineHelp">Legacy：旧脚本校验器；只支持受限伪 Python 语法。</p>
           </section>
         </div>
         <h2>生成请求</h2><div id="pending" class="empty">暂无生成请求</div>
@@ -602,9 +605,22 @@ public final class KurumiWebMonitor {
         });
         document.getElementById('runBtn').addEventListener('click',()=>{
           const script=document.getElementById('runScript').value;
+          const engine=document.getElementById('runEngine').value;
           if(!script.trim())return;
-          if(!confirm('这段脚本会在当前 Minecraft 世界中执行真实操作。确定执行吗？'))return;
-          submit('/api/run',{script},document.getElementById('runStatus'));
+          const kind=engine==='langgraph'?'自然语言任务':'脚本';
+          if(!confirm('将使用 '+engine+' 在当前 Minecraft 世界中执行'+kind+'。确定执行吗？'))return;
+          submit('/api/run',{script,engine},document.getElementById('runStatus'));
+        });
+        document.getElementById('runEngine').addEventListener('change',function(){
+          const engine=this.value;
+          document.getElementById('engineHelp').textContent=engine==='legacy'
+            ?'Legacy：旧脚本校验器；仅支持受限伪 Python 语法。'
+            :engine==='python'
+            ?'GraalPy：执行真实 Python 脚本；需要 GraalPy 运行时与 /kurumi auto on。'
+            :'LangGraph：输入自然语言任务，由 Agent 选择 Skills；需要 Agent 服务与 /kurumi auto on。';
+          document.getElementById('runScript').placeholder=engine==='langgraph'
+            ?'例如：查看背包里还有多少樱花原木'
+            :engine==='python'?'from helpers import KurumiHelper':'talk(get_player_status())';
         });
         refresh();loadSkills();
         setInterval(refresh,1000);
