@@ -89,9 +89,14 @@ public final class KurumiAgentProcess {
     }
 
     public static CompletableFuture<JsonObject> chat(String sender, String message) {
+        return chat(sender, message, false);
+    }
+
+    public static CompletableFuture<JsonObject> chat(String sender, String message, boolean chatOnly) {
         JsonObject payload = new JsonObject();
         payload.addProperty("sender", sender);
         payload.addProperty("message", message);
+        payload.addProperty("chat_only", chatOnly);
         return request("/chat", payload);
     }
 
