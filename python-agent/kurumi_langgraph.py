@@ -81,7 +81,10 @@ class KurumiGraph:
         return "act" if state["decision"]["type"] == "tool" else "end"
 
     def _act(self, state: AgentState) -> dict:
-        self._guard(state)
+        if self.stopped():
+            raise Stopped("Emergency stop requested")
+        if time.monotonic() > state["deadline"]:
+            raise TimeoutError("Agent execution deadline reached")
         decision = state["decision"]
         name, args = decision.get("name"), decision.get("args", [])
         if not isinstance(name, str):
