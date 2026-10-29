@@ -60,7 +60,7 @@ public final class KurumiClientController {
 
     static boolean hasSurvivalTask() {
         return requestInFlight || awaitedStage != null || quickStage != null
-                || KurumiPseudoExecutor.busy() || KurumiEmbeddedPythonBridge.busy() || KurumiPlanExecutor.busy()
+                || KurumiPseudoExecutor.busy() || KurumiPythonRuntime.busy() || KurumiPlanExecutor.busy()
                 || KurumiFishingBridge.busy() || KurumiLongTaskBridge.busy();
     }
 
@@ -232,7 +232,7 @@ public final class KurumiClientController {
         KurumiLongTaskBridge.cancel();
         KurumiChestCraftTask.cancel();
         KurumiPseudoExecutor.cancel();
-        KurumiEmbeddedPythonBridge.cancel();
+        KurumiPythonRuntime.cancel();
         KurumiChestInspector.cancel();
         KurumiChestSearch.cancel();
         KurumiTaskRecovery.cancel();
@@ -260,7 +260,7 @@ public final class KurumiClientController {
         PENDING_CLARIFICATIONS.clear();
         KurumiWebActions.cancelPending();
         KurumiPseudoExecutor.cancel();
-        KurumiEmbeddedPythonBridge.cancel();
+        KurumiPythonRuntime.cancel();
         KurumiPlanExecutor.cancel();
         KurumiLongTaskBridge.cancel();
         KurumiChestCraftTask.cancel();
@@ -310,7 +310,7 @@ public final class KurumiClientController {
             if (System.currentTimeMillis() - quick.started() > AGENT_DEADLINE_MS) {
                 quickStage = null;
                 KurumiPseudoExecutor.cancel();
-        KurumiEmbeddedPythonBridge.cancel();
+        KurumiPythonRuntime.cancel();
                 publicFailure("快捷技能执行超时，已取消");
                 return;
             }
@@ -353,23 +353,23 @@ public final class KurumiClientController {
         if (System.currentTimeMillis() - stage.started() > AGENT_DEADLINE_MS) {
             awaitedStage = null;
             KurumiPseudoExecutor.cancel();
-        KurumiEmbeddedPythonBridge.cancel();
+        KurumiPythonRuntime.cancel();
             finishRequest();
             notice("Kurumi 多轮工具任务达到20分钟总时限，已停止");
             return;
         }
-        if ((stage.python() ? KurumiEmbeddedPythonBridge.finishedRunId() : KurumiPseudoExecutor.finishedRunId()) != stage.scriptId()) return;
+        if ((stage.python() ? KurumiPythonRuntime.finishedRunId() : KurumiPseudoExecutor.finishedRunId()) != stage.scriptId()) return;
         awaitedStage = null;
         if (stage.stage() >= MAX_AGENT_STAGES) {
             finishRequest();
             notice("Kurumi 达到安全调用预算，任务已中断（并非已完成）");
             return;
         }
-        String report = stage.python() ? KurumiEmbeddedPythonBridge.finishedRunReport() : KurumiPseudoExecutor.finishedRunReport();
+        String report = stage.python() ? KurumiPythonRuntime.finishedRunReport() : KurumiPseudoExecutor.finishedRunReport();
         // Full-plan mode: a normally completed script is terminal. Only explicit
         // observe() handoffs and failures re-enter the LLM for another plan.
-        if ((stage.python() ? KurumiEmbeddedPythonBridge.finishedRunSucceeded() : KurumiPseudoExecutor.finishedRunSucceeded())
-                && !(stage.python() ? KurumiEmbeddedPythonBridge.finishedRunObserved() : KurumiPseudoExecutor.finishedRunObserved())) {
+        if ((stage.python() ? KurumiPythonRuntime.finishedRunSucceeded() : KurumiPseudoExecutor.finishedRunSucceeded())
+                && !(stage.python() ? KurumiPythonRuntime.finishedRunObserved() : KurumiPseudoExecutor.finishedRunObserved())) {
             boolean verified = KurumiSkillResultVerifier.hasVerifiedCompletion(report);
             KurumiWebMonitor.log("完整脚本已结束，不再为正常阶段结束调用大模型：" + report);
             KurumiWebMonitor.state(verified ? "完整脚本执行完毕（有验证结果）"
@@ -377,14 +377,14 @@ public final class KurumiClientController {
             finishRequest();
             return;
         }
-        verifiedScriptCompletion = (stage.python() ? KurumiEmbeddedPythonBridge.finishedRunSucceeded() : KurumiPseudoExecutor.finishedRunSucceeded())
+        verifiedScriptCompletion = (stage.python() ? KurumiPythonRuntime.finishedRunSucceeded() : KurumiPseudoExecutor.finishedRunSucceeded())
                 && KurumiSkillResultVerifier.hasVerifiedCompletion(report);
         agentSession.recordObservation("阶段" + stage.stage(), report);
         KurumiWebMonitor.requestReceived(stage.originalRequest() + "（工具反馈阶段 "
                 + stage.stage() + "）");
         List<ChatMessage> next = new ArrayList<>(stage.conversation());
         String screenshotData = stage.generation() == generation
-                ? KurumiScreenshotBridge.consume(stage.python() ? KurumiEmbeddedPythonBridge.finishedRunVisionId() : KurumiPseudoExecutor.finishedRunVisionId()) : null;
+                ? KurumiScreenshotBridge.consume(stage.python() ? KurumiPythonRuntime.finishedRunVisionId() : KurumiPseudoExecutor.finishedRunVisionId()) : null;
         next.add(new ChatMessage("user", "脚本发生异常或主动 observe() 请求进一步决策，以下是客户端实际反馈，"
                 + "不是推测：\n" + report
                 + "\n根据异常原因恢复尚未完成的任务，或根据 observe() 结果决定必要的后续行动。请优先生成可连续运行的完整剩余脚本。"
@@ -557,7 +557,7 @@ public final class KurumiClientController {
                     KurumiWebMonitor.log("主人提供新指令：中断当前脚本并重新规划");
                     KurumiPlanExecutor.cancel();
                     KurumiPseudoExecutor.cancel();
-        KurumiEmbeddedPythonBridge.cancel();
+        KurumiPythonRuntime.cancel();
                 }
             }
             return;
@@ -1037,7 +1037,8 @@ public final class KurumiClientController {
                     boolean continueAfterStage = decision.program().isPresent()
                             && toolCalls + 1 <= MAX_AGENT_STAGES;
                     boolean pythonScript = decision.program().isPresent()
-                            && !"legacy".equalsIgnoreCase(System.getProperty("mcaimod.scriptEngine", "python"));
+                            && KurumiPythonRuntime.available()
+                            && "python".equalsIgnoreCase(System.getProperty("mcaimod.scriptEngine", "legacy"));
                     if (decision.action().isPresent() || !decision.target().isEmpty() || decision.x() != null || !decision.blockId().isEmpty() || decision.plan().isPresent() || decision.program().isPresent()) {
                         KurumiActionValidator.Action action = decision.action().orElse(null);
                         if (!autoFarmEnabled && !(decision.program().isPresent()
@@ -1072,7 +1073,7 @@ public final class KurumiClientController {
                             publicFailure("已有长任务进行中，请先 /kurumi stop");
                             return;
                         }
-                        if (KurumiPlanExecutor.busy() || KurumiPseudoExecutor.busy() || KurumiEmbeddedPythonBridge.busy()) {
+                        if (KurumiPlanExecutor.busy() || KurumiPseudoExecutor.busy() || KurumiPythonRuntime.busy()) {
                             publicFailure("自由组合任务执行中，请先 /kurumi stop");
                             return;
                         }
@@ -1080,7 +1081,7 @@ public final class KurumiClientController {
                             KurumiTaskRecovery.begin();
                         if (decision.program().isPresent()) KurumiWebMonitor.requirement(message);
                         BaritoneBridge.Result result = decision.program().isPresent()
-                                ? (pythonScript ? KurumiEmbeddedPythonBridge.start(decision.script())
+                                ? (pythonScript ? KurumiPythonRuntime.start(decision.script())
                                         : KurumiPseudoExecutor.start(decision.program().get(), toolCalls > 0))
                                 : decision.plan().isPresent()
                                 ? KurumiTaskPlanner.execute(decision.plan().get())
@@ -1130,7 +1131,7 @@ public final class KurumiClientController {
                         nextConversation.add(new ChatMessage("assistant", reply));
                         awaitedStage = new AwaitedStage(profile, nextConversation, sender,
                                 message, requestGeneration, toolCalls + 1,
-                                agentStartedAt, pythonScript ? KurumiEmbeddedPythonBridge.activeRunId() : KurumiPseudoExecutor.activeRunId(), pythonScript);
+                                agentStartedAt, pythonScript ? KurumiPythonRuntime.activeRunId() : KurumiPseudoExecutor.activeRunId(), pythonScript);
                         KurumiWebMonitor.log("第 " + (toolCalls + 1)
                                 + " 阶段脚本已启动；执行结束后返回工具结果给 AI");
                     } else {
