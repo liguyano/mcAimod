@@ -15,3 +15,19 @@
 Edge TTS 需要联网且音频由在线语音服务生成。Java Mod 会从 JAR 提取内置 Python 脚本到系统临时目录，通过 `python_command` 启动，自动合成并播放，游戏端不用手动启动 Python。Python 侧使用 pygame 解码 MP3 并播放。
 
 故障排查：确认 `py -c "import edge_tts, pygame; print('ok')"` 能正常运行；若 PATH 未配置，可将 `python_command` 设置为 Python 解释器的完整路径。日志从 Java 控制台输出。语音每次都新建一个短期 Python 子进程，存在一定启动延迟，未来可改常驻进程。停止后不会强行终止已发送的 HTTP 请求本身，但会终止播放子进程。
+
+## Kurumi 0.6.0 LangGraph 联动
+
+LangGraph 返回给游戏聊天的最终 `reply` 现在也会加入本地语音队列。
+原本由 `talk()` 触发的朗读逻辑保持不变；不会朗读所有玩家的公共聊天。
+原有 `/kurumi voice on|off|test|stop` 指令继续有效。语音队列限制
+200 字符，过长回答只朗读开头部分，避免长时间占用音频。
+
+先运行 `./setup-agent.ps1` 安装 Agent 依赖，其中包括 `edge-tts` 和
+`pygame`。若未在 `mcaimod-voice.json` 中设置 `python_command`，
+Java 会优先选择 `config/mcaimod-agent/.venv/Scripts/python.exe`，
+不存在时回退系统 `py`。已有配置若显式设为 `py`，会继续使用
+系统 Python；如需统一虚拟环境，删除 `python_command` 字段即可。
+
+本功能使用现有独立 TTS 播放进程（不是 LangGraph 图中的节点）。
+Edge TTS 需要网络连接，声音仅在游戏运行电脑上播放。
