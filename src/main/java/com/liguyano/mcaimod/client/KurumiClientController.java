@@ -1040,6 +1040,16 @@ public final class KurumiClientController {
                             && KurumiPythonRuntime.available()
                             && "python".equalsIgnoreCase(System.getProperty("mcaimod.scriptEngine", "legacy"));
                     if (decision.action().isPresent() || !decision.target().isEmpty() || decision.x() != null || !decision.blockId().isEmpty() || decision.plan().isPresent() || decision.program().isPresent()) {
+                        if (KurumiPythonModulePolicy.containsImport(decision.script())) {
+                            String operator = minecraft.getConnection().getPlayerInfo(sender) == null
+                                    ? "" : minecraft.getConnection().getPlayerInfo(sender).getProfile().name();
+                            if (!pythonScript || !autoFarmEnabled
+                                    || !"SekaiSaionji".equals(operator)
+                                    || !KurumiPythonModulePolicy.isApprovedImportScript(decision.script())) {
+                                publicFailure("本地 Python 模块只能由主人在已启用 GraalPy 和自动执行时使用。");
+                                return;
+                            }
+                        }
                         KurumiActionValidator.Action action = decision.action().orElse(null);
                         if (!autoFarmEnabled && !(decision.program().isPresent()
                                 && KurumiScriptSafety.isReadOnly(decision.program().get().statements()))) {
