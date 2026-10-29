@@ -78,9 +78,9 @@ public final class KurumiToolRegistry {
     }
 
     public static String catalog() {
-        StringBuilder result = new StringBuilder("Kurumi 可用工具（签名为伪代码格式；[]表示可选参数；细节可用 get_tool_help(\\"工具名\\") 查询）：\\n");
+        StringBuilder result = new StringBuilder("Kurumi 可用工具（签名为伪代码格式；[]表示可选参数；细节可用 get_tool_help(\"工具名\") 查询）：\n");
         for (Entry e : ENTRIES.values()) {
-            result.append(e.signature()).append(" — ").append(e.description()).append('\\n');
+            result.append(e.signature()).append(" — ").append(e.description()).append('\n');
         }
         return result.toString();
     }
