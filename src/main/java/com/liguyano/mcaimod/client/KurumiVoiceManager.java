@@ -77,7 +77,7 @@ public final class KurumiVoiceManager {
 
     public static void test() {
         install();
-        if (!QUEUE.offer("主人~ Kurumi 的语音测试开始啦！")) {
+        if (!QUEUE.offer("ご主人さま〜！ くるみの声、聞こえますか？ えへへっ♪")) {
             QUEUE.poll();
             QUEUE.offer("主人~ Kurumi 的语音测试开始啦！");
         }
@@ -116,7 +116,7 @@ public final class KurumiVoiceManager {
                         ? agentPython.toAbsolutePath().toString() : "py";
                 String python = value(config, "python_command", defaultPython);
                 ProcessBuilder builder = new ProcessBuilder(python, scriptPath().toString(), message,
-                        voice, value(config, "rate", "+5%"), value(config, "pitch", "+10Hz"),
+                        voice, value(config, "rate", "+12%"), value(config, "pitch", "+35Hz"),
                         value(config, "volume", "0.8"));
                 builder.redirectErrorStream(true);
                 Path output = Files.createTempFile("kurumi-tts-log-", ".txt");
