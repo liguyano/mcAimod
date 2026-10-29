@@ -2,7 +2,7 @@
   "enabled": true,
   "voice_zh": "zh-CN-XiaoyiNeural",
   "voice_ja": "ja-JP-NanamiNeural",
-  "rate": "+5%",
-  "pitch": "+10Hz",
+  "rate": "+12%",
+  "pitch": "+35Hz",
   "volume": "0.8"
 }
