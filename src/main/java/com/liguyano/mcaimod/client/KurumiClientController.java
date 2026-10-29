@@ -628,15 +628,15 @@ public final class KurumiClientController {
         }
         // 0.6: prefer LangGraph for normal chat. Java retains emergency stop,
         // exact shortcuts and the legacy fallback when Python is unavailable.
-        if (isOwner && !"legacy".equalsIgnoreCase(System.getProperty("mcaimod.agentEngine", "langgraph"))
+        if (!"legacy".equalsIgnoreCase(System.getProperty("mcaimod.agentEngine", "langgraph"))
                 && KurumiAgentProcess.available()) {
             requestInFlight = true;
             activeSender = event.getSender();
             long agentGeneration = generation;
             String agentSender = senderNameForMemory.isBlank() ? event.getSender().toString() : senderNameForMemory;
             KurumiWebMonitor.requestReceived(message);
-            KurumiSpeech.say("はいっ、ご主人さま！ ちゃんと聞こえましたよっ♪");
-            KurumiAgentProcess.chat(agentSender, message).whenComplete((answer, error) ->
+            KurumiSpeech.say(isOwner ? "はいっ、ご主人さま！ ちゃんと聞こえましたよっ♪" : "はーいっ、くるみです♪");
+            KurumiAgentProcess.chat(agentSender, message, !isOwner).whenComplete((answer, error) ->
                 minecraft.execute(() -> {
                     if (agentGeneration != generation || !requestInFlight) return;
                     if (error != null || answer == null || !answer.has("success")
