@@ -680,9 +680,15 @@ public final class KurumiClientController {
                         + "for/while 内可使用 break、continue，循环变量可以在条件和工具参数中使用。"
                         + "while 循环最多20轮，任务最多20分钟、动作最多200个；不确定时先观察，不要假称动作已完成。"));
                 String selectedToolGuide = taskToolGuide(effectiveMessage);
-        if (selectedToolGuide != null) conversation.add(new ChatMessage("system", selectedToolGuide));
-        conversation.add(new ChatMessage("system", "工具签名目录由本地注册表提供。需要核对某个工具时，调用 observe(get_tool_help(\\\"函数名\\\")) 查询；不存在时 found=false，禁止猜测函数或参数。"));
-        else {
+        if (selectedToolGuide != null) {
+            conversation.add(new ChatMessage("system", selectedToolGuide));
+        } else {
+            conversation.add(new ChatMessage("system", KurumiToolRegistry.catalog()));
+        }
+        conversation.add(new ChatMessage("system",
+                "本地工具签名目录列出了所有可用函数及参数。若不确定具体调用方式，"
+                + "使用 observe(get_tool_help(\\"工具名\\")) 查询；found=false 时不得猜测函数或参数。"));
+        if (selectedToolGuide == null) {
             conversation.add(new ChatMessage("system",
                         "常用动作：come(\\\"玩家名\\\") 到玩家附近停止；follow(\\\"玩家名\\\") 持续跟随；"
                         + "goto(x,y,z) 坐标寻路；move(\\\"forward\\\",n)、move(\\\"back\\\",n)、"
