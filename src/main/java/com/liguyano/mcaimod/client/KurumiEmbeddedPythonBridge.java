@@ -29,6 +29,18 @@ public final class KurumiEmbeddedPythonBridge {
     private static final AtomicBoolean RUNNING = new AtomicBoolean();
     private static volatile Thread worker;
     private static volatile Context activeContext;
+    private static volatile long runSequence;
+    private static volatile long finishedSequence;
+    private static volatile boolean finishedSuccess;
+    private static volatile boolean finishedObserved;
+    private static volatile String finishedReport = "";
+    private static volatile String pendingObservation;
+
+    public static long activeRunId() { return runSequence; }
+    public static long finishedRunId() { return finishedSequence; }
+    public static boolean finishedRunSucceeded() { return finishedSuccess; }
+    public static boolean finishedRunObserved() { return finishedObserved; }
+    public static String finishedRunReport() { return finishedReport; }
 
     private KurumiEmbeddedPythonBridge() {}
 
@@ -46,7 +58,12 @@ public final class KurumiEmbeddedPythonBridge {
             return new BaritoneBridge.Result(false, "Python 脚本为空或超出16KB限制");
         if (!RUNNING.compareAndSet(false, true))
             return new BaritoneBridge.Result(false, "已有 Python 脚本正在运行");
-        worker = new Thread(() -> execute(script), "Kurumi-GraalPy-Worker");
+        long run = ++runSequence;
+        finishedSuccess = false;
+        finishedObserved = false;
+        finishedReport = "";
+        pendingObservation = null;
+        worker = new Thread(() -> execute(script, run), "Kurumi-GraalPy-Worker");
         worker.setDaemon(true);
         worker.start();
         return new BaritoneBridge.Result(true, "嵌入式 Python 脚本已启动（实验模式）");
@@ -239,7 +256,7 @@ public final class KurumiEmbeddedPythonBridge {
         return result(action);
     }
 
-    private static void execute(String source) {
+    private static void execute(String source, long run) {
         long started = System.nanoTime();
         scriptStartedNanos = started;
         TOOL_CALLS.set(0);
@@ -283,6 +300,16 @@ public final class KurumiEmbeddedPythonBridge {
                     return asJson(onGameThread(() -> callGameTool(name, frozen)));
                 });
             }
+            context.getBindings("python").putMember("_handoff_observation",
+                    (ProxyExecutable) args -> {
+                        if (args.length != 1 || !args[0].isString())
+                            throw new IllegalArgumentException("observe(value) 参数不合法");
+                        String payload = args[0].asString();
+                        if (payload.length() > 48_000)
+                            throw new IllegalArgumentException("observe() 返回数据超过48KB");
+                        pendingObservation = payload;
+                        return true;
+                    });
             context.getBindings("python").putMember("_java_tools", ProxyObject.fromMap(toolFunctions));
             context.eval("python", """
                     import json
@@ -294,18 +321,41 @@ public final class KurumiEmbeddedPythonBridge {
                             return invoke
                     tools = _KurumiTools()
                     """);
-            context.eval("python", source);
+            context.eval("python", """
+                    class _KurumiObserve(Exception):
+                        pass
+
+                    def observe(value):
+                        _handoff_observation(json.dumps(value, ensure_ascii=False, default=str))
+                        raise _KurumiObserve()
+                    """);
+            try {
+                context.eval("python", source);
+                finishedSuccess = true;
+                finishedReport = "Python 脚本已执行完毕";
+            } catch (PolyglotException error) {
+                if (pendingObservation == null || !error.isGuestException()) throw error;
+                finishedObserved = true;
+                finishedSuccess = true;
+                finishedReport = "AI观察：" + pendingObservation;
+                KurumiWebMonitor.log("Python observe() 交还控制权：" + finishedReport);
+            }
             KurumiWebMonitor.log("GraalPy 脚本执行结束，耗时 "
                     + TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started) + "ms");
         } catch (PolyglotException | IllegalStateException error) {
-            KurumiWebMonitor.log("GraalPy 脚本失败：" + error.getMessage());
+            finishedSuccess = false;
+            finishedReport = "GraalPy 脚本失败：" + error.getMessage();
+            KurumiWebMonitor.log(finishedReport);
         } catch (Throwable error) {
-            KurumiWebMonitor.log("GraalPy 运行时加载或执行失败：" + error);
+            finishedSuccess = false;
+            finishedReport = "GraalPy 运行时加载或执行失败：" + error;
+            KurumiWebMonitor.log(finishedReport);
         } finally {
             activeContext = null;
             TOOL_CALLS.set(0);
             worker = null;
             RUNNING.set(false);
+            finishedSequence = run;
         }
     }
 }
