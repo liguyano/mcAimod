@@ -147,12 +147,11 @@ dependencies {
     jarJar(implementation('org.jetbrains.kotlin:kotlin-stdlib:1.8.21')) {
         version { strictly '[1.8.21]'; prefer '1.8.21' }
     }
-    // GraalPy language runtime: included in the development runtime only.
-    // Do not claim NeoForge JarJar distribution works until its transitive
-    // Truffle and Python language dependencies have been packaged and verified.
+    // GraalPy is a complete language runtime rather than one standalone JAR.
+    // The bundle resolution below enumerates EVERY required runtime artifact.
     implementation 'org.graalvm.polyglot:polyglot:25.3.4.1'
-    runtimeOnly 'org.graalvm.polyglot:python:25.3.4.1'
     implementation 'org.graalvm.python:python-embedding:25.3.4.1'
+    runtimeOnly 'org.graalvm.polyglot:python:25.3.4.1'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     // Minecraft supplies Gson at runtime; plain JUnit launches need it explicitly.
@@ -179,6 +178,67 @@ dependencies {
     // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html
     // http://www.gradle.org/docs/current/userguide/dependency_management.html
 }
+
+
+// Resolve the GraalPy dependency closure and explicitly feed each artifact
+// to ModDevGradle Jar-in-Jar. Plain implementation/runtimeOnly alone makes
+// Gradle compilation work but does not put the libraries in a distributed mod.
+configurations {
+    graalPyDistribution {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = true
+    }
+}
+dependencies {
+    graalPyDistribution 'org.graalvm.polyglot:polyglot:25.3.4.1'
+    graalPyDistribution 'org.graalvm.python:python-embedding:25.3.4.1'
+    graalPyDistribution 'org.graalvm.polyglot:python:25.3.4.1'
+}
+
+// NeoForge jarJar takes explicit module dependencies, not a transitive POM.
+// Resolve once during configuration and add all resolved Java JAR artifacts.
+// This includes Truffle, the Python language, resources and other essentials.
+def graalPyArtifacts = configurations.graalPyDistribution.resolvedConfiguration.resolvedArtifacts
+def graalPyCoordinates = graalPyArtifacts.findAll { it.extension == 'jar' }.collect {
+    "${it.moduleVersion.id.group}:${it.name}:${it.moduleVersion.id.version}"
+}.unique().sort()
+if (!graalPyCoordinates.any { it.startsWith('org.graalvm.polyglot:polyglot:') } ||
+        !graalPyCoordinates.any { it.startsWith('org.graalvm.python:python-language:') }) {
+    throw new GradleException('GraalPy runtime closure incomplete: ' + graalPyCoordinates)
+}
+graalPyCoordinates.each { coordinate ->
+    dependencies.add('jarJar', coordinate) {
+        version {
+            def versionText = coordinate.substring(coordinate.lastIndexOf(':') + 1)
+            strictly "[${versionText}]"
+            prefer versionText
+        }
+    }
+}
+logger.lifecycle("GraalPy JAR-in-JAR runtime dependencies ({}): {}", graalPyCoordinates.size(), graalPyCoordinates)
+
+tasks.register('verifyGraalPyJarJar') {
+    group = 'verification'
+    description = 'Checks that the released Mod jar embeds all resolved GraalPy runtime libraries.'
+    dependsOn tasks.named('jar')
+    doLast {
+        def modJar = tasks.named('jar').get().archiveFile.get().asFile
+        def zip = new java.util.zip.ZipFile(modJar)
+        try {
+            def names = zip.entries().collect { it.name }
+            ['polyglot-', 'python-language-', 'python-resources-', 'truffle-api-'].each { prefix ->
+                if (!names.any { it.startsWith('META-INF/jarjar/') && it.contains(prefix) && it.endsWith('.jar') }) {
+                    throw new GradleException("Missing embedded GraalPy dependency ${prefix} in ${modJar}")
+                }
+            }
+            if (!names.contains('META-INF/jarjar/metadata.json'))
+                throw new GradleException('JarJar metadata missing from release JAR')
+            logger.lifecycle("Verified GraalPy libraries in {}", modJar)
+        } finally { zip.close() }
+    }
+}
+tasks.named('build') { dependsOn tasks.named('verifyGraalPyJarJar') }
 
 tasks.named('test', Test).configure {
     useJUnitPlatform()
