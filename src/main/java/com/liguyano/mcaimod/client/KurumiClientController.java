@@ -131,9 +131,9 @@ public final class KurumiClientController {
         String direction = ally == null ? "远离攻击者" : "向玩家 " + ally.name() + " 靠近";
         KurumiWebMonitor.log("受到攻击，紧急逃离（" + direction + "）：" + movement.message());
         if (mc.getConnection() != null) KurumiSpeech.say(!movement.success()
-                ? "主人~ 我被攻击了！已停止任务，但逃跑寻路失败了！"
-                : ally != null ? ally.name() + "，救我！有东西在攻击我！"
-                : "主人~ 我被攻击了！附近没人能帮忙，我先逃跑！");
+                ? "ご主人さまっ、攻撃されちゃいました！ お仕事は止めたけど、逃げ道が見つかりませんっ！"
+                : ally != null ? ally.name() + "さん、助けてくださいっ！ なにかに襲われています〜！"
+                : "ご主人さま〜！ 襲われちゃったので、まず逃げますねっ！");
         survivalRecovery = hadTask && profile != null && sender != null
                 ? new SurvivalRecovery(profile, conversation, sender, original, now, step) : null;
         fleeingUntil = movement.success() ? now + 12_000 : now;
@@ -514,8 +514,8 @@ public final class KurumiClientController {
         else KurumiWebMonitor.requestFailed(result.message());
         Minecraft mc = Minecraft.getInstance();
         if (mc.getConnection() != null)
-            KurumiSpeech.say(result.success() ? "好的，主人~ " + result.message()
-                    : "抱歉，主人~ " + result.message());
+            KurumiSpeech.say(result.success() ? "はーい、ご主人さまっ♪ " + result.message()
+                    : "ごめんなさい、ご主人さま…… " + result.message());
         return true;
     }
 
@@ -545,8 +545,8 @@ public final class KurumiClientController {
                 if ("保存".equals(answer) || "记住".equals(answer)) {
                     boolean saved = SKILLS.saveApproved(approval.skill());
                     KurumiSpeech.say(saved
-                            ? "主人，已保存技能【" + approval.skill().title() + "】和批准的快捷触发词。"
-                            : "主人，技能保存失败，可能是脚本无效或快捷词重复；请查看日志。");
+                            ? "ご主人さま、スキル【" + approval.skill().title() + "】と合言葉を保存しましたよっ♪"
+                            : "あれれ、スキルを保存できませんでした……コードか合言葉を確認してくださいね。");
                 } else {
                     KurumiSpeech.say("はーい、ご主人さま！ 今回はスキルを保存しませんね♪");
                 }
@@ -595,7 +595,7 @@ public final class KurumiClientController {
             Optional<KurumiTaskPlanner.Program> program = KurumiScriptParser.parse(
                     skill.code() + "\nresult = " + skill.name() + "()\nobserve(result)");
             if (program.isEmpty()) {
-                KurumiSpeech.say("快捷技能源码无法解析，已取消执行：" + KurumiScriptParser.lastError());
+                KurumiSpeech.say("スキルのコードを読み取れなかったので中止しました：" + KurumiScriptParser.lastError());
                 GATE.finish();
                 return;
             }
@@ -607,7 +607,7 @@ public final class KurumiClientController {
             KurumiPseudoExecutor.clearVariables();
             BaritoneBridge.Result started = KurumiPseudoExecutor.start(program.get());
             if (!started.success()) {
-                KurumiSpeech.say("快捷技能未启动：" + started.message());
+                KurumiSpeech.say("スキルを始められませんでした：" + started.message());
                 GATE.finish();
                 return;
             }
@@ -1020,8 +1020,8 @@ public final class KurumiClientController {
                                             : minecraft.getConnection().getPlayerInfo(sender).getProfile().name())) {
                                 KurumiSkillMemory.parseProposal(reply).ifPresent(proposal -> {
                                     pendingSkillApproval = new PendingSkillApproval(sender, proposal);
-                                    KurumiSpeech.say("主人~，这次操作验证成功了。要将【"
-                                            + proposal.title() + "】保存成可复用技能吗？建议快捷词："
+                                    KurumiSpeech.say("ご主人さまっ、うまくできましたよ♪ 【"
+                                            + proposal.title() + "】をスキルとして保存しますか？ おすすめの合言葉："
                                             + String.join("、", proposal.triggers())
                                             + "。回复『保存』或『不保存』即可。");
                                 });
@@ -1192,7 +1192,7 @@ public final class KurumiClientController {
                                 ? "方块操作" : decision.target());
                     }
                     if (decision.action().isPresent() && (decision.action().get().type() == KurumiActionValidator.Type.PICKUP || decision.action().get().type() == KurumiActionValidator.Type.PICKUP_ALL || decision.action().get().type() == KurumiActionValidator.Type.PICKUP_ITEM_ALL)) {
-                        KurumiSpeech.say("" + "已开始前往掉落物位置，尚未确认拾取完成。");
+                        KurumiSpeech.say("" + "落とし物の場所へ向かっていますっ。まだ拾えたかは確認中です♪");
                         return;
                     }
                     List<ChatMessage> updated = new ArrayList<>(HISTORY.getOrDefault(sender, List.of()));
@@ -1221,7 +1221,7 @@ public final class KurumiClientController {
         notice(reason);
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player != null && minecraft.getConnection() != null) {
-            KurumiSpeech.say("抱歉，操作失败：" + reason);
+            KurumiSpeech.say("ごめんなさい、操作に失敗しちゃいました：" + reason);
         }
     }
 
