@@ -85,7 +85,7 @@ public final class KurumiDecisionParser {
                 String script = object.get("script").getAsString();
                 // Ordinary scripts must not initialize NeoForge config during standalone parser tests.
                 boolean localPythonImports = "python".equalsIgnoreCase(
-                        System.getProperty("mcaimod.scriptEngine", "legacy"))
+                        System.getProperty("mcaimod.scriptEngine", "python"))
                         && KurumiPythonModulePolicy.isApprovedImportScript(script);
                 if (!localPythonImports && script.lines().map(String::stripLeading).anyMatch(line ->
                         line.startsWith("from ") || line.startsWith("import ")
