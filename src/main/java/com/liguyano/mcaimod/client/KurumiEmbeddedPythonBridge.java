@@ -366,7 +366,9 @@ public final class KurumiEmbeddedPythonBridge {
 
                     class _KurumiTools:
                         def __getattr__(self, name):
-                            callback = _java_tools[name]
+                            # GraalPy sees Java ProxyObject as a foreign object.
+                            # Member access is supported, Python [] subscription is not.
+                            callback = getattr(_java_tools, name)
                             def invoke(*args):
                                 return _kurumi_native(json.loads(callback(*args)))
                             return invoke
