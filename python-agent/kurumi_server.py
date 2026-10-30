@@ -65,7 +65,7 @@ def model_request(messages):
     if raw.startswith("```"):
         lines = raw.splitlines()
         if len(lines) >= 3 and lines[-1].strip() == "```":
-            raw = "\\n".join(lines[1:-1]).strip()
+            raw = "\n".join(lines[1:-1]).strip()
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError as error:
