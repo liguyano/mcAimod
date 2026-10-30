@@ -641,7 +641,14 @@ public final class KurumiClientController {
                     if (agentGeneration != generation || !requestInFlight) return;
                     if (error != null || answer == null || !answer.has("success")
                             || !answer.get("success").getAsBoolean()) {
-                        KurumiWebMonitor.requestFailed("LangGraph 执行失败");
+                        String detail = error != null ? error.getClass().getSimpleName() + ": "
+                                + String.valueOf(error.getMessage())
+                                : answer != null && answer.has("error") ? answer.get("error").getAsString()
+                                : "Agent returned no successful result";
+                        detail = detail.replaceAll("(?i)(sk-[a-z0-9_-]{12,})", "[REDACTED]");
+                        if (detail.length() > 400) detail = detail.substring(0, 400);
+                        KurumiWebMonitor.log("LangGraph 失败原因：" + detail);
+                        KurumiWebMonitor.requestFailed("LangGraph 执行失败：" + detail);
                         KurumiSpeech.say("あれれ、うまくできませんでした……ログを確認してくださいね。");
                     } else {
                         String reply = answer.has("reply") ? answer.get("reply").getAsString() : "";
