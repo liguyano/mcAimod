@@ -59,7 +59,20 @@ def model_request(messages):
             model=profile["model_id"], messages=messages,
             max_tokens=int(profile.get("max_output_tokens", 1024)))
     raw = response.choices[0].message.content
-    return json.loads(raw)
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError("Model returned an empty response")
+    raw = raw.strip()
+    if raw.startswith("```"):
+        lines = raw.splitlines()
+        if len(lines) >= 3 and lines[-1].strip() == "```":
+            raw = "\\n".join(lines[1:-1]).strip()
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise ValueError("Model did not return valid JSON (first 160 chars): " + raw[:160]) from error
+    if not isinstance(parsed, dict):
+        raise ValueError("Model must return a JSON object")
+    return parsed
 
 memory = KurumiMemory(Path(__file__).resolve().parent / "memory" / "conversations.db",
                      os.environ.get("KURUMI_TIMEZONE", "Asia/Shanghai"))
