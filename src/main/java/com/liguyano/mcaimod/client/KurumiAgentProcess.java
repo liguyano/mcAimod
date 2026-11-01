@@ -120,7 +120,17 @@ public final class KurumiAgentProcess {
                 .build();
         return HTTP.sendAsync(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
                 .thenApply(reply -> {
-                    if (reply.statusCode() != 200) throw new IllegalStateException("Agent HTTP " + reply.statusCode());
+                    if (reply.statusCode() != 200) {
+                        String detail = reply.body();
+                        try {
+                            JsonObject error = JsonParser.parseString(detail).getAsJsonObject();
+                            if (error.has("error")) detail = error.get("error").getAsString();
+                        } catch (RuntimeException ignored) {}
+                        detail = detail.replaceAll("(?i)(sk-[a-z0-9_-]{12,})", "[REDACTED]")
+                                .replaceAll("(?i)(bearer\\s+)[a-z0-9._-]+", "$1[REDACTED]");
+                        if (detail.length() > 500) detail = detail.substring(0, 500);
+                        throw new IllegalStateException("Agent HTTP " + reply.statusCode() + ": " + detail);
+                    }
                     return JsonParser.parseString(reply.body()).getAsJsonObject();
                 });
     }
