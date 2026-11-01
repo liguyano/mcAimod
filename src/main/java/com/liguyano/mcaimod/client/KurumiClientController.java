@@ -163,7 +163,6 @@ public final class KurumiClientController {
     static boolean pythonAgentActionsAllowed() { return autoFarmEnabled; }
 
     public static void install() {
-        KurumiAgentToolServer.install();
         NeoForge.EVENT_BUS.addListener(KurumiClientController::onPlayerChat);
         NeoForge.EVENT_BUS.addListener(KurumiClientController::registerCommands);
         NeoForge.EVENT_BUS.addListener(KurumiClientController::onLogin);
@@ -207,7 +206,6 @@ public final class KurumiClientController {
     }
 
     private static void onLogin(ClientPlayerNetworkEvent.LoggingIn event) {
-        KurumiAgentProcess.launch();
         KurumiBedShortcut.resetWorld();
         restoreSavedSwitches();
     }
@@ -628,7 +626,7 @@ public final class KurumiClientController {
         }
         // 0.6: prefer LangGraph for normal chat. Java retains emergency stop,
         // exact shortcuts and the legacy fallback when Python is unavailable.
-        if (!"legacy".equalsIgnoreCase(System.getProperty("mcaimod.agentEngine", "langgraph"))
+        if (!"legacy".equalsIgnoreCase(System.getProperty("mcaimod.agentEngine", "legacy"))
                 && KurumiAgentProcess.available()) {
             requestInFlight = true;
             activeSender = event.getSender();
@@ -1082,7 +1080,7 @@ public final class KurumiClientController {
                             && toolCalls + 1 <= MAX_AGENT_STAGES;
                     boolean pythonScript = decision.program().isPresent()
                             && KurumiPythonRuntime.available()
-                            && !"legacy".equalsIgnoreCase(System.getProperty("mcaimod.scriptEngine", "python"));
+                            && !"legacy".equalsIgnoreCase(System.getProperty("mcaimod.scriptEngine", "legacy"));
                     if (decision.action().isPresent() || !decision.target().isEmpty() || decision.x() != null || !decision.blockId().isEmpty() || decision.plan().isPresent() || decision.program().isPresent()) {
                         if (KurumiPythonModulePolicy.containsImport(decision.script())) {
                             String operator = minecraft.getConnection().getPlayerInfo(sender) == null
