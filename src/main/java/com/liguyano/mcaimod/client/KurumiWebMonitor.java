@@ -248,7 +248,13 @@ public final class KurumiWebMonitor {
     }
     public static synchronized void state(String value) {
         log(value);
-        if (current == null) return;
+        if (current == null) {
+            if (pending != null && !"执行中".equals(value)) {
+                addEvent(pending, "任务结束：" + value);
+                finishPending(value);
+            }
+            return;
+        }
         current.state = value;
         if (!"执行中".equals(value)) archive(value);
     }
