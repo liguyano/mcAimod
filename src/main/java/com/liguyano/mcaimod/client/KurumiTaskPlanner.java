@@ -9,6 +9,8 @@ import java.util.Optional;
 
 /** Validates a bounded, freely ordered sequence of supported game actions. */
 public final class KurumiTaskPlanner {
+    /** Maximum block depth for both source and structured-script validation (root is depth 0). */
+    static final int MAX_SCRIPT_NESTING = 16;
     public record Step(String action, String itemId, int quantity, Integer x, Integer y, Integer z, String target) {}
     public record BreakCondition(String source, String itemId, int count) {}
     public record Plan(List<Step> steps, int quantity, int takeQuantity, int loopCount,
@@ -113,7 +115,7 @@ public final class KurumiTaskPlanner {
     }
 
     private static List<Statement> parseStatements(JsonArray array, int depth, int[] budget) {
-        if (depth > 5 || array.size() > 200) throw new IllegalArgumentException("nesting");
+        if (depth > MAX_SCRIPT_NESTING || array.size() > 200) throw new IllegalArgumentException("nesting");
         List<Statement> statements = new ArrayList<>();
         for (JsonElement el : array) {
             if (++budget[0] > 200 || !el.isJsonObject()) throw new IllegalArgumentException("budget");

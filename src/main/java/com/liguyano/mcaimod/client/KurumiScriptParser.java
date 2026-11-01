@@ -144,7 +144,7 @@ public final class KurumiScriptParser {
         done.add(name);
     }
     private static JsonArray block(List<Line> lines, Cursor cursor, int indent, int depth, int loopDepth) {
-        if (depth > 5) throw new IllegalArgumentException("nesting");
+        if (depth > KurumiTaskPlanner.MAX_SCRIPT_NESTING) throw new IllegalArgumentException("nesting");
         JsonArray out = new JsonArray();
         while (cursor.at < lines.size() && lines.get(cursor.at).indent() == indent) {
             String code = lines.get(cursor.at++).code();
