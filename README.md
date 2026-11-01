@@ -201,3 +201,20 @@ The Web panel's manual execution section now offers three explicit debugging bac
 - **LangGraph**: **natural-language task**, not arbitrary Python evaluation, forwarded to the separate CPython Agent via `KurumiAgentProcess.chat` (requires running agent and `/kurumi auto on`).
 
 For safety, manual Web execution requires the in-game local player to be `SekaiSaionji`. The script-generation preview still produces and validates *legacy* pseudocode only. These Web changes have not yet been validated in a real game.
+
+### Runtime rollback: Java interpreter default
+
+Kurumi's default chat agent is again the Java implementation. It uses the
+existing Java planning/execution stages and `KurumiPseudoExecutor` script
+interpreter. The client no longer auto-starts the CPython LangGraph HTTP
+service or Python-game tool server on login. Web manual execution selects the
+Java legacy interpreter only. `setup-agent.ps1` is **not required** for
+chat, planning or script execution. Previous Python sources and SQLite files
+are retained but not used by the default Java Agent.
+
+**Voice distinction:** network MP3 synthesis still uses Python `edge-tts`
+when speech is enabled. That is independent from the Java AI interpreter.
+For a fully Python-free deployment, disable the TTS feature separately; the
+browser remote MP3 output will then be unavailable until an alternative TTS
+backend is provided. This rollback does not yet migrate Python-agent memory
+or checkpoints into Java memory.
