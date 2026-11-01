@@ -473,9 +473,9 @@ public final class KurumiWebMonitor {
           </section>
           <section class="card">
             <h2>手动执行 · 引擎调试</h2>
-            <p class="muted">选择执行引擎。旧解释器和 GraalPy 接收脚本；LangGraph 接收自然语言任务，不会直接执行粘贴的 Python 代码。</p>
+            <p class="muted">当前使用 Java 手写解释器执行脚本，不需要安装 Python 或 LangGraph。</p>
             <label for="runEngine">执行引擎</label>
-            <select id="runEngine"><option value="legacy">旧 Java 伪代码（Legacy）</option><option value="python">GraalPy · Python 脚本</option><option value="langgraph">LangGraph · 自然语言任务</option></select>
+            <select id="runEngine"><option value="legacy">旧 Java 伪代码（Legacy）</option></select>
             <textarea id="runScript" placeholder="talk(get_player_status())"></textarea>
             <div class="controls"><button id="runBtn">确认并执行</button><span id="runStatus" class="feedback">空闲</span></div>
             <p class="muted" id="engineHelp">Legacy：旧脚本校验器；只支持受限伪 Python 语法。</p>
