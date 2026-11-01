@@ -196,6 +196,12 @@ public final class KurumiWebMonitor {
         addEvent(pending, "动作请求已接受：" + operation + "；运行结果仍待游戏确认");
         finishPending("已提交执行");
     }
+    /** Archive a normal Java chat response without a running script. */
+    public static synchronized void requestAnswered(String detail) {
+        if (pending == null) return;
+        addEvent(pending, "Java Agent 已完成：" + (detail == null ? "已回复" : detail));
+        finishPending("已完成");
+    }
     public static synchronized void requestFailed(String reason) {
         if (pending == null) return;
         addEvent(pending, "请求失败：" + reason);
