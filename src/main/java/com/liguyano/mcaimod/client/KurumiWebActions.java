@@ -255,7 +255,7 @@ public final class KurumiWebActions {
     public static synchronized String submitRun(String source) { return submitRun(source, "legacy"); }
 
     public static synchronized String submitRun(String source, String engine) {
-        if (!List.of("legacy", "python", "langgraph").contains(engine))
+        if (!"legacy".equals(engine))
             return "无效的执行引擎";
         if (source == null || source.isBlank() || source.length() > 8192)
             return "脚本不能为空且最多8192字";
