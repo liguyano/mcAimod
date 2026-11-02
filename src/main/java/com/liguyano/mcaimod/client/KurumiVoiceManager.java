@@ -22,7 +22,8 @@ import java.util.concurrent.ArrayBlockingQueue;
 
 /** Connects to an independently running loopback Irodori-TTS or AivisSpeech server. */
 public final class KurumiVoiceManager {
-    private static final ArrayBlockingQueue<String> QUEUE = new ArrayBlockingQueue<>(5);
+    private record Speech(String text, String emotion) {}
+    private static final ArrayBlockingQueue<Speech> QUEUE = new ArrayBlockingQueue<>(5);
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(3)).build();
     private static volatile boolean started;
@@ -72,11 +73,17 @@ public final class KurumiVoiceManager {
     }
 
     public static void speak(String message) {
+        speak(message, null);
+    }
+
+    public static void speak(String message, String emotion) {
         if (message == null || message.isBlank() || message.startsWith("/")) return;
+        if (emotion != null) KurumiEmotion.caption(emotion);
         install();
         String text = message.strip();
         if (text.length() > 200) text = text.substring(0, 200);
-        if (!QUEUE.offer(text)) { QUEUE.poll(); QUEUE.offer(text); }
+        Speech speech = new Speech(text, emotion);
+        if (!QUEUE.offer(speech)) { QUEUE.poll(); QUEUE.offer(speech); }
     }
 
     public static void test() {
@@ -85,9 +92,13 @@ public final class KurumiVoiceManager {
 
     /** Queue a Web-panel test using exactly the same synthesis and playback path as Kurumi dialogue. */
     public static void preview(String text) {
+        preview(text, "normal");
+    }
+
+    public static void preview(String text, String emotion) {
         if (text == null || text.isBlank() || text.length() > 200)
             throw new IllegalArgumentException("请输入 1 至 200 字符的试听文本");
-        speak(text);
+        speak(text, emotion);
     }
 
     public static synchronized void stop() {
@@ -127,11 +138,14 @@ public final class KurumiVoiceManager {
         return validateWav(response.body());
     }
 
-    private static byte[] synthesizeIrodori(String text, JsonObject config) throws Exception {
+    private static byte[] synthesizeIrodori(String text, JsonObject config, String emotion) throws Exception {
         float speed = Float.parseFloat(value(config, "speed", "1.0"));
+        String caption = emotion == null
+                ? value(config, "caption", "明るく可愛らしい日本のアニメ少女の声。親しみやすく自然な話し方。")
+                : KurumiEmotion.caption(emotion);
         JsonObject requestBody = IrodoriSpeechRequest.build(text,
                 value(config, "model", "irodori-tts"), value(config, "voice", "none"), speed,
-                value(config, "caption", "明るく可愛らしい日本のアニメ少女の声。親しみやすく自然な話し方。"));
+                caption);
         HttpRequest request = HttpRequest.newBuilder(endpoint(config, "/v1/audio/speech", ""))
                 .header("Content-Type", "application/json")
                 .timeout(Duration.ofSeconds(300))
@@ -142,9 +156,9 @@ public final class KurumiVoiceManager {
         return validateWav(response.body());
     }
 
-    private static byte[] synthesize(String text, JsonObject config) throws Exception {
+    private static byte[] synthesize(String text, JsonObject config, String emotion) throws Exception {
         return switch (value(config, "provider", "irodori")) {
-            case "irodori" -> synthesizeIrodori(text, config);
+            case "irodori" -> synthesizeIrodori(text, config, emotion);
             case "aivis" -> synthesizeAivis(text, config);
             default -> throw new IllegalArgumentException("未知语音后端，支持 irodori 或 aivis");
         };
@@ -179,10 +193,11 @@ public final class KurumiVoiceManager {
         while (!Thread.currentThread().isInterrupted()) {
             String text = null;
             try {
-                text = QUEUE.take();
+                Speech speech = QUEUE.take();
+                text = speech.text();
                 long generation = epoch;
                 JsonObject config = settings();
-                byte[] wav = synthesize(text, config);
+                byte[] wav = synthesize(text, config, speech.emotion());
                 if (generation != epoch) continue;
                 KurumiWebMonitor.publishAudio(text, wav, "audio/wav");
                 if (enabled() && Boolean.parseBoolean(value(config, "local_playback", "true"))) playWav(wav, generation);
