@@ -100,14 +100,8 @@ public final class KurumiVoiceManager {
     private static URI endpoint(JsonObject config, String path, String params) {
         String provider = value(config, "provider", "irodori");
         String base = value(config, "server_url", provider.equals("aivis")
-                ? "http://127.0.0.1:10101" : "http://127.0.0.1:8088");
-        URI uri = URI.create(base);
-        // Loopback only: never forward game speech to an arbitrary configured server.
-        String host = uri.getHost();
-        if (!"http".equals(uri.getScheme()) || !("127.0.0.1".equals(host) || "localhost".equals(host))
-                || uri.getUserInfo() != null || uri.getRawQuery() != null || uri.getRawFragment() != null)
-            throw new IllegalArgumentException("语音服务器必须是 http://127.0.0.1:端口");
-        return URI.create(base.replaceAll("/+$", "") + path + params);
+                ? "http://127.0.0.1:10101" : "https://kurumivoice.cpolar.top");
+        return KurumiVoiceEndpoint.resolve(base, path, params);
     }
 
     private static byte[] synthesizeAivis(String text, JsonObject config) throws Exception {
@@ -183,8 +177,9 @@ public final class KurumiVoiceManager {
 
     private static void work() {
         while (!Thread.currentThread().isInterrupted()) {
+            String text = null;
             try {
-                String text = QUEUE.take();
+                text = QUEUE.take();
                 long generation = epoch;
                 JsonObject config = settings();
                 byte[] wav = synthesize(text, config);
@@ -196,6 +191,7 @@ public final class KurumiVoiceManager {
                 return;
             } catch (Exception ex) {
                 KurumiWebMonitor.log("本地语音失败：" + ex.getMessage());
+                if (text != null) KurumiWebMonitor.publishVoiceError(text, ex.getMessage());
             }
         }
     }
