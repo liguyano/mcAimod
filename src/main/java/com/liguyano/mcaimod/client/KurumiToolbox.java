@@ -42,7 +42,30 @@ public final class KurumiToolbox {
             result.add("slots", matches);
             return result.toString();
         }
-        if ("inspect_container".equals(tool) || (tool != null && tool.startsWith("inspect_slot:"))) {
+        if ("inspect_container".equals(tool)) {
+            var menu = mc.player.containerMenu;
+            if (menu == mc.player.inventoryMenu) return "{\"error\":\"no_open_container\"}";
+            JsonObject out = new JsonObject();
+            JsonArray items = new JsonArray();
+            int containerSlots = 0;
+            for (int i = 0; i < menu.slots.size(); i++) {
+                var slot = menu.getSlot(i);
+                if (slot.container == mc.player.getInventory()) continue;
+                containerSlots++;
+                var stack = slot.getItem();
+                if (stack.isEmpty()) continue;
+                JsonObject item = new JsonObject();
+                item.addProperty("slot", i);
+                item.addProperty("id", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+                item.addProperty("count", stack.getCount());
+                items.add(item);
+            }
+            out.addProperty("menu_class", menu.getClass().getName());
+            out.addProperty("container_slots", containerSlots);
+            out.add("items", items);
+            return out.toString();
+        }
+        if ("inspect_container_full".equals(tool) || (tool != null && tool.startsWith("inspect_slot:"))) {
             var menu = mc.player.containerMenu;
             JsonObject out = new JsonObject();
             if (menu == mc.player.inventoryMenu) return "{\"error\":\"no_open_container\"}";
@@ -69,8 +92,13 @@ public final class KurumiToolbox {
                 info.addProperty("may_pickup", slot.mayPickup(mc.player));
                 info.addProperty("max_stack_size", slot.getMaxStackSize());
                 if (!stack.isEmpty()) {
-                    JsonObject details = itemDetails(stack);
-                    for (var entry : details.entrySet()) info.add(entry.getKey(), entry.getValue());
+                    if (selected >= 0) {
+                        JsonObject details = itemDetails(stack);
+                        for (var entry : details.entrySet()) info.add(entry.getKey(), entry.getValue());
+                    } else {
+                        info.addProperty("item_id", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+                        info.addProperty("count", stack.getCount());
+                    }
                     info.addProperty("may_place_same_item", slot.mayPlace(stack));
                 }
                 slots.add(info);
@@ -294,8 +322,6 @@ public final class KurumiToolbox {
                     JsonObject item = new JsonObject();
                     item.addProperty("item", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
                     item.addProperty("count", stack.getCount());
-                    JsonObject details = itemDetails(stack);
-                    for (var entry : details.entrySet()) item.add(entry.getKey(), entry.getValue());
                     items.add(item);
                 }
                 out.add("items", items);
