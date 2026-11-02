@@ -880,6 +880,9 @@ public final class KurumiClientController {
                 "脚本由 Java 内置的受限 Python 风格解释器执行，不支持真实 Python 运行时、外部包或任意文件访问。"
                 + "不要在脚本顶层写 return；只使用工具注册表及解析器支持的语法。"
                 + "可以调用 get_position()、goto(x,y,z)、talk(message)、observe(value)。"
+                + "表达式支持由变量和基本值组成的字典与列表字面量，例如"
+                + "observe({\"rods_in_inventory\": rod_count, \"container\": info}) 和 [1, 2, 3]；"
+                + "字典键使用字符串，允许嵌套但要保持结果简短。"
                 + "工具结果优先使用 result.success 一类字段访问，异步动作收到 success=true 仅代表已受理，仍需观察确认完成。"));
         conversation.add(new ChatMessage("system",
                 "Kurumi 的情绪语音由你在每条实际发言中选择：普通聊天用 talk(\"消息\", \"normal\")，"
