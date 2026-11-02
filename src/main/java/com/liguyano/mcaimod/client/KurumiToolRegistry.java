@@ -26,6 +26,7 @@ public final class KurumiToolRegistry {
         add("scan_dropped_items()", "inventory", "扫描掉落物");
         add("inspect_container()", "container", "查看已打开容器槽位");
         add("inspect_slot(index)", "container", "指定槽位信息");
+        add("find_container_items(item_id)", "container", "已打开容器按物品 ID 查询全部匹配槽位及总数，附附魔耐久");
         add("get_distance(kind,target)", "move", "查询目标距离");
         add("find_nearest_block(block_id)", "observe", "查找最近方块");
         add("search_all_block(block_id)", "harvest", "搜索已加载区域的方块坐标");
