@@ -582,16 +582,17 @@ public final class KurumiClientController {
             GATE.finish();
             return;
         }
-        if (pending == null && isOwner && SKILLS.findExactTrigger(message).isPresent()
-                && "()".equals(KurumiSkillMemory.signature(SKILLS.findExactTrigger(message).get()))) {
-            KurumiSkillMemory.Skill skill = SKILLS.findExactTrigger(message).get();
+        Optional<KurumiSkillMemory.Shortcut> shortcut = pending == null && isOwner
+                ? SKILLS.findShortcut(message) : Optional.empty();
+        if (shortcut.isPresent()) {
+            KurumiSkillMemory.Skill skill = shortcut.get().skill();
             if (!autoFarmEnabled) {
                 KurumiSpeech.say("ご主人さま、まず /kurumi auto on を有効にしてくださいねっ。");
                 GATE.finish();
                 return;
             }
             Optional<KurumiTaskPlanner.Program> program = KurumiScriptParser.parse(
-                    skill.code() + "\nresult = " + skill.name() + "()\nobserve(result)");
+                    skill.code() + "\nresult = " + shortcut.get().invocation() + "\nobserve(result)");
             if (program.isEmpty()) {
                 KurumiSpeech.say("スキルのコードを読み取れなかったので中止しました：" + KurumiScriptParser.lastError());
                 GATE.finish();
@@ -744,6 +745,8 @@ public final class KurumiClientController {
                         + "stop_fishing() 停止钓鱼，observe(get_fishing_status()) 查询实际状态。"
                         + "持续钓鱼直到停止或安全条件触发；改为其他移动/采集任务前必须先 stop_fishing()。"
                         + "sleep_in_bed() 才是游戏里睡觉：自动寻找附近24格的床，近处直接右键，远处先寻路再右键。"
+                        + "睡觉任务优先使用已有的 sleep_in_bed() 高级工具；需要先回家时先 goto(已确认的坐标)，再调用 sleep_in_bed()。"
+                        + "禁止为了睡觉逐个枚举 white_bed、orange_bed 等16种床；除非主人明确要求寻找特定颜色的床。"
                         + "用户说睡觉、回家睡觉、上床休息或睡到天亮时，必须调用 sleep_in_bed()；"
                         + "泛指查找床可用 find_nearest_block(\\\"minecraft:bed\\\") 匹配任意颜色；"
                         + "search_all_block(\\\"minecraft:bed\\\") 也匹配任意床，结果的 block_id 是实际颜色方块ID。"
@@ -897,8 +900,8 @@ public final class KurumiClientController {
                         + "。用户说回家、去某个已保存地点时，先核对维度与名称，"
                         + "使用 goto(x,y,z) 前往对应坐标；仅在确认抵达后才能声称到达。"
                         + "多步骤指令须逐步执行，不能把发出寻路命令当成已经到达。"
-                        + "只有主人发送完整指令“去 地点名”（去后是空格）才走本地快捷寻路；"
-                        + "“去仓库”“前往仓库”“回家”等交给你根据已保存地点自行规划。"));
+                        + "只有主人发送完整的“去 地点名”才使用本地快捷寻路；“去仓库”“前往仓库”“回家”等由你规划；"
+                        + "仅“地点名 在哪里”这类带空格的单句查询由客户端快捷处理。"));
         conversation.add(new ChatMessage("system",
                 "最高优先级输出规则：只允许一个 JSON 对象。信息不足时允许 type=clarify、question 字段，"
                 + "并且不能包含任何可执行动作；需要更多操作时 type 为 action，action 必须是 EXECUTE_SCRIPT，"
@@ -938,7 +941,7 @@ public final class KurumiClientController {
 
     private static String taskToolGuide(String request) {
         String input = request == null ? "" : request.toLowerCase(java.util.Locale.ROOT);
-        StringBuilder guide = new StringBuilder(KurumiToolRegistry.catalog());
+        StringBuilder guide = new StringBuilder(KurumiToolRegistry.catalogForRequest(request));
         boolean matched = false;
         if (input.contains("尸体") || input.contains("遗体") || input.contains("corpse") || input.contains("实体") || input.contains("上船") || input.contains("村民")) {
             guide.append("\n").append("实体与尸体：scan_nearby_entities() 返回 entities 数组（按距离排序），每项有 type/uuid/x/y/z。找最近的 corpse:corpse，记录 UUID；goto 到附近后重新扫描确认 UUID，interact(\"corpse:corpse\",uuid) 精确交互；inspect_container() 检查界面，再 take_all_items()，观察剩余物品。交互默认不自动转头。");
@@ -958,6 +961,10 @@ public final class KurumiClientController {
         }
         if (input.contains("走") || input.contains("来") || input.contains("跟") || input.contains("移动") || input.contains("寻路") || input.contains("回家") || input.contains("睡觉") || input.contains("床") || input.contains("视角") || input.contains("去")) {
             guide.append("\n").append("移动：goto(x,y,z) 坐标寻路；come(\"玩家名\") 到附近停止；follow(\"玩家名\") 持续跟随；move(\"forward\",n) 等相对移动1至16格；stop() 停止。look_at(x,y,z) 可选转头，interact(id) 默认不需看向目标但需在交互距离内。sleep(n) 只是等待，sleep_in_bed() 才是真睡觉。");
+            matched = true;
+        }
+        if (input.contains("睡") || input.contains("床")) {
+            guide.append("\n睡觉任务：sleep_in_bed() 自行寻找和使用附近床。回家后直接执行它，不要列出16种床颜色反复 find_nearest_block；床交互已受理后不要重复尝试。");
             matched = true;
         }
         if (input.contains("打") || input.contains("攻击") || input.contains("怪") || input.contains("战斗") || input.contains("逃跑") || input.contains("救命")) {
@@ -994,11 +1001,19 @@ public final class KurumiClientController {
                 + " suggest_skill 对象，字段为 name、title、description、triggers（建议的快捷触发词数组）、group（可选，默认 skills，需小写字母数字下划线）、code（只包含顶层 def 函数定义）。"
                 + "主人必须明确回复保存才会持久化；不要自行声称已保存。"
                 + "快捷指令成功后无需模型分析，失败时你要分析反馈，自行决定是否修正，不要机械重试。"));
-        PROVIDER.chat(profile, KurumiAgentContext.compact(withSkills, message,
+        List<ChatMessage> modelMessages = KurumiAgentContext.compact(withSkills, message,
                         agentSession.buildModelContext() + "\n当前变量快照（可能省略大值，变量本体保留于客户端）："
                         + snapshot.substring(0, Math.min(10000, snapshot.length()))
-                        + "\n" + KurumiPlayerDirectory.modelContext()))
-                .whenComplete((reply, error) -> minecraft.execute(() -> {
+                        + "\n" + KurumiPlayerDirectory.modelContext());
+        int inputChars = modelMessages.stream().mapToInt(item -> item.content().length()).sum();
+        long requestStarted = System.nanoTime();
+        KurumiWebMonitor.log("模型请求开始：输入字符=" + inputChars + "，重试次数=" + formatRetries);
+        PROVIDER.chat(profile, modelMessages)
+                .whenComplete((reply, error) -> {
+                    long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - requestStarted);
+                    minecraft.execute(() -> {
+                        KurumiWebMonitor.log(KurumiRequestMetrics.summary(elapsedMs, inputChars,
+                                reply == null ? 0 : reply.length(), formatRetries, error != null));
                     if (generation != requestGeneration) return;
                     if (!enabled || generation != requestGeneration || minecraft.player == null ||
                             minecraft.getConnection() == null) return;
@@ -1206,7 +1221,8 @@ public final class KurumiClientController {
                     if (updated.size() > 20) updated = new ArrayList<>(updated.subList(updated.size() - 20, updated.size()));
                     HISTORY.put(sender, updated);
                     // All model speech is delivered by script talk(), not the reply metadata.
-                }));
+                    });
+                });
     }
 
     private static boolean isReadOnlySpeech(List<KurumiTaskPlanner.Statement> statements) {

@@ -26,6 +26,9 @@ final class KurumiSkillMemory {
             this(name, title, description, triggers, code, version, "skills");
         }
     }
+    record Shortcut(Skill skill, String phrase, String args) {
+        String invocation() { return skill.name() + "(" + args + ")"; }
+    }
 
     private static final Set<String> RESERVED = Set.of("停止", "stop", "过来", "睡觉", "tp", "保存", "不保存", "取消");
     private static final int MAX_SKILLS = 128;
@@ -51,6 +54,123 @@ final class KurumiSkillMemory {
     synchronized Optional<Skill> findExactTrigger(String text) {
         String target = text.strip();
         return all().stream().filter(s -> s.triggers().contains(target)).findFirst();
+    }
+    synchronized Optional<Shortcut> findShortcut(String text) {
+        if (text == null) return Optional.empty();
+        String phrase = text.strip();
+        try {
+            JsonObject root = readRoot();
+            for (JsonElement element : root.getAsJsonArray("skills")) {
+                JsonObject entry = element.getAsJsonObject();
+                Skill skill = read(groupOf(entry), entry.get("name").getAsString()).orElse(null);
+                if (skill == null) continue;
+                for (JsonElement item : entry.getAsJsonArray("triggers"))
+                    if (phrase.equals(item.getAsString())) return Optional.of(new Shortcut(skill, phrase, ""));
+                if (entry.has("shortcuts")) for (JsonElement item : entry.getAsJsonArray("shortcuts")) {
+                    JsonObject shortcut = item.getAsJsonObject();
+                    if (phrase.equals(shortcut.get("phrase").getAsString()))
+                        return Optional.of(new Shortcut(skill, phrase, shortcut.get("args").getAsString()));
+                }
+            }
+        } catch (Exception ex) { KurumiWebMonitor.log("快捷触发读取失败：" + ex.getMessage()); }
+        return Optional.empty();
+    }
+
+    synchronized List<Shortcut> shortcuts(String group, String name) {
+        List<Shortcut> result = new ArrayList<>();
+        Skill skill = read(group, name).orElse(null);
+        if (skill == null) return result;
+        for (String trigger : skill.triggers()) result.add(new Shortcut(skill, trigger, ""));
+        try {
+            for (JsonElement element : readRoot().getAsJsonArray("skills")) {
+                JsonObject entry = element.getAsJsonObject();
+                if (!name.equals(entry.get("name").getAsString()) || !group.equals(groupOf(entry))) continue;
+                if (entry.has("shortcuts")) for (JsonElement item : entry.getAsJsonArray("shortcuts")) {
+                    JsonObject shortcut = item.getAsJsonObject();
+                    result.add(new Shortcut(skill, shortcut.get("phrase").getAsString(), shortcut.get("args").getAsString()));
+                }
+            }
+        } catch (Exception ex) { KurumiWebMonitor.log("快捷触发读取失败：" + ex.getMessage()); }
+        return List.copyOf(result);
+    }
+
+    synchronized boolean addShortcut(String group, String name, String phrase, String args) {
+        Skill skill = read(group, name).orElse(null);
+        if (skill == null || !validPhrase(phrase) || args == null || args.length() > 500
+                || !safeShortcutArgs(skill, args) || findShortcut(phrase).isPresent()) return false;
+        try {
+            JsonObject root = readRoot();
+            for (JsonElement element : root.getAsJsonArray("skills")) {
+                JsonObject entry = element.getAsJsonObject();
+                if (!name.equals(entry.get("name").getAsString()) || !group.equals(groupOf(entry))) continue;
+                JsonArray shortcuts = entry.has("shortcuts") ? entry.getAsJsonArray("shortcuts") : new JsonArray();
+                if (shortcuts.size() + entry.getAsJsonArray("triggers").size() >= 32) return false;
+                JsonObject shortcut = new JsonObject();
+                shortcut.addProperty("phrase", phrase);
+                shortcut.addProperty("args", args.strip());
+                shortcuts.add(shortcut);
+                entry.add("shortcuts", shortcuts);
+                return writeRoot(root);
+            }
+        } catch (Exception ex) { KurumiWebMonitor.log("快捷触发保存失败：" + ex.getMessage()); }
+        return false;
+    }
+
+    synchronized boolean removeShortcut(String group, String name, String phrase) {
+        if (!validPhrase(phrase)) return false;
+        try {
+            JsonObject root = readRoot();
+            for (JsonElement element : root.getAsJsonArray("skills")) {
+                JsonObject entry = element.getAsJsonObject();
+                if (!name.equals(entry.get("name").getAsString()) || !group.equals(groupOf(entry))) continue;
+                boolean removed = false;
+                JsonArray oldTriggers = entry.getAsJsonArray("triggers"), triggers = new JsonArray();
+                for (JsonElement trigger : oldTriggers) {
+                    if (phrase.equals(trigger.getAsString())) removed = true;
+                    else triggers.add(trigger);
+                }
+                entry.add("triggers", triggers);
+                JsonArray shortcuts = new JsonArray();
+                if (entry.has("shortcuts")) for (JsonElement item : entry.getAsJsonArray("shortcuts")) {
+                    if (phrase.equals(item.getAsJsonObject().get("phrase").getAsString())) removed = true;
+                    else shortcuts.add(item);
+                }
+                entry.add("shortcuts", shortcuts);
+                return removed && writeRoot(root);
+            }
+        } catch (Exception ex) { KurumiWebMonitor.log("快捷触发删除失败：" + ex.getMessage()); }
+        return false;
+    }
+
+    private static boolean validPhrase(String phrase) {
+        return phrase != null && !phrase.isBlank() && phrase.length() <= 28
+                && phrase.equals(phrase.strip()) && !RESERVED.contains(phrase);
+    }
+    private static boolean safeShortcutArgs(Skill skill, String args) {
+        String signature = signature(skill);
+        if ("(未知)".equals(signature)) return false;
+        String parameters = signature.substring(1, signature.length() - 1).strip();
+        int count = parameters.isEmpty() ? 0 : parameters.split(",", -1).length;
+        // Literal-only presets: strings, numbers, booleans and literal pos(x,y,z).
+        String atom = "(?:\"(?:[^\"\\\\]|\\\\[\"\\\\nrt])*\"|'(?:[^'\\\\]|\\\\['\\\\nrt])*'|-?\\d+(?:\\.\\d+)?|true|false|True|False|pos\\(\\s*-?\\d+\\s*,\\s*-?\\d+\\s*,\\s*-?\\d+\\s*\\))";
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(atom).matcher(args);
+        int found = 0, offset = 0;
+        while (matcher.find()) {
+            if (!args.substring(offset, matcher.start()).matches(found == 0 ? "\\s*" : "\\s*,\\s*")) return false;
+            found++;
+            offset = matcher.end();
+        }
+        if (found != count || !args.substring(offset).isBlank()) return false;
+        return KurumiScriptParser.parse(skill.code() + "\nresult = " + skill.name() + "(" + args + ")\nobserve(result)").isPresent();
+    }
+
+    private boolean writeRoot(JsonObject root) throws IOException {
+        Files.createDirectories(path.getParent());
+        Path pending = path.resolveSibling(path.getFileName() + ".tmp");
+        Files.writeString(pending, new GsonBuilder().setPrettyPrinting().create().toJson(root), StandardCharsets.UTF_8);
+        try { Files.move(pending, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
+        catch (java.nio.file.AtomicMoveNotSupportedException ex) { Files.move(pending, path, StandardCopyOption.REPLACE_EXISTING); }
+        return true;
     }
     synchronized String titles() {
         StringBuilder out = new StringBuilder();
@@ -181,6 +301,8 @@ final class KurumiSkillMemory {
                 if (entry.get("name").getAsString().equals(candidate.name()) && groupOf(entry).equals(candidate.group())) continue;
                 JsonArray triggers = entry.getAsJsonArray("triggers");
                 for (JsonElement value : triggers) if (candidate.triggers().contains(value.getAsString())) return false;
+                if (entry.has("shortcuts")) for (JsonElement value : entry.getAsJsonArray("shortcuts"))
+                    if (candidate.triggers().contains(value.getAsJsonObject().get("phrase").getAsString())) return false;
             }
             JsonArray updated = new JsonArray();
             boolean replaced = false;
@@ -198,8 +320,10 @@ final class KurumiSkillMemory {
                 history.add(prior);
                 JsonArray trimmed = new JsonArray();
                 for (int i = Math.max(0, history.size() - 5); i < history.size(); i++) trimmed.add(history.get(i));
-                updated.add(toJson(new Skill(candidate.name(), candidate.title(), candidate.description(),
-                        candidate.triggers(), candidate.code(), old.get("version").getAsInt() + 1, candidate.group()), trimmed));
+                JsonObject replacement = toJson(new Skill(candidate.name(), candidate.title(), candidate.description(),
+                        candidate.triggers(), candidate.code(), old.get("version").getAsInt() + 1, candidate.group()), trimmed);
+                if (old.has("shortcuts")) replacement.add("shortcuts", old.getAsJsonArray("shortcuts"));
+                updated.add(replacement);
             }
             if (!replaced) updated.add(toJson(candidate, new JsonArray()));
             root.add("skills", updated);

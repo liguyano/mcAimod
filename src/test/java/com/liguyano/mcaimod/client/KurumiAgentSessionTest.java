@@ -44,5 +44,6 @@ class KurumiAgentSessionTest {
         assertTrue(result.stream().anyMatch(m -> m.content().contains("收集钻石")));
         assertTrue(result.stream().anyMatch(m -> m.content().contains("观察结果44")));
         assertTrue(result.stream().mapToInt(m -> m.content().length()).sum() <= 48000);
+        assertTrue(result.stream().mapToInt(m -> m.content().length()).sum() <= 32000);
     }
 }

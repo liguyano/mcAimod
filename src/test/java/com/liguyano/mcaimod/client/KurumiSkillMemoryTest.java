@@ -10,6 +10,27 @@ import static org.junit.jupiter.api.Assertions.*;
 class KurumiSkillMemoryTest {
     @TempDir Path temp;
 
+    @Test void shortcutsAreAddedAfterSavingAndKeepDistinctParameters() {
+        var store = new KurumiSkillMemory(temp.resolve("skills.json"));
+        assertFalse(store.addShortcut("skills", "wood", "砍樱花树", "\"minecraft:cherry_log\", 16"));
+        assertTrue(store.saveApproved(new KurumiSkillMemory.Skill("wood", "木头", "采集木头", List.of(),
+                "def wood(block_id, radius):\n    return block_id", 1)));
+        assertTrue(store.addShortcut("skills", "wood", "砍樱花树", "\"minecraft:cherry_log\", 16"));
+        assertTrue(store.addShortcut("skills", "wood", "砍橡树", "\"minecraft:oak_log\", 8"));
+        assertEquals("wood(\"minecraft:cherry_log\", 16)", store.findShortcut("砍樱花树").orElseThrow().invocation());
+        assertEquals("wood(\"minecraft:oak_log\", 8)", new KurumiSkillMemory(temp.resolve("skills.json"))
+                .findShortcut("砍橡树").orElseThrow().invocation());
+        assertFalse(store.addShortcut("skills", "wood", "危险", "stop()"));
+        assertFalse(store.addShortcut("skills", "wood", "缺参数", "16"));
+        assertFalse(store.addShortcut("skills", "wood", "砍橡树", "\"minecraft:oak_log\", 16"));
+        assertTrue(store.saveApproved(new KurumiSkillMemory.Skill("wood", "新版木头", "采集木头", List.of(),
+                "def wood(block_id, radius):\n    return block_id", 1)));
+        assertEquals("wood(\"minecraft:oak_log\", 8)", store.findShortcut("砍橡树").orElseThrow().invocation());
+        assertTrue(store.removeShortcut("skills", "wood", "砍樱花树"));
+        assertTrue(store.findShortcut("砍樱花树").isEmpty());
+        assertTrue(store.findShortcut("砍橡树").isPresent());
+    }
+
     @Test void requiresValidFunctionAndPersistsApprovedSkills() {
         var store = new KurumiSkillMemory(temp.resolve("skills.json"));
         var skill = new KurumiSkillMemory.Skill("loot_corpse", "捡尸体", "寻找尸体并取物",

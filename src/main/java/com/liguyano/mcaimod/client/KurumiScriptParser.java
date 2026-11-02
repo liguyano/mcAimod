@@ -42,7 +42,7 @@ public final class KurumiScriptParser {
     private static final Pattern FOR_RANGE = Pattern.compile("for ([a-z][a-z0-9_]{0,23}) in range\\(([^()]*)\\):");
     private static final Pattern DEFINITION = Pattern.compile("def ([a-z][a-z0-9_]{0,23})\\(([^()]*)\\):");
     private static final Pattern SIMPLE_CALL = Pattern.compile("([a-z][a-z0-9_]{0,23})\\((.*)\\)");
-    private static final String RAISE_PART = "(?:\"[^\"\\r\\n]{1,190}\"|[a-z][a-z0-9_]{0,23}(?:\\.[a-z][a-z0-9_]{0,23})*)";
+    private static final String RAISE_PART = "(?:\"[^\"\\r\\n]{1,190}\"|'[^'\\r\\n]{1,190}'|[a-z][a-z0-9_]{0,23}(?:\\.[a-z][a-z0-9_]{0,23})*)";
     private static final Pattern RAISE_EXPRESSION = Pattern.compile(RAISE_PART + "(?:\\s*\\+\\s*" + RAISE_PART + ")*");
     static boolean safeRaiseExpression(String expression) {
         return expression != null && expression.length() <= 500

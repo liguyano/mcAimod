@@ -265,15 +265,6 @@ public final class KurumiWebActions {
         return null;
     }
 
-    private static boolean ownerOnly(List<KurumiTaskPlanner.Statement> statements) {
-        for (var stmt : statements) {
-            if (stmt.step() != null && List.of("ATTACK_PLAYER", "DROP_ALL", "CHEST_PUT_ALL",
-                    "CHEST_TAKE_ALL", "TPA_ACCEPT").contains(stmt.step().action())) return true;
-            if (ownerOnly(stmt.body()) || ownerOnly(stmt.otherwise())) return true;
-        }
-        return false;
-    }
-
     private static void runOnClient(String source, String engine) {
         String error = null;
         boolean queuedAgent = false;
@@ -285,8 +276,6 @@ public final class KurumiWebActions {
                     || KurumiPlanExecutor.busy() || KurumiLongTaskBridge.busy()
                     || KurumiChestCraftTask.busy())
                 error = "已有任务在执行";
-            else if (!"SekaiSaionji".equals(mc.player.getName().getString()))
-                error = "Web 手动执行仅允许主人操作";
             else if ("python".equals(engine)) {
                 if (!KurumiPythonRuntime.available()) error = "GraalPy 运行时不可用";
                 else if (!KurumiClientController.pythonAgentActionsAllowed())
@@ -319,9 +308,6 @@ public final class KurumiWebActions {
             } else {
                 Optional<KurumiTaskPlanner.Program> program = KurumiScriptParser.parse(source);
                 if (program.isEmpty()) error = "脚本校验失败：" + KurumiScriptParser.lastError();
-                else if (ownerOnly(program.get().statements())
-                        && !"SekaiSaionji".equals(mc.player.getName().getString()))
-                    error = "该任务包含仅主人可以执行的操作";
                 else {
                     KurumiWebMonitor.requirement("Web 旧解释器调试");
                     var result = KurumiPseudoExecutor.start(program.get());

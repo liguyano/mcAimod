@@ -36,21 +36,22 @@ public final class KurumiExpressions {
         java.util.List<JsonElement> values = new java.util.ArrayList<>();
         if (source.isBlank()) return values;
         int depth = 0, start = 0;
-        boolean quoted = false;
+        char quote = 0;
         for (int i = 0; i <= source.length(); i++) {
-            if (i == source.length() || (source.charAt(i) == ',' && depth == 0 && !quoted)) {
+            if (i == source.length() || (source.charAt(i) == ',' && depth == 0 && quote == 0)) {
                 if (values.size() >= 7 || start == i) throw new IllegalArgumentException("参数数量或格式错误");
                 values.add(evaluate(source.substring(start, i), vars));
                 start = i + 1;
                 continue;
             }
             char c = source.charAt(i);
-            if (c == '"') quoted = !quoted;
-            else if (!quoted && c == '(') depth++;
-            else if (!quoted && c == ')') depth--;
+            if (quote != 0 && c == quote) quote = 0;
+            else if (quote == 0 && (c == '"' || c == '\'')) quote = c;
+            else if (quote == 0 && c == '(') depth++;
+            else if (quote == 0 && c == ')') depth--;
             if (depth < 0 || depth > 6) throw new IllegalArgumentException("表达式括号不匹配");
         }
-        if (quoted || depth != 0) throw new IllegalArgumentException("表达式括号或引号不匹配");
+        if (quote != 0 || depth != 0) throw new IllegalArgumentException("表达式括号或引号不匹配");
         return values;
     }
     public static String text(JsonElement element) {
@@ -168,8 +169,9 @@ public final class KurumiExpressions {
         if (++operations > 80) throw new IllegalArgumentException("表达式过于复杂");
         spaces();
         if (take("(")) { JsonElement x=or(); expect(")"); return fields(x); }
-        if (at < input.length() && input.charAt(at) == '"') {
-            int start = at++, end = input.indexOf('"',at);
+        if (at < input.length() && (input.charAt(at) == '"' || input.charAt(at) == '\'')) {
+            char quote = input.charAt(at);
+            int start = at++, end = input.indexOf(quote,at);
             if (end<0 || end-start>190) throw new IllegalArgumentException("字符串格式错误");
             String value=input.substring(at,end);
             at=end+1;

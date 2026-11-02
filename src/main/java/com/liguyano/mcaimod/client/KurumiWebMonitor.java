@@ -64,6 +64,14 @@ public final class KurumiWebMonitor {
         JsonArray triggers = new JsonArray();
         for (String trigger : skill.triggers()) triggers.add(trigger);
         item.add("triggers", triggers);
+        JsonArray shortcuts = new JsonArray();
+        for (KurumiSkillMemory.Shortcut shortcut : KurumiSkillMemory.configured().shortcuts(skill.group(), skill.name())) {
+            JsonObject preset = new JsonObject();
+            preset.addProperty("phrase", shortcut.phrase());
+            preset.addProperty("args", shortcut.args());
+            shortcuts.add(preset);
+        }
+        item.add("shortcuts", shortcuts);
         return item;
     }
 
@@ -111,6 +119,19 @@ public final class KurumiWebMonitor {
                 reply(exchange, deleted ? 200 : 404, result);
                 return;
             }
+            if ("add_shortcut".equals(action) || "remove_shortcut".equals(action)) {
+                String group = payload.has("group") ? payload.get("group").getAsString() : "skills";
+                String name = payload.get("name").getAsString();
+                String phrase = payload.get("phrase").getAsString();
+                boolean accepted = "add_shortcut".equals(action)
+                        ? store.addShortcut(group, name, phrase, payload.get("args").getAsString())
+                        : store.removeShortcut(group, name, phrase);
+                JsonObject result = new JsonObject();
+                result.addProperty("accepted", accepted);
+                if (!accepted) result.addProperty("error", "快捷触发无效：检查技能是否已保存、参数个数/格式及触发词是否冲突");
+                reply(exchange, accepted ? 200 : 400, result);
+                return;
+            }
             String name = payload.get("name").getAsString();
             String group = payload.has("group") ? payload.get("group").getAsString() : "skills";
             String title = payload.get("title").getAsString();
@@ -120,6 +141,9 @@ public final class KurumiWebMonitor {
                     ? payload.getAsJsonArray("triggers") : new JsonArray();
             List<String> triggers = new java.util.ArrayList<>();
             for (var trigger : triggerArray) triggers.add(trigger.getAsString());
+            // Editing a saved skill must not discard existing shortcut configuration.
+            if (!payload.has("triggers"))
+                store.read(group, name).ifPresent(existing -> triggers.addAll(existing.triggers()));
             KurumiSkillMemory.Skill candidate = new KurumiSkillMemory.Skill(
                     name, title, description, List.copyOf(triggers), code, 1, group);
             boolean saved = store.saveApproved(candidate);
@@ -501,12 +525,11 @@ public final class KurumiWebMonitor {
         <div class="cols">
           <section class="card">
             <h3>手动新增 / 编辑技能</h3>
-            <p class="muted">代码必须是解释器支持的 def 函数；触发词用英文逗号分隔。保存后立即生效，修改会保留最近版本。</p>
+            <p class="muted">代码必须是解释器支持的 def 函数。先保存技能，再在右侧技能管理中添加带固定参数的快捷触发；修改会保留最近版本。</p>
             <label for="skillGroup">分组名（默认 skills）</label><input id="skillGroup" placeholder="skills" value="skills" maxlength="24">
             <label for="skillName">函数名（例如 loot_corpse）</label><input id="skillName" placeholder="loot_corpse" maxlength="24">
             <label for="skillTitle">标题</label><input id="skillTitle" placeholder="捡尸体" maxlength="48">
             <label for="skillDescription">说明</label><input id="skillDescription" placeholder="寻找最近的尸体并取出所有物品" maxlength="240">
-            <label for="skillTriggers">快捷触发词（可留空）</label><input id="skillTriggers" placeholder="捡尸体, 收尸">
             <label for="skillCode">函数代码</label><textarea id="skillCode" placeholder="def loot_corpse():"></textarea>
             <div class="controls"><button id="saveSkillBtn" type="button">保存技能</button><button id="clearSkillBtn" class="secondary" type="button">清空表单</button><span id="skillFeedback" class="feedback"></span></div>
           </section>
@@ -605,7 +628,28 @@ public final class KurumiWebMonitor {
             const card=el('article','skill-row');
             card.append(el('strong','',skill.title+' ('+(skill.group||'skills')+'.'+skill.name+') · v'+skill.version));
             card.append(el('p','muted',skill.description||''));
-            card.append(el('p','', '快捷触发词：'+((skill.triggers||[]).join('、')||'无')));
+            const shortcutList=el('div','');
+            shortcutList.append(el('p','muted','快捷触发（固定参数按函数参数顺序填写）：'));
+            for(const shortcut of (skill.shortcuts||[])){
+              const line=el('div','skill-actions');
+              line.append(el('span','',shortcut.phrase+' → '+skill.name+'('+(shortcut.args||'')+')'));
+              const drop=el('button','secondary','删除触发');drop.type='button';
+              drop.addEventListener('click',async()=>{
+                if(!confirm('删除快捷触发「'+shortcut.phrase+'」？'))return;
+                await changeShortcut('remove_shortcut',skill,shortcut.phrase,'');
+              });
+              line.append(drop);shortcutList.append(line);
+            }
+            if(!(skill.shortcuts||[]).length)shortcutList.append(el('p','muted','暂无快捷触发'));
+            const phraseInput=el('input');phraseInput.placeholder='快捷触发词，例如：砍樱花树';phraseInput.maxLength=28;
+            const argsInput=el('input');argsInput.placeholder='固定参数，例如："minecraft:cherry_log", 16';
+            const add=el('button','secondary','添加快捷触发');add.type='button';
+            add.addEventListener('click',async()=>{
+              const phrase=phraseInput.value.trim();
+              if(!phrase){document.getElementById('skillFeedback').textContent='请填写快捷触发词';return;}
+              await changeShortcut('add_shortcut',skill,phrase,argsInput.value.trim());
+            });
+            shortcutList.append(phraseInput,argsInput,add);card.append(shortcutList);
             const details=el('details');details.append(el('summary','','查看函数代码'));
             const code=el('pre','logs',skill.code||'');code.style.maxHeight='240px';code.style.overflow='auto';
             details.append(code);card.append(details);
@@ -616,7 +660,6 @@ public final class KurumiWebMonitor {
               document.getElementById('skillName').value=skill.name;
               document.getElementById('skillTitle').value=skill.title;
               document.getElementById('skillDescription').value=skill.description;
-              document.getElementById('skillTriggers').value=(skill.triggers||[]).join(', ');
               document.getElementById('skillCode').value=skill.code||'';
               document.getElementById('skillFeedback').textContent='已载入 '+skill.name+'，保存后会生成新版本';
               document.getElementById('skillName').focus();
@@ -637,17 +680,27 @@ public final class KurumiWebMonitor {
             actions.append(edit,remove);card.append(actions);list.append(card);
           }
         }
+        async function changeShortcut(action,skill,phrase,args){
+          const feedback=document.getElementById('skillFeedback');
+          try{
+            const response=await fetch('/api/skills',{method:'POST',headers:authHeaders({'Content-Type':'application/json','X-Kurumi-Web':'1'}),
+              body:JSON.stringify({action,group:skill.group||'skills',name:skill.name,phrase,args})});
+            const data=await response.json();
+            if(!response.ok||!data.accepted)throw Error(data.error||'操作失败');
+            feedback.textContent=(action==='add_shortcut'?'已添加':'已删除')+'快捷触发：'+phrase;
+            await loadSkills();
+          }catch(error){feedback.textContent=String(error.message||error);}
+        }
         async function saveSkill(){
           const name=document.getElementById('skillName').value.trim();
           const group=document.getElementById('skillGroup').value.trim()||'skills';
           const title=document.getElementById('skillTitle').value.trim();
           const description=document.getElementById('skillDescription').value.trim();
-          const triggers=document.getElementById('skillTriggers').value.split(',').map(x=>x.trim()).filter(Boolean);
           const code=document.getElementById('skillCode').value;
           const feedback=document.getElementById('skillFeedback');
           try{
             const response=await fetch('/api/skills',{method:'POST',headers:authHeaders({'Content-Type':'application/json','X-Kurumi-Web':'1'}),
-              body:JSON.stringify({action:'save',group,name,title,description,triggers,code})});
+              body:JSON.stringify({action:'save',group,name,title,description,code})});
             const data=await response.json();
             
             if(!response.ok||!data.accepted)throw Error(data.error||'保存失败');
@@ -658,7 +711,7 @@ public final class KurumiWebMonitor {
         document.getElementById('saveSkillBtn').addEventListener('click',saveSkill);
         document.getElementById('clearSkillBtn').addEventListener('click',()=>{
           document.getElementById('skillGroup').value='skills';
-          for(const id of ['skillName','skillTitle','skillDescription','skillTriggers','skillCode'])document.getElementById(id).value='';
+          for(const id of ['skillName','skillTitle','skillDescription','skillCode'])document.getElementById(id).value='';
           document.getElementById('skillFeedback').textContent='表单已清空';
         });
         document.getElementById('refreshSkillsBtn').addEventListener('click',loadSkills);
