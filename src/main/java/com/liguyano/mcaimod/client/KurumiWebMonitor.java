@@ -44,6 +44,15 @@ public final class KurumiWebMonitor {
         while (SPEECH.size() > 20) SPEECH.removeFirst();
         while (AUDIO.size() > 20) AUDIO.remove(AUDIO.keySet().iterator().next());
     }
+    /** Publish synthesis errors too, so the Web player never waits indefinitely after a failed request. */
+    public static synchronized void publishVoiceError(String spoken, String reason) {
+        JsonObject event = new JsonObject();
+        event.addProperty("id", ++speechId);
+        event.addProperty("text", spoken == null ? "" : spoken.substring(0, Math.min(200, spoken.length())));
+        event.addProperty("error", reason == null ? "语音合成失败" : reason.substring(0, Math.min(500, reason.length())));
+        SPEECH.addLast(event.toString());
+        while (SPEECH.size() > 20) SPEECH.removeFirst();
+    }
     private static synchronized String speechEvents(long after) {
         JsonObject result = new JsonObject();
         result.addProperty("latest", speechId);
@@ -495,7 +504,7 @@ public final class KurumiWebMonitor {
             if(!initialized){initialized=true;last=data.latest||0;return;}
             for(const e of data.events||[]){if(e.id<=last)continue;
               last=e.id;document.getElementById('last').textContent=e.text;
-              document.getElementById('previewStatus').textContent='已生成';
+              document.getElementById('previewStatus').textContent=e.error?'生成失败：'+e.error:'已生成';
               if(active&&e.audio){pending.push(e.audio);if(pending.length>10)pending.shift();}
             }
             last=Math.max(last,data.latest||0);playNext();
