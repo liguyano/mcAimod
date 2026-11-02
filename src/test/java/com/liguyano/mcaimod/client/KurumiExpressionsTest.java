@@ -334,6 +334,7 @@ class KurumiExpressionsTest {
                 distance = get_distance("block","minecraft:furnace")
                 slots = inspect_container()
                 slot = inspect_slot(0)
+                matches = find_container_items("minecraft:diamond_sword")
                 talk(slot)
                 """;
         assertTrue(KurumiScriptParser.parse(script).isPresent());
