@@ -21,11 +21,12 @@ public final class KurumiToolRegistry {
         add("get_position()", "move", "获取当前位置");
         add("get_player_status()", "observe", "获取血量饥饿等");
         add("get_environment()", "observe", "周围环境");
-        add("get_inventory()", "inventory", "读取背包");
+        add("get_inventory()", "inventory", "精简读取背包物品 ID 和数量");
         add("scan_nearby_blocks()", "observe", "扫描方块");
         add("scan_dropped_items()", "inventory", "扫描掉落物");
-        add("inspect_container()", "container", "查看已打开容器槽位");
-        add("inspect_slot(index)", "container", "指定槽位信息");
+        add("inspect_container()", "container", "精简查看容器非空槽（仅容器物品，不含玩家背包）");
+        add("inspect_container_full()", "container", "完整查看所有槽位，包括空槽及玩家背包槽位");
+        add("inspect_slot(index)", "container", "指定槽位详细信息（包括附魔耐久）");
         add("find_container_items(item_id)", "container", "已打开容器按物品 ID 查询全部匹配槽位及总数，附附魔耐久");
         add("get_distance(kind,target)", "move", "查询目标距离");
         add("find_nearest_block(block_id)", "observe", "查找最近方块");
