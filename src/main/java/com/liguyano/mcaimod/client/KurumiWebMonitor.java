@@ -382,6 +382,30 @@ public final class KurumiWebMonitor {
                 exchange.sendResponseHeaders(200, bytes.length);
                 try (var out = exchange.getResponseBody()) { out.write(bytes); }
             });
+            server.createContext("/api/voice/test", exchange -> {
+                if (!"POST".equals(exchange.getRequestMethod())) {
+                    exchange.sendResponseHeaders(405, -1); exchange.close(); return;
+                }
+                if (!"1".equals(exchange.getRequestHeaders().getFirst("X-Kurumi-Web"))
+                        || !"application/json".equals(exchange.getRequestHeaders().getFirst("Content-Type"))) {
+                    JsonObject error = new JsonObject(); error.addProperty("error", "请通过 Kurumi 语音测试页面提交");
+                    reply(exchange, 400, error); return;
+                }
+                byte[] input = exchange.getRequestBody().readNBytes(2049);
+                if (input.length > 2048) {
+                    JsonObject error = new JsonObject(); error.addProperty("error", "请求过长");
+                    reply(exchange, 413, error); return;
+                }
+                try {
+                    JsonObject payload = JsonParser.parseString(new String(input, StandardCharsets.UTF_8)).getAsJsonObject();
+                    KurumiVoiceManager.preview(payload.get("text").getAsString());
+                    JsonObject result = new JsonObject(); result.addProperty("accepted", true);
+                    reply(exchange, 202, result);
+                } catch (RuntimeException ex) {
+                    JsonObject error = new JsonObject(); error.addProperty("error", "语音文本无效：" + ex.getMessage());
+                    reply(exchange, 400, error);
+                }
+            });
             server.createContext("/voice", exchange -> {
                 if (!"GET".equals(exchange.getRequestMethod())) { exchange.sendResponseHeaders(405, -1); exchange.close(); return; }
                 byte[] bytes = VOICE_PAGE.getBytes(StandardCharsets.UTF_8);
@@ -422,12 +446,16 @@ public final class KurumiWebMonitor {
         <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
         <title>Kurumi Voice</title><style>
         body{font:16px system-ui,sans-serif;background:#121624;color:#f0eaff;max-width:650px;margin:40px auto;padding:20px}
-        button,input{font:inherit;margin:7px;padding:9px;border-radius:8px}button{cursor:pointer}
+        button,input,textarea{font:inherit;margin:7px;padding:9px;border-radius:8px}button{cursor:pointer}
         section{padding:20px;background:#20263b;border-radius:18px}#last{white-space:pre-wrap;min-height:60px}
+        textarea{display:block;width:95%;background:#121624;color:#fff;border:1px solid #64748b}
         </style></head><body><h1>くるみ ♡ Voice Player</h1><section>
-        <p>くるみの MP3 をこの端末で再生します。再生開始を押してくださいね♪</p>
+        <p>くるみの音声をこの端末で再生します。再生開始を押してくださいね♪</p>
         <button id="start">▶ 再生開始</button><button id="stop">■ 停止</button>
         <label>音量 <input id="volume" type="range" min="0" max="1" step="0.05" value="0.8"></label>
+        <h3>语音试听</h3>
+        <textarea id="previewText" maxlength="200" rows="3">こんにちは、ご主人様！私はくるみです。</textarea>
+        <button id="preview">生成并试听</button><span id="previewStatus"></span>
         <p id="status">停止中</p><h3>最後のメッセージ</h3><div id="last">まだありません</div>
         </section><script>
         const player=new Audio(),pending=[];let active=false,last=0,initialized=false,playing=false;
@@ -446,6 +474,20 @@ public final class KurumiWebMonitor {
           active=false;pending.length=0;player.pause();player.removeAttribute('src');playing=false;
           document.getElementById('status').textContent='停止中';
         };
+        document.getElementById('preview').onclick=async()=>{
+          const btn=document.getElementById('preview');
+          const status=document.getElementById('previewStatus');
+          btn.disabled=true;status.textContent='正在提交…';
+          active=true;document.getElementById('status').textContent='再生中';
+          try{
+            const res=await fetch('/api/voice/test',{method:'POST',headers:{'Content-Type':'application/json','X-Kurumi-Web':'1'},
+              body:JSON.stringify({text:document.getElementById('previewText').value})});
+            const body=await res.json();
+            if(!res.ok)throw Error(body.error||res.status);
+            status.textContent='已提交，等待合成…';
+          }catch(err){status.textContent='提交失败：'+err.message;}
+          finally{btn.disabled=false;}
+        };
         async function poll(){
           try{
             const r=await fetch('/api/speech?after='+last,{cache:'no-store'});
@@ -453,6 +495,7 @@ public final class KurumiWebMonitor {
             if(!initialized){initialized=true;last=data.latest||0;return;}
             for(const e of data.events||[]){if(e.id<=last)continue;
               last=e.id;document.getElementById('last').textContent=e.text;
+              document.getElementById('previewStatus').textContent='已生成';
               if(active&&e.audio){pending.push(e.audio);if(pending.length>10)pending.shift();}
             }
             last=Math.max(last,data.latest||0);playNext();
