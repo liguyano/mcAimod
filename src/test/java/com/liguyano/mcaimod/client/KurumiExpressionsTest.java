@@ -333,6 +333,7 @@ class KurumiExpressionsTest {
                 target = find_nearest_block("minecraft:furnace")
                 distance = get_distance("block","minecraft:furnace")
                 slots = inspect_container()
+                full_slots = inspect_container_full()
                 slot = inspect_slot(0)
                 matches = find_container_items("minecraft:diamond_sword")
                 talk(slot)
