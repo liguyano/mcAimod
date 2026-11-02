@@ -36,6 +36,7 @@ public final class KurumiExpressions {
         java.util.List<JsonElement> values = new java.util.ArrayList<>();
         if (source.isBlank()) return values;
         int depth = 0, start = 0;
+        char[] open = new char[8];
         char quote = 0;
         for (int i = 0; i <= source.length(); i++) {
             if (i == source.length() || (source.charAt(i) == ',' && depth == 0 && quote == 0)) {
@@ -47,9 +48,16 @@ public final class KurumiExpressions {
             char c = source.charAt(i);
             if (quote != 0 && c == quote) quote = 0;
             else if (quote == 0 && (c == '"' || c == '\'')) quote = c;
-            else if (quote == 0 && c == '(') depth++;
-            else if (quote == 0 && c == ')') depth--;
-            if (depth < 0 || depth > 6) throw new IllegalArgumentException("表达式括号不匹配");
+            else if (quote == 0 && (c == '(' || c == '[' || c == '{')) {
+                if (depth >= open.length) throw new IllegalArgumentException("表达式嵌套太深");
+                open[depth++] = c;
+            } else if (quote == 0 && (c == ')' || c == ']' || c == '}')) {
+                if (depth == 0 || (c == ')' && open[depth - 1] != '(')
+                        || (c == ']' && open[depth - 1] != '[')
+                        || (c == '}' && open[depth - 1] != '{'))
+                    throw new IllegalArgumentException("表达式括号不匹配");
+                depth--;
+            }
         }
         if (quote != 0 || depth != 0) throw new IllegalArgumentException("表达式括号或引号不匹配");
         return values;
@@ -169,6 +177,39 @@ public final class KurumiExpressions {
         if (++operations > 80) throw new IllegalArgumentException("表达式过于复杂");
         spaces();
         if (take("(")) { JsonElement x=or(); expect(")"); return fields(x); }
+        if (take("{")) {
+            JsonObject result = new JsonObject();
+            if (!take("}")) {
+                while (true) {
+                    JsonElement key = primary();
+                    if (!key.isJsonPrimitive() || !key.getAsJsonPrimitive().isString())
+                        throw new IllegalArgumentException("字典键必须是字符串");
+                    String name = key.getAsString();
+                    if (name.length() > 64 || result.has(name))
+                        throw new IllegalArgumentException("字典键过长或重复");
+                    expect(":");
+                    if (result.size() >= 32) throw new IllegalArgumentException("字典元素过多");
+                    result.add(name, or());
+                    if (take("}")) break;
+                    expect(",");
+                    if (take("}")) break;
+                }
+            }
+            return fields(result);
+        }
+        if (take("[")) {
+            JsonArray result = new JsonArray();
+            if (!take("]")) {
+                while (true) {
+                    if (result.size() >= 32) throw new IllegalArgumentException("列表元素过多");
+                    result.add(or());
+                    if (take("]")) break;
+                    expect(",");
+                    if (take("]")) break;
+                }
+            }
+            return fields(result);
+        }
         if (at < input.length() && (input.charAt(at) == '"' || input.charAt(at) == '\'')) {
             char quote = input.charAt(at);
             int start = at++, end = input.indexOf(quote,at);
@@ -184,6 +225,7 @@ public final class KurumiExpressions {
         }
         if (keyword("True")) return new JsonPrimitive(true);
         if (keyword("False")) return new JsonPrimitive(false);
+        if (keyword("None")) return JsonNull.INSTANCE;
         String name=identifier();
         if (name.isEmpty()) throw new IllegalArgumentException("非法表达式");
         if ("true".equals(name)) return new JsonPrimitive(true);
@@ -210,10 +252,17 @@ public final class KurumiExpressions {
             } else if (take("[")) {
                 JsonElement indexValue=or();
                 expect("]");
-                int index=integer(indexValue);
-                if (!value.isJsonArray() || index<0 || index>=value.getAsJsonArray().size())
-                    throw new IllegalArgumentException("数组下标越界或目标不是数组");
-                value=value.getAsJsonArray().get(index);
+                if (value.isJsonObject() && indexValue.isJsonPrimitive()
+                        && indexValue.getAsJsonPrimitive().isString()) {
+                    String key = indexValue.getAsString();
+                    if (!value.getAsJsonObject().has(key)) throw new IllegalArgumentException("字典字段不存在: " + key);
+                    value = value.getAsJsonObject().get(key);
+                } else {
+                    int index=integer(indexValue);
+                    if (!value.isJsonArray() || index<0 || index>=value.getAsJsonArray().size())
+                        throw new IllegalArgumentException("数组下标越界或目标不是数组");
+                    value=value.getAsJsonArray().get(index);
+                }
             } else return value;
         }
     }
