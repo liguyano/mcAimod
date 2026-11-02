@@ -14,7 +14,7 @@ public final class KurumiExpressions {
                 "check_inventory_count", "get_crafting_recipe", "check_nearby_chest",
                 "get_nearby_chest_result", "get_position", "get_player_status", "get_environment",
                 "get_inventory", "scan_nearby_entities", "scan_nearby_blocks", "scan_dropped_items",
-                "inspect_container", "inspect_slot", "get_distance").contains(name);
+                "inspect_container", "inspect_slot", "find_container_items", "get_distance").contains(name);
     }
     private final String input;
     private final Map<String, JsonElement> variables;
@@ -368,6 +368,10 @@ public final class KurumiExpressions {
                 int slot=integer(args.get(0));
                 if (slot < 0 || slot > 255) throw new IllegalArgumentException("槽位编号必须在0到255之间");
                 tool="inspect_slot:"+slot;
+            }
+            case "find_container_items" -> {
+                if (args.size()!=1) throw new IllegalArgumentException("find_container_items 需要物品 ID");
+                tool="find_container_items:"+string(args.get(0));
             }
             case "get_distance" -> {
                 if (args.size()!=2) throw new IllegalArgumentException("距离工具参数数量错误");
