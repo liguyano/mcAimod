@@ -83,6 +83,15 @@ public final class KurumiDecisionParser {
             if ("EXECUTE_SCRIPT".equals(name)) {
                 if (!object.has("script") || !object.get("script").isJsonPrimitive()) return Optional.empty();
                 String script = object.get("script").getAsString();
+                // Reject malformed imports before accessing disk-backed skill memory.
+                // This also keeps plain Java parser validation independent of NeoForge startup.
+                for (String line : script.lines().toList()) {
+                    String trimmed = line.strip();
+                    if (trimmed.startsWith("import ") && !trimmed.matches("import [a-z][a-z0-9_]{0,23}\\.[a-z][a-z0-9_]{0,23}"))
+                        return Optional.empty();
+                    if (trimmed.startsWith("from ") && !trimmed.matches("from [a-z][a-z0-9_]{0,23} import [a-z][a-z0-9_]{0,23}(\\s*,\\s*[a-z][a-z0-9_]{0,23})*"))
+                        return Optional.empty();
+                }
                 if (script.lines().map(String::stripLeading).anyMatch(line ->
                         line.startsWith("from ") || line.startsWith("import ")
                                 || line.startsWith("run_skill(")))
