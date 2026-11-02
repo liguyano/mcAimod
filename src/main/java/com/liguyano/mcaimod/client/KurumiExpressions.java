@@ -14,7 +14,7 @@ public final class KurumiExpressions {
                 "check_inventory_count", "get_crafting_recipe", "check_nearby_chest",
                 "get_nearby_chest_result", "get_position", "get_player_status", "get_environment",
                 "get_inventory", "scan_nearby_entities", "scan_nearby_blocks", "scan_dropped_items",
-                "inspect_container", "inspect_slot", "find_container_items", "get_distance").contains(name);
+                "inspect_container", "inspect_container_full", "inspect_slot", "find_container_items", "get_distance").contains(name);
     }
     private final String input;
     private final Map<String, JsonElement> variables;
@@ -359,7 +359,7 @@ public final class KurumiExpressions {
             }
             case "get_position", "get_player_status", "get_environment", "get_inventory",
                     "scan_nearby_entities", "scan_nearby_blocks", "scan_dropped_items",
-                    "inspect_container" -> {
+                    "inspect_container", "inspect_container_full" -> {
                 if (!args.isEmpty()) throw new IllegalArgumentException("工具不接受参数");
                 tool=name;
             }
