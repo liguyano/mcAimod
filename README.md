@@ -59,68 +59,16 @@ Current Java-backed features include, depending on context and server support:
 
 Some actions are asynchronous. The script must distinguish **request accepted** from **action completed**, and verify observable outcomes before claiming success.
 
-## v0.5.0: Embedded Python Work in Progress
+## Script execution: Java interpreter
 
-The long-term plan is **Java Agent + embedded GraalPy script execution + Java Minecraft tools**, *not* a Python rewrite of the model API or the entire Mod.
+Kurumi executes its restricted Python-style scripts entirely through the Java
+`KurumiScriptParser` and `KurumiPseudoExecutor`. This is not CPython: only the
+documented tool calls and syntax are supported. A completed script stops the
+task unless it explicitly yields with `observe()` or reports a failure.
 
-The repository now contains:
-- `python-prototype/`: a separate GraalPy proof of concept.
-- `KurumiEmbeddedPythonBridge.java`: experimental Java-to-GraalPy tool dispatch, native Python-compatible return value conversion, and an initial `observe()` stage-report mechanism.
-- GraalPy dependencies declared in the main Gradle build for integration work.
-
-**Experimental runtime switch:** The AI `EXECUTE_SCRIPT` path can be routed to GraalPy when the full runtime is available, with script completion and `observe(value)` handed back to the Java Agent. The old Java pseudocode validator still checks generated scripts first; it is **not unrestricted CPython**, and some valid Python programs will be rejected by the legacy validator. This source-level integration is **not yet verified in a regular NeoForge installation**.
-
-**Default engine:** Kurumi now prefers GraalPy when the runtime is present. If GraalPy classes are unavailable, it falls back to the original Java pseudocode executor. Set `-Dmcaimod.scriptEngine=legacy` to explicitly force the old engine. Packaging and in-game compatibility still require verification.
-
-**Packaging attempt:** The Gradle build now resolves GraalPy runtime dependencies, registers their JARs with NeoForge Jar-in-Jar, and adds a `verifyGraalPyJarJar` verification task. This is a source change, not proof that the final Mod loads in-game. Run `./gradlew clean build verifyGraalPyJarJar --no-configuration-cache` and test the resulting JAR in Minecraft. If the build or runtime fails, keep the Java legacy engine active until resolved. Full tool parity, authorization testing, asynchronous completion and real game tests are still outstanding. Do not assume every registered tool works correctly. Native libraries such as OpenCV are not bundled or guaranteed to work.
-
-## Importing Local Python Modules (Experimental)
-
-With the embedded GraalPy runtime installed, the **owner** can place reusable Python files in the Minecraft instance's configuration directory:
-
-```text
-.minecraft/
-  config/
-    mcaimod-python/
-      farming.py
-      helpers.py
-```
-
-For example, `config/mcaimod-python/helpers.py`:
-
-```python
-class InventoryHelper:
-    def count_stacks(self):
-        inventory = get_inventory()
-        return inventory
-```
-
-Then, in a model-generated script:
-
-```python
-from helpers import InventoryHelper
-helper = InventoryHelper()
-observe(helper.count_stacks())
-```
-
-Supported top-level import declarations are `import module_name` and
-`from module_name import SymbolName`. Local filenames must be simple Python
-identifiers with a `.py` extension; no package folders, relative paths,
-aliases, wildcard imports, or external pip modules. Scripts using local imports
-are allowed only for the configured owner with `/kurumi auto on` and the JVM
-flag `-Dmcaimod.scriptEngine=python`. The module directory is resolved from
-the **actual Minecraft instance's** `config/` folder.
-
-The Java runtime reads modules from this single trusted local directory and
-preloads them into GraalPy's `sys.modules`, so these are genuine Python
-`import` statements, not pseudocode expansion. Guest Python still has
-filesystem and process access disabled; an imported module can use only the
-game tools made available through Kurumi's bridge.
-
-**Caution:** this owner-only import path bypasses the legacy pseudocode AST
-validator. Install modules only from code you trust and test in a disposable
-world. Source integration and runtime distribution have not yet been
-independently validated in a live NeoForge game.
+The embedded GraalPy runtime, Java bridge, runtime dependencies, packaging
+checks, and local CPython-module import path have been removed. The historical
+`python-prototype/` directory is separate from the shipped Mod.
 
 ## Requirements
 
@@ -194,13 +142,10 @@ See [CHANGELOG.md](CHANGELOG.md) for implementation history. The project is unde
 
 ### Web execution engine selector (0.6.0)
 
-The Web panel's manual execution section now offers three explicit debugging backends:
-
-- **Legacy Java**: restricted pseudocode via `KurumiScriptParser` and `KurumiPseudoExecutor`.
-- **GraalPy**: Python source via `KurumiPythonRuntime.start` (requires packaged runtime and `/kurumi auto on`).
-- **LangGraph**: **natural-language task**, not arbitrary Python evaluation, forwarded to the separate CPython Agent via `KurumiAgentProcess.chat` (requires running agent and `/kurumi auto on`).
-
-For safety, manual Web execution requires the in-game local player to be `SekaiSaionji`. The script-generation preview still produces and validates *legacy* pseudocode only. These Web changes have not yet been validated in a real game.
+The Web panel executes restricted Java-interpreter scripts through
+`KurumiScriptParser` and `KurumiPseudoExecutor`. The separate LangGraph
+prototype is not required for this path. The script-generation preview uses
+the same restricted parser. These Web changes still require in-game testing.
 
 ### Runtime rollback: Java interpreter default
 
@@ -212,9 +157,7 @@ Java legacy interpreter only. `setup-agent.ps1` is **not required** for
 chat, planning or script execution. Previous Python sources and SQLite files
 are retained but not used by the default Java Agent.
 
-**Voice distinction:** network MP3 synthesis still uses Python `edge-tts`
-when speech is enabled. That is independent from the Java AI interpreter.
-For a fully Python-free deployment, disable the TTS feature separately; the
-browser remote MP3 output will then be unavailable until an alternative TTS
-backend is provided. This rollback does not yet migrate Python-agent memory
-or checkpoints into Java memory.
+**Voice:** Kurumi connects through Java HTTP to a separately running local
+AivisSpeech server (default `127.0.0.1:10101`). No Python, GraalPy, or TTS
+model files are bundled with the Mod. See [local voice setup](docs/kurumi-local-tts.md).
+The separate Python-agent memory and checkpoints are not migrated into Java.

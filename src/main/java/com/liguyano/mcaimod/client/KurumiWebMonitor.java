@@ -28,12 +28,14 @@ public final class KurumiWebMonitor {
     private static HttpServer server;
     private static long speechId;
     private static final Deque<String> SPEECH = new ArrayDeque<>();
-    private static final java.util.Map<Long, byte[]> AUDIO = new java.util.LinkedHashMap<>();
-    /** Called after successful Edge TTS synthesis; only Kurumi-authored speech enters here. */
-    public static synchronized void publishAudio(String spoken, byte[] mp3) {
-        if (spoken == null || spoken.isBlank() || mp3 == null || mp3.length == 0 || mp3.length > 2_000_000) return;
+    private record AudioData(byte[] bytes, String mimeType) {}
+    private static final java.util.Map<Long, AudioData> AUDIO = new java.util.LinkedHashMap<>();
+    /** Only Kurumi-authored speech enters the Web audio feed. */
+    public static synchronized void publishAudio(String spoken, byte[] audio, String mimeType) {
+        if (spoken == null || spoken.isBlank() || audio == null || audio.length == 0 || audio.length > 8_000_000
+                || !java.util.Set.of("audio/wav", "audio/mpeg").contains(mimeType)) return;
         long id = ++speechId;
-        AUDIO.put(id, mp3);
+        AUDIO.put(id, new AudioData(audio, mimeType));
         JsonObject event = new JsonObject();
         event.addProperty("id", id);
         event.addProperty("text", spoken.substring(0, Math.min(200, spoken.length())));
@@ -41,6 +43,15 @@ public final class KurumiWebMonitor {
         SPEECH.addLast(event.toString());
         while (SPEECH.size() > 20) SPEECH.removeFirst();
         while (AUDIO.size() > 20) AUDIO.remove(AUDIO.keySet().iterator().next());
+    }
+    /** Publish synthesis errors too, so the Web player never waits indefinitely after a failed request. */
+    public static synchronized void publishVoiceError(String spoken, String reason) {
+        JsonObject event = new JsonObject();
+        event.addProperty("id", ++speechId);
+        event.addProperty("text", spoken == null ? "" : spoken.substring(0, Math.min(200, spoken.length())));
+        event.addProperty("error", reason == null ? "语音合成失败" : reason.substring(0, Math.min(500, reason.length())));
+        SPEECH.addLast(event.toString());
+        while (SPEECH.size() > 20) SPEECH.removeFirst();
     }
     private static synchronized String speechEvents(long after) {
         JsonObject result = new JsonObject();
@@ -64,6 +75,14 @@ public final class KurumiWebMonitor {
         JsonArray triggers = new JsonArray();
         for (String trigger : skill.triggers()) triggers.add(trigger);
         item.add("triggers", triggers);
+        JsonArray shortcuts = new JsonArray();
+        for (KurumiSkillMemory.Shortcut shortcut : KurumiSkillMemory.configured().shortcuts(skill.group(), skill.name())) {
+            JsonObject preset = new JsonObject();
+            preset.addProperty("phrase", shortcut.phrase());
+            preset.addProperty("args", shortcut.args());
+            shortcuts.add(preset);
+        }
+        item.add("shortcuts", shortcuts);
         return item;
     }
 
@@ -111,6 +130,19 @@ public final class KurumiWebMonitor {
                 reply(exchange, deleted ? 200 : 404, result);
                 return;
             }
+            if ("add_shortcut".equals(action) || "remove_shortcut".equals(action)) {
+                String group = payload.has("group") ? payload.get("group").getAsString() : "skills";
+                String name = payload.get("name").getAsString();
+                String phrase = payload.get("phrase").getAsString();
+                boolean accepted = "add_shortcut".equals(action)
+                        ? store.addShortcut(group, name, phrase, payload.get("args").getAsString())
+                        : store.removeShortcut(group, name, phrase);
+                JsonObject result = new JsonObject();
+                result.addProperty("accepted", accepted);
+                if (!accepted) result.addProperty("error", "快捷触发无效：检查技能是否已保存、参数个数/格式及触发词是否冲突");
+                reply(exchange, accepted ? 200 : 400, result);
+                return;
+            }
             String name = payload.get("name").getAsString();
             String group = payload.has("group") ? payload.get("group").getAsString() : "skills";
             String title = payload.get("title").getAsString();
@@ -120,6 +152,9 @@ public final class KurumiWebMonitor {
                     ? payload.getAsJsonArray("triggers") : new JsonArray();
             List<String> triggers = new java.util.ArrayList<>();
             for (var trigger : triggerArray) triggers.add(trigger.getAsString());
+            // Editing a saved skill must not discard existing shortcut configuration.
+            if (!payload.has("triggers"))
+                store.read(group, name).ifPresent(existing -> triggers.addAll(existing.triggers()));
             KurumiSkillMemory.Skill candidate = new KurumiSkillMemory.Skill(
                     name, title, description, List.copyOf(triggers), code, 1, group);
             boolean saved = store.saveApproved(candidate);
@@ -335,13 +370,13 @@ public final class KurumiWebMonitor {
                 long id;
                 try { id = Long.parseLong(idString); }
                 catch (NumberFormatException e) { exchange.sendResponseHeaders(404, -1); exchange.close(); return; }
-                byte[] mp3;
-                synchronized (KurumiWebMonitor.class) { mp3 = AUDIO.get(id); }
-                if (mp3 == null) { exchange.sendResponseHeaders(404, -1); exchange.close(); return; }
-                exchange.getResponseHeaders().set("Content-Type", "audio/mpeg");
+                AudioData audio;
+                synchronized (KurumiWebMonitor.class) { audio = AUDIO.get(id); }
+                if (audio == null) { exchange.sendResponseHeaders(404, -1); exchange.close(); return; }
+                exchange.getResponseHeaders().set("Content-Type", audio.mimeType());
                 exchange.getResponseHeaders().set("Cache-Control", "no-store");
-                exchange.sendResponseHeaders(200, mp3.length);
-                try (var out = exchange.getResponseBody()) { out.write(mp3); }
+                exchange.sendResponseHeaders(200, audio.bytes().length);
+                try (var out = exchange.getResponseBody()) { out.write(audio.bytes()); }
             });
             server.createContext("/api/speech", exchange -> {
                 if (!"GET".equals(exchange.getRequestMethod())) { exchange.sendResponseHeaders(405, -1); exchange.close(); return; }
@@ -355,6 +390,31 @@ public final class KurumiWebMonitor {
                 exchange.getResponseHeaders().set("Cache-Control", "no-store");
                 exchange.sendResponseHeaders(200, bytes.length);
                 try (var out = exchange.getResponseBody()) { out.write(bytes); }
+            });
+            server.createContext("/api/voice/test", exchange -> {
+                if (!"POST".equals(exchange.getRequestMethod())) {
+                    exchange.sendResponseHeaders(405, -1); exchange.close(); return;
+                }
+                if (!"1".equals(exchange.getRequestHeaders().getFirst("X-Kurumi-Web"))
+                        || !"application/json".equals(exchange.getRequestHeaders().getFirst("Content-Type"))) {
+                    JsonObject error = new JsonObject(); error.addProperty("error", "请通过 Kurumi 语音测试页面提交");
+                    reply(exchange, 400, error); return;
+                }
+                byte[] input = exchange.getRequestBody().readNBytes(2049);
+                if (input.length > 2048) {
+                    JsonObject error = new JsonObject(); error.addProperty("error", "请求过长");
+                    reply(exchange, 413, error); return;
+                }
+                try {
+                    JsonObject payload = JsonParser.parseString(new String(input, StandardCharsets.UTF_8)).getAsJsonObject();
+                    KurumiVoiceManager.preview(payload.get("text").getAsString(),
+                            payload.has("emotion") ? payload.get("emotion").getAsString() : "normal");
+                    JsonObject result = new JsonObject(); result.addProperty("accepted", true);
+                    reply(exchange, 202, result);
+                } catch (RuntimeException ex) {
+                    JsonObject error = new JsonObject(); error.addProperty("error", "语音文本无效：" + ex.getMessage());
+                    reply(exchange, 400, error);
+                }
             });
             server.createContext("/voice", exchange -> {
                 if (!"GET".equals(exchange.getRequestMethod())) { exchange.sendResponseHeaders(405, -1); exchange.close(); return; }
@@ -396,12 +456,21 @@ public final class KurumiWebMonitor {
         <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
         <title>Kurumi Voice</title><style>
         body{font:16px system-ui,sans-serif;background:#121624;color:#f0eaff;max-width:650px;margin:40px auto;padding:20px}
-        button,input{font:inherit;margin:7px;padding:9px;border-radius:8px}button{cursor:pointer}
+        button,input,textarea,select{font:inherit;margin:7px;padding:9px;border-radius:8px}button{cursor:pointer}
         section{padding:20px;background:#20263b;border-radius:18px}#last{white-space:pre-wrap;min-height:60px}
+        textarea{display:block;width:95%;background:#121624;color:#fff;border:1px solid #64748b}
         </style></head><body><h1>くるみ ♡ Voice Player</h1><section>
-        <p>くるみの MP3 をこの端末で再生します。再生開始を押してくださいね♪</p>
+        <p>くるみの音声をこの端末で再生します。再生開始を押してくださいね♪</p>
         <button id="start">▶ 再生開始</button><button id="stop">■ 停止</button>
         <label>音量 <input id="volume" type="range" min="0" max="1" step="0.05" value="0.8"></label>
+        <h3>语音试听</h3>
+        <textarea id="previewText" maxlength="200" rows="3">こんにちは、ご主人様！私はくるみです。</textarea>
+        <label>情绪 <select id="emotion">
+          <option value="normal">普通</option><option value="happy">开心</option>
+          <option value="fear">害怕</option><option value="affection">撒娇</option>
+          <option value="shy">害羞</option><option value="sad">难过</option>
+        </select></label>
+        <button id="preview">生成并试听</button><span id="previewStatus"></span>
         <p id="status">停止中</p><h3>最後のメッセージ</h3><div id="last">まだありません</div>
         </section><script>
         const player=new Audio(),pending=[];let active=false,last=0,initialized=false,playing=false;
@@ -420,6 +489,21 @@ public final class KurumiWebMonitor {
           active=false;pending.length=0;player.pause();player.removeAttribute('src');playing=false;
           document.getElementById('status').textContent='停止中';
         };
+        document.getElementById('preview').onclick=async()=>{
+          const btn=document.getElementById('preview');
+          const status=document.getElementById('previewStatus');
+          btn.disabled=true;status.textContent='正在提交…';
+          active=true;document.getElementById('status').textContent='再生中';
+          try{
+            const res=await fetch('/api/voice/test',{method:'POST',headers:{'Content-Type':'application/json','X-Kurumi-Web':'1'},
+              body:JSON.stringify({text:document.getElementById('previewText').value,
+                emotion:document.getElementById('emotion').value})});
+            const body=await res.json();
+            if(!res.ok)throw Error(body.error||res.status);
+            status.textContent='已提交，等待合成…';
+          }catch(err){status.textContent='提交失败：'+err.message;}
+          finally{btn.disabled=false;}
+        };
         async function poll(){
           try{
             const r=await fetch('/api/speech?after='+last,{cache:'no-store'});
@@ -427,6 +511,7 @@ public final class KurumiWebMonitor {
             if(!initialized){initialized=true;last=data.latest||0;return;}
             for(const e of data.events||[]){if(e.id<=last)continue;
               last=e.id;document.getElementById('last').textContent=e.text;
+              document.getElementById('previewStatus').textContent=e.error?'生成失败：'+e.error:'已生成';
               if(active&&e.audio){pending.push(e.audio);if(pending.length>10)pending.shift();}
             }
             last=Math.max(last,data.latest||0);playNext();
@@ -487,10 +572,10 @@ public final class KurumiWebMonitor {
             <h2>手动执行 · 引擎调试</h2>
             <p class="muted">当前使用 Java 手写解释器执行脚本，不需要安装 Python 或 LangGraph。</p>
             <label for="runEngine">执行引擎</label>
-            <select id="runEngine"><option value="legacy">旧 Java 伪代码（Legacy）</option></select>
+            <select id="runEngine"><option value="legacy">Java 内置脚本解释器</option></select>
             <textarea id="runScript" placeholder="talk(get_player_status())"></textarea>
             <div class="controls"><button id="runBtn">确认并执行</button><span id="runStatus" class="feedback">空闲</span></div>
-            <p class="muted" id="engineHelp">Legacy：旧脚本校验器；只支持受限伪 Python 语法。</p>
+            <p class="muted" id="engineHelp">Java 内置解释器：支持受限 Python 风格语法，无需额外运行时。</p>
           </section>
         </div>
         <h2>生成请求</h2><div id="pending" class="empty">暂无生成请求</div>
@@ -501,12 +586,11 @@ public final class KurumiWebMonitor {
         <div class="cols">
           <section class="card">
             <h3>手动新增 / 编辑技能</h3>
-            <p class="muted">代码必须是解释器支持的 def 函数；触发词用英文逗号分隔。保存后立即生效，修改会保留最近版本。</p>
+            <p class="muted">代码必须是解释器支持的 def 函数。先保存技能，再在右侧技能管理中添加带固定参数的快捷触发；修改会保留最近版本。</p>
             <label for="skillGroup">分组名（默认 skills）</label><input id="skillGroup" placeholder="skills" value="skills" maxlength="24">
             <label for="skillName">函数名（例如 loot_corpse）</label><input id="skillName" placeholder="loot_corpse" maxlength="24">
             <label for="skillTitle">标题</label><input id="skillTitle" placeholder="捡尸体" maxlength="48">
             <label for="skillDescription">说明</label><input id="skillDescription" placeholder="寻找最近的尸体并取出所有物品" maxlength="240">
-            <label for="skillTriggers">快捷触发词（可留空）</label><input id="skillTriggers" placeholder="捡尸体, 收尸">
             <label for="skillCode">函数代码</label><textarea id="skillCode" placeholder="def loot_corpse():"></textarea>
             <div class="controls"><button id="saveSkillBtn" type="button">保存技能</button><button id="clearSkillBtn" class="secondary" type="button">清空表单</button><span id="skillFeedback" class="feedback"></span></div>
           </section>
@@ -605,7 +689,28 @@ public final class KurumiWebMonitor {
             const card=el('article','skill-row');
             card.append(el('strong','',skill.title+' ('+(skill.group||'skills')+'.'+skill.name+') · v'+skill.version));
             card.append(el('p','muted',skill.description||''));
-            card.append(el('p','', '快捷触发词：'+((skill.triggers||[]).join('、')||'无')));
+            const shortcutList=el('div','');
+            shortcutList.append(el('p','muted','快捷触发（固定参数按函数参数顺序填写）：'));
+            for(const shortcut of (skill.shortcuts||[])){
+              const line=el('div','skill-actions');
+              line.append(el('span','',shortcut.phrase+' → '+skill.name+'('+(shortcut.args||'')+')'));
+              const drop=el('button','secondary','删除触发');drop.type='button';
+              drop.addEventListener('click',async()=>{
+                if(!confirm('删除快捷触发「'+shortcut.phrase+'」？'))return;
+                await changeShortcut('remove_shortcut',skill,shortcut.phrase,'');
+              });
+              line.append(drop);shortcutList.append(line);
+            }
+            if(!(skill.shortcuts||[]).length)shortcutList.append(el('p','muted','暂无快捷触发'));
+            const phraseInput=el('input');phraseInput.placeholder='快捷触发词，例如：砍樱花树';phraseInput.maxLength=28;
+            const argsInput=el('input');argsInput.placeholder='固定参数，例如："minecraft:cherry_log", 16';
+            const add=el('button','secondary','添加快捷触发');add.type='button';
+            add.addEventListener('click',async()=>{
+              const phrase=phraseInput.value.trim();
+              if(!phrase){document.getElementById('skillFeedback').textContent='请填写快捷触发词';return;}
+              await changeShortcut('add_shortcut',skill,phrase,argsInput.value.trim());
+            });
+            shortcutList.append(phraseInput,argsInput,add);card.append(shortcutList);
             const details=el('details');details.append(el('summary','','查看函数代码'));
             const code=el('pre','logs',skill.code||'');code.style.maxHeight='240px';code.style.overflow='auto';
             details.append(code);card.append(details);
@@ -616,7 +721,6 @@ public final class KurumiWebMonitor {
               document.getElementById('skillName').value=skill.name;
               document.getElementById('skillTitle').value=skill.title;
               document.getElementById('skillDescription').value=skill.description;
-              document.getElementById('skillTriggers').value=(skill.triggers||[]).join(', ');
               document.getElementById('skillCode').value=skill.code||'';
               document.getElementById('skillFeedback').textContent='已载入 '+skill.name+'，保存后会生成新版本';
               document.getElementById('skillName').focus();
@@ -637,17 +741,27 @@ public final class KurumiWebMonitor {
             actions.append(edit,remove);card.append(actions);list.append(card);
           }
         }
+        async function changeShortcut(action,skill,phrase,args){
+          const feedback=document.getElementById('skillFeedback');
+          try{
+            const response=await fetch('/api/skills',{method:'POST',headers:authHeaders({'Content-Type':'application/json','X-Kurumi-Web':'1'}),
+              body:JSON.stringify({action,group:skill.group||'skills',name:skill.name,phrase,args})});
+            const data=await response.json();
+            if(!response.ok||!data.accepted)throw Error(data.error||'操作失败');
+            feedback.textContent=(action==='add_shortcut'?'已添加':'已删除')+'快捷触发：'+phrase;
+            await loadSkills();
+          }catch(error){feedback.textContent=String(error.message||error);}
+        }
         async function saveSkill(){
           const name=document.getElementById('skillName').value.trim();
           const group=document.getElementById('skillGroup').value.trim()||'skills';
           const title=document.getElementById('skillTitle').value.trim();
           const description=document.getElementById('skillDescription').value.trim();
-          const triggers=document.getElementById('skillTriggers').value.split(',').map(x=>x.trim()).filter(Boolean);
           const code=document.getElementById('skillCode').value;
           const feedback=document.getElementById('skillFeedback');
           try{
             const response=await fetch('/api/skills',{method:'POST',headers:authHeaders({'Content-Type':'application/json','X-Kurumi-Web':'1'}),
-              body:JSON.stringify({action:'save',group,name,title,description,triggers,code})});
+              body:JSON.stringify({action:'save',group,name,title,description,code})});
             const data=await response.json();
             
             if(!response.ok||!data.accepted)throw Error(data.error||'保存失败');
@@ -658,7 +772,7 @@ public final class KurumiWebMonitor {
         document.getElementById('saveSkillBtn').addEventListener('click',saveSkill);
         document.getElementById('clearSkillBtn').addEventListener('click',()=>{
           document.getElementById('skillGroup').value='skills';
-          for(const id of ['skillName','skillTitle','skillDescription','skillTriggers','skillCode'])document.getElementById(id).value='';
+          for(const id of ['skillName','skillTitle','skillDescription','skillCode'])document.getElementById(id).value='';
           document.getElementById('skillFeedback').textContent='表单已清空';
         });
         document.getElementById('refreshSkillsBtn').addEventListener('click',loadSkills);
@@ -729,14 +843,8 @@ public final class KurumiWebMonitor {
         });
         document.getElementById('runEngine').addEventListener('change',function(){
           const engine=this.value;
-          document.getElementById('engineHelp').textContent=engine==='legacy'
-            ?'Legacy：旧脚本校验器；仅支持受限伪 Python 语法。'
-            :engine==='python'
-            ?'GraalPy：执行真实 Python 脚本；需要 GraalPy 运行时与 /kurumi auto on。'
-            :'LangGraph：输入自然语言任务，由 Agent 选择 Skills；需要 Agent 服务与 /kurumi auto on。';
-          document.getElementById('runScript').placeholder=engine==='langgraph'
-            ?'例如：查看背包里还有多少樱花原木'
-            :engine==='python'?'from helpers import KurumiHelper':'talk(get_player_status())';
+          document.getElementById('engineHelp').textContent='Java 内置解释器：仅支持受限 Python 风格语法，无需 GraalPy。';
+          document.getElementById('runScript').placeholder='talk(get_player_status())';
         });
         refresh();loadSkills();
         setInterval(refresh,1000);

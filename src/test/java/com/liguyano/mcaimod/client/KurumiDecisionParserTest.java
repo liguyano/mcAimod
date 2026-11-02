@@ -58,6 +58,10 @@ class KurumiDecisionParserTest {
         assertTrue(KurumiDecisionParser.parse(request("sleep(121)")).isEmpty());
     }
 
+    @Test void supportsModelSelectedEmotionInTalk() {
+        assertTrue(KurumiDecisionParser.parse(request("talk(\"ご主人様、助けて！\", \"fear\")")).isPresent());
+    }
+
     @Test void rejectsLegacyResponses() {
         assertTrue(KurumiDecisionParser.parse("{\"type\":\"chat\",\"reply\":\"你好\"}").isEmpty());
         assertTrue(KurumiDecisionParser.parse("{\"type\":\"tool\",\"tool\":\"get_environment\",\"reply\":\"查询\"}").isEmpty());
@@ -68,5 +72,17 @@ class KurumiDecisionParserTest {
         assertTrue(KurumiDecisionParser.parse(request("java.lang.Runtime.getRuntime()")).isEmpty());
         assertTrue(KurumiDecisionParser.parse(request("talk(get_distance(\"bad\",\"minecraft:stone\"))")).isEmpty());
         assertTrue(KurumiDecisionParser.parse("not json").isEmpty());
+    }
+
+    @Test void pythonEngineFlagCannotBypassJavaScriptValidation() {
+        String previous = System.getProperty("mcaimod.scriptEngine");
+        try {
+            System.setProperty("mcaimod.scriptEngine", "python");
+            assertTrue(KurumiDecisionParser.parse(request("import helpers\nhelper = InventoryHelper()" )).isEmpty());
+            assertTrue(KurumiDecisionParser.parse(request("talk(\"Java 执行\")")).isPresent());
+        } finally {
+            if (previous == null) System.clearProperty("mcaimod.scriptEngine");
+            else System.setProperty("mcaimod.scriptEngine", previous);
+        }
     }
 }

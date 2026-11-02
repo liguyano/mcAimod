@@ -9,6 +9,34 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class KurumiExpressionsTest {
+    @Test void dictionaryAndListLiteralsCanCombineVariablesAndNestedResults() {
+        JsonObject container = new JsonObject();
+        container.addProperty("slot_count", 90);
+        Map<String, JsonElement> vars = Map.of("rod_count", new JsonPrimitive(1), "info", container);
+        JsonElement result = KurumiExpressions.evaluate(
+                "{\"rods_in_inventory\": rod_count, \"container\": info, \"items\": [1, {\"ok\": True}, []]}", vars);
+        assertEquals(1, result.getAsJsonObject().get("rods_in_inventory").getAsInt());
+        assertEquals(90, result.getAsJsonObject().getAsJsonObject("container").get("slot_count").getAsInt());
+        assertTrue(result.getAsJsonObject().getAsJsonArray("items").get(1).getAsJsonObject().get("ok").getAsBoolean());
+        assertEquals(90, KurumiExpressions.evaluate("data['container'].slot_count", Map.of("data", result)).getAsInt());
+    }
+
+    @Test void argumentsDoNotSplitInsideNestedCollections() {
+        var args = KurumiExpressions.arguments("{\"one\": [1, 2]}, \"fear\"", Map.of());
+        assertEquals(2, args.size());
+        assertEquals(2, args.get(0).getAsJsonObject().getAsJsonArray("one").size());
+        assertTrue(KurumiScriptParser.parse("observe({\"rods_in_inventory\": rod_count, \"container\": info})").isPresent(),
+                KurumiScriptParser.lastError());
+    }
+
+    @Test void literalsRejectInvalidKeysAndLargeStructures() {
+        assertThrows(IllegalArgumentException.class,
+                () -> KurumiExpressions.evaluate("{x: 1}", Map.of()));
+        assertThrows(IllegalArgumentException.class,
+                () -> KurumiExpressions.evaluate("{\"a\": 1, \"a\": 2}", Map.of()));
+        assertThrows(IllegalArgumentException.class,
+                () -> KurumiExpressions.evaluate("[" + "1,".repeat(40) + "1]", Map.of()));
+    }
     @Test void supportsIntegerDivisionForCraftingStackCounts() {
         assertEquals(37, KurumiExpressions.integer(KurumiExpressions.evaluate("75 // 2", Map.of())));
         assertEquals(64, KurumiExpressions.integer(KurumiExpressions.evaluate("128 // 2", Map.of())));
@@ -305,7 +333,9 @@ class KurumiExpressionsTest {
                 target = find_nearest_block("minecraft:furnace")
                 distance = get_distance("block","minecraft:furnace")
                 slots = inspect_container()
+                full_slots = inspect_container_full()
                 slot = inspect_slot(0)
+                matches = find_container_items("minecraft:diamond_sword")
                 talk(slot)
                 """;
         assertTrue(KurumiScriptParser.parse(script).isPresent());

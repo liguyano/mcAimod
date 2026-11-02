@@ -8,12 +8,17 @@ public final class KurumiSpeech {
 
     /** Never observe or replay incoming server chat: only Kurumi's own messages call this. */
     public static void say(String text) {
+        say(text, null);
+    }
+
+    /** Emotion affects TTS only; multiplayer chat remains the original text. */
+    public static void say(String text, String emotion) {
         Minecraft mc = Minecraft.getInstance();
         if (text == null || text.isBlank() || mc.getConnection() == null) return;
         String message = text.strip();
         if (message.startsWith("/")) return;
         String sent = message.length() > 120 ? message.substring(0, 120) : message;
         mc.getConnection().sendChat(sent);
-        KurumiVoiceManager.speak(sent);
+        KurumiVoiceManager.speak(sent, emotion);
     }
 }

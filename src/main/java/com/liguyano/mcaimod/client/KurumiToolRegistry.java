@@ -3,6 +3,9 @@ package com.liguyano.mcaimod.client;
 import com.google.gson.JsonObject;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Locale;
 
 /** Compact discovery catalog for the Kurumi DSL. Detailed examples stay task-scoped. */
 public final class KurumiToolRegistry {
@@ -18,11 +21,13 @@ public final class KurumiToolRegistry {
         add("get_position()", "move", "获取当前位置");
         add("get_player_status()", "observe", "获取血量饥饿等");
         add("get_environment()", "observe", "周围环境");
-        add("get_inventory()", "inventory", "读取背包");
+        add("get_inventory()", "inventory", "精简读取背包物品 ID 和数量");
         add("scan_nearby_blocks()", "observe", "扫描方块");
         add("scan_dropped_items()", "inventory", "扫描掉落物");
-        add("inspect_container()", "container", "查看已打开容器槽位");
-        add("inspect_slot(index)", "container", "指定槽位信息");
+        add("inspect_container()", "container", "精简查看容器非空槽（仅容器物品，不含玩家背包）");
+        add("inspect_container_full()", "container", "完整查看所有槽位，包括空槽及玩家背包槽位");
+        add("inspect_slot(index)", "container", "指定槽位详细信息（包括附魔耐久）");
+        add("find_container_items(item_id)", "container", "已打开容器按物品 ID 查询全部匹配槽位及总数，附附魔耐久");
         add("get_distance(kind,target)", "move", "查询目标距离");
         add("find_nearest_block(block_id)", "observe", "查找最近方块");
         add("search_all_block(block_id)", "harvest", "搜索已加载区域的方块坐标");
@@ -83,6 +88,40 @@ public final class KurumiToolRegistry {
             result.append(e.signature()).append(" — ").append(e.description()).append('\n');
         }
         return result.toString();
+    }
+
+    /** Task-focused signatures, with full discovery for unclassified instructions. */
+    public static String catalogForRequest(String request) {
+        String text = request == null ? "" : request.toLowerCase(Locale.ROOT);
+        Set<String> categories = new HashSet<>();
+        if (containsAny(text, "尸体", "遗体", "corpse", "实体", "村民", "上船", "交互"))
+            categories.addAll(Set.of("entity", "container", "inventory", "move"));
+        if (containsAny(text, "箱", "仓库", "容器", "背包", "取出", "放入", "存放"))
+            categories.addAll(Set.of("container", "inventory", "move"));
+        if (containsAny(text, "砍", "挖", "采", "农", "树", "原木", "矿", "拾取", "收集", "连锁"))
+            categories.addAll(Set.of("harvest", "inventory", "move"));
+        if (containsAny(text, "合成", "制作", "工作台", "熔炉", "配方", "酿造"))
+            categories.addAll(Set.of("craft", "container", "inventory", "move"));
+        if (containsAny(text, "走", "来", "跟", "移动", "寻路", "回家", "睡", "床", "去", "come", "follow"))
+            categories.add("move");
+        if (containsAny(text, "打怪", "打架", "攻击", "怪物", "战斗", "逃跑", "救命"))
+            categories.addAll(Set.of("combat", "move", "entity"));
+        if (containsAny(text, "钓鱼", "鱼竿", "fish")) categories.addAll(Set.of("fish", "inventory", "move"));
+        if (containsAny(text, "记忆", "地图", "地点", "路标", "导航")) categories.addAll(Set.of("memory", "move"));
+        if (categories.isEmpty()) return catalog();
+        categories.add("observe");
+        StringBuilder result = new StringBuilder("Kurumi 当前任务相关工具（未列出工具可通过 get_tool_help 查询）：\n");
+        for (Entry entry : ENTRIES.values()) {
+            if (categories.contains(entry.category()) || entry.signature().startsWith("stop()")) {
+                result.append(entry.signature()).append(" — ").append(entry.description()).append('\n');
+            }
+        }
+        return result.toString();
+    }
+
+    private static boolean containsAny(String text, String... keywords) {
+        for (String keyword : keywords) if (text.contains(keyword)) return true;
+        return false;
     }
 
     public static JsonObject help(String name) {

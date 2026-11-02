@@ -11,7 +11,16 @@ import java.util.regex.Pattern;
 public final class KurumiLocationMemory {
     private static final Pattern SAVE = Pattern.compile("(?:记住|记下|标记)(?:这里|这个位置|这个地方)?(?:是|叫|为)(.{1,24})");
     private static final Pattern GO = Pattern.compile("去 ([^\\s，,。！？!?；;]{1,24})");
-    private static final Pattern WHERE = Pattern.compile("(.{1,24})(?:在哪里|在哪儿|在哪|的坐标)");
+    private static final Pattern WHERE = Pattern.compile("([^\\s，,。！？!?；;]{1,24}) (?:在哪里|在哪儿|在哪|的坐标)");
+
+    /** Only an explicit separating space opts into a local location lookup. */
+    static boolean isWhereShortcut(String body) {
+        return body != null && WHERE.matcher(body.strip()).matches();
+    }
+
+    static boolean isGoShortcut(String body) {
+        return body != null && GO.matcher(body.strip()).matches();
+    }
 
     public static boolean handle(String message, String senderName) {
         if (!"SekaiSaionji".equals(senderName)) return false;
@@ -27,8 +36,7 @@ public final class KurumiLocationMemory {
         boolean locationIntent = body.startsWith("去 ") || body.startsWith("记住")
                 || body.startsWith("记下") || body.startsWith("标记")
                 || body.startsWith("忘记") || body.startsWith("删除地点")
-                || body.contains("在哪里") || body.contains("在哪儿")
-                || body.contains("在哪") || body.contains("的坐标")
+                || isWhereShortcut(body)
                 || body.contains("记住了哪些") || body.contains("地点列表")
                 || body.contains("记忆的地点");
         if (!locationIntent) return false;
@@ -49,7 +57,7 @@ public final class KurumiLocationMemory {
         Matcher save = SAVE.matcher(body), go = GO.matcher(body), where = WHERE.matcher(body);
         boolean list = body.contains("记住了哪些") || body.contains("地点列表") || body.contains("记忆的地点");
         boolean delete = body.startsWith("忘记") || body.startsWith("删除地点");
-        if (!save.find() && !go.find() && !where.find() && !list && !delete) return false;
+        if (!save.find() && !go.matches() && !where.matches() && !list && !delete) return false;
 
         try {
             String dimension = mc.level.dimension().identifier().toString();

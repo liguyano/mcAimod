@@ -6,8 +6,8 @@ import java.util.List;
 
 /** Preserve system rules and recent turns while bounding requests to the model. */
 public final class KurumiAgentContext {
-    private static final int MAX_CHARS = 48000;
-    private static final int MAX_RECENT = 18;
+    private static final int MAX_CHARS = 32000;
+    private static final int MAX_RECENT = 10;
 
     public static List<ChatMessage> compact(List<ChatMessage> messages, String originalRequest,
                                              String currentTaskContext) {
@@ -20,7 +20,7 @@ public final class KurumiAgentContext {
         List<ChatMessage> selected = new ArrayList<>(system);
         selected.add(new ChatMessage("system", "当前持续任务的原始目标：" + originalRequest
                 + "。历史详细工具结果可能已压缩；不确定时重新 observe 查询。\n" + currentTaskContext));
-        int budget = MAX_CHARS - selected.stream().mapToInt(m -> m.content().length()).sum();
+        int budget = Math.max(0, MAX_CHARS - selected.stream().mapToInt(m -> m.content().length()).sum());
         int from = Math.max(0, turns.size() - MAX_RECENT);
         List<ChatMessage> recent = new ArrayList<>();
         for (int i = turns.size() - 1; i >= from; i--) {

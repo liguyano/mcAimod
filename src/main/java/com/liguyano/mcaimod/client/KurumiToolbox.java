@@ -5,6 +5,8 @@ import com.google.gson.JsonObject;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.entity.item.ItemEntity;
 
@@ -15,7 +17,55 @@ public final class KurumiToolbox {
     public static String observe(String tool) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return "{\"error\":\"not_in_world\"}";
-        if ("inspect_container".equals(tool) || (tool != null && tool.startsWith("inspect_slot:"))) {
+        if (tool != null && tool.startsWith("find_container_items:")) {
+            String itemId = tool.substring("find_container_items:".length());
+            if (!itemId.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
+                return "{\"error\":\"invalid_item_id\"}";
+            var menu = mc.player.containerMenu;
+            if (menu == mc.player.inventoryMenu) return "{\"error\":\"no_open_container\"}";
+            JsonArray matches = new JsonArray();
+            int total = 0;
+            for (int i = 0; i < menu.slots.size(); i++) {
+                var slot = menu.getSlot(i);
+                if (slot.container == mc.player.getInventory()) continue;
+                var stack = slot.getItem();
+                if (stack.isEmpty() || !itemId.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString())) continue;
+                JsonObject info = itemDetails(stack);
+                info.addProperty("index", i);
+                matches.add(info);
+                total += stack.getCount();
+            }
+            JsonObject result = new JsonObject();
+            result.addProperty("item_id", itemId);
+            result.addProperty("total_count", total);
+            result.addProperty("slot_count", matches.size());
+            result.add("slots", matches);
+            return result.toString();
+        }
+        if ("inspect_container".equals(tool)) {
+            var menu = mc.player.containerMenu;
+            if (menu == mc.player.inventoryMenu) return "{\"error\":\"no_open_container\"}";
+            JsonObject out = new JsonObject();
+            JsonArray items = new JsonArray();
+            int containerSlots = 0;
+            for (int i = 0; i < menu.slots.size(); i++) {
+                var slot = menu.getSlot(i);
+                if (slot.container == mc.player.getInventory()) continue;
+                containerSlots++;
+                var stack = slot.getItem();
+                if (stack.isEmpty()) continue;
+                JsonObject item = new JsonObject();
+                item.addProperty("slot", i);
+                item.addProperty("id", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+                item.addProperty("count", stack.getCount());
+                items.add(item);
+            }
+            out.addProperty("menu_class", menu.getClass().getName());
+            out.addProperty("container_slots", containerSlots);
+            out.add("items", items);
+            return out.toString();
+        }
+        if ("inspect_container_full".equals(tool) || (tool != null && tool.startsWith("inspect_slot:"))) {
             var menu = mc.player.containerMenu;
             JsonObject out = new JsonObject();
             if (menu == mc.player.inventoryMenu) return "{\"error\":\"no_open_container\"}";
@@ -42,8 +92,13 @@ public final class KurumiToolbox {
                 info.addProperty("may_pickup", slot.mayPickup(mc.player));
                 info.addProperty("max_stack_size", slot.getMaxStackSize());
                 if (!stack.isEmpty()) {
-                    info.addProperty("item_id", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
-                    info.addProperty("count", stack.getCount());
+                    if (selected >= 0) {
+                        JsonObject details = itemDetails(stack);
+                        for (var entry : details.entrySet()) info.add(entry.getKey(), entry.getValue());
+                    } else {
+                        info.addProperty("item_id", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+                        info.addProperty("count", stack.getCount());
+                    }
                     info.addProperty("may_place_same_item", slot.mayPlace(stack));
                 }
                 slots.add(info);
@@ -274,6 +329,31 @@ public final class KurumiToolbox {
             default -> out.addProperty("error", "unsupported_tool");
         }
         return out.toString();
+    }
+    private static JsonObject itemDetails(ItemStack stack) {
+        JsonObject item = new JsonObject();
+        item.addProperty("item_id", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+        item.addProperty("count", stack.getCount());
+        if (stack.isDamageableItem()) {
+            item.addProperty("damage", stack.getDamageValue());
+            item.addProperty("max_durability", stack.getMaxDamage());
+            item.addProperty("remaining_durability", stack.getMaxDamage() - stack.getDamageValue());
+        }
+        JsonArray enchantments = new JsonArray();
+        addEnchantments(enchantments, stack.getEnchantments());
+        var stored = stack.get(DataComponents.STORED_ENCHANTMENTS);
+        if (stored != null) addEnchantments(enchantments, stored);
+        if (!enchantments.isEmpty()) item.add("enchantments", enchantments);
+        return item;
+    }
+    private static void addEnchantments(JsonArray target, net.minecraft.world.item.enchantment.ItemEnchantments source) {
+        for (var entry : source.entrySet()) {
+            JsonObject enchantment = new JsonObject();
+            enchantment.addProperty("id", entry.getKey().unwrapKey()
+                    .map(key -> key.location().toString()).orElse("unknown"));
+            enchantment.addProperty("level", entry.getIntValue());
+            target.add(enchantment);
+        }
     }
     private KurumiToolbox() {}
 }

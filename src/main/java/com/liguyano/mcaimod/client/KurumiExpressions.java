@@ -14,7 +14,7 @@ public final class KurumiExpressions {
                 "check_inventory_count", "get_crafting_recipe", "check_nearby_chest",
                 "get_nearby_chest_result", "get_position", "get_player_status", "get_environment",
                 "get_inventory", "scan_nearby_entities", "scan_nearby_blocks", "scan_dropped_items",
-                "inspect_container", "inspect_slot", "get_distance").contains(name);
+                "inspect_container", "inspect_container_full", "inspect_slot", "find_container_items", "get_distance").contains(name);
     }
     private final String input;
     private final Map<String, JsonElement> variables;
@@ -36,21 +36,30 @@ public final class KurumiExpressions {
         java.util.List<JsonElement> values = new java.util.ArrayList<>();
         if (source.isBlank()) return values;
         int depth = 0, start = 0;
-        boolean quoted = false;
+        char[] open = new char[8];
+        char quote = 0;
         for (int i = 0; i <= source.length(); i++) {
-            if (i == source.length() || (source.charAt(i) == ',' && depth == 0 && !quoted)) {
+            if (i == source.length() || (source.charAt(i) == ',' && depth == 0 && quote == 0)) {
                 if (values.size() >= 7 || start == i) throw new IllegalArgumentException("参数数量或格式错误");
                 values.add(evaluate(source.substring(start, i), vars));
                 start = i + 1;
                 continue;
             }
             char c = source.charAt(i);
-            if (c == '"') quoted = !quoted;
-            else if (!quoted && c == '(') depth++;
-            else if (!quoted && c == ')') depth--;
-            if (depth < 0 || depth > 6) throw new IllegalArgumentException("表达式括号不匹配");
+            if (quote != 0 && c == quote) quote = 0;
+            else if (quote == 0 && (c == '"' || c == '\'')) quote = c;
+            else if (quote == 0 && (c == '(' || c == '[' || c == '{')) {
+                if (depth >= open.length) throw new IllegalArgumentException("表达式嵌套太深");
+                open[depth++] = c;
+            } else if (quote == 0 && (c == ')' || c == ']' || c == '}')) {
+                if (depth == 0 || (c == ')' && open[depth - 1] != '(')
+                        || (c == ']' && open[depth - 1] != '[')
+                        || (c == '}' && open[depth - 1] != '{'))
+                    throw new IllegalArgumentException("表达式括号不匹配");
+                depth--;
+            }
         }
-        if (quoted || depth != 0) throw new IllegalArgumentException("表达式括号或引号不匹配");
+        if (quote != 0 || depth != 0) throw new IllegalArgumentException("表达式括号或引号不匹配");
         return values;
     }
     public static String text(JsonElement element) {
@@ -168,8 +177,42 @@ public final class KurumiExpressions {
         if (++operations > 80) throw new IllegalArgumentException("表达式过于复杂");
         spaces();
         if (take("(")) { JsonElement x=or(); expect(")"); return fields(x); }
-        if (at < input.length() && input.charAt(at) == '"') {
-            int start = at++, end = input.indexOf('"',at);
+        if (take("{")) {
+            JsonObject result = new JsonObject();
+            if (!take("}")) {
+                while (true) {
+                    JsonElement key = primary();
+                    if (!key.isJsonPrimitive() || !key.getAsJsonPrimitive().isString())
+                        throw new IllegalArgumentException("字典键必须是字符串");
+                    String name = key.getAsString();
+                    if (name.length() > 64 || result.has(name))
+                        throw new IllegalArgumentException("字典键过长或重复");
+                    expect(":");
+                    if (result.size() >= 32) throw new IllegalArgumentException("字典元素过多");
+                    result.add(name, or());
+                    if (take("}")) break;
+                    expect(",");
+                    if (take("}")) break;
+                }
+            }
+            return fields(result);
+        }
+        if (take("[")) {
+            JsonArray result = new JsonArray();
+            if (!take("]")) {
+                while (true) {
+                    if (result.size() >= 32) throw new IllegalArgumentException("列表元素过多");
+                    result.add(or());
+                    if (take("]")) break;
+                    expect(",");
+                    if (take("]")) break;
+                }
+            }
+            return fields(result);
+        }
+        if (at < input.length() && (input.charAt(at) == '"' || input.charAt(at) == '\'')) {
+            char quote = input.charAt(at);
+            int start = at++, end = input.indexOf(quote,at);
             if (end<0 || end-start>190) throw new IllegalArgumentException("字符串格式错误");
             String value=input.substring(at,end);
             at=end+1;
@@ -182,6 +225,7 @@ public final class KurumiExpressions {
         }
         if (keyword("True")) return new JsonPrimitive(true);
         if (keyword("False")) return new JsonPrimitive(false);
+        if (keyword("None")) return JsonNull.INSTANCE;
         String name=identifier();
         if (name.isEmpty()) throw new IllegalArgumentException("非法表达式");
         if ("true".equals(name)) return new JsonPrimitive(true);
@@ -208,10 +252,17 @@ public final class KurumiExpressions {
             } else if (take("[")) {
                 JsonElement indexValue=or();
                 expect("]");
-                int index=integer(indexValue);
-                if (!value.isJsonArray() || index<0 || index>=value.getAsJsonArray().size())
-                    throw new IllegalArgumentException("数组下标越界或目标不是数组");
-                value=value.getAsJsonArray().get(index);
+                if (value.isJsonObject() && indexValue.isJsonPrimitive()
+                        && indexValue.getAsJsonPrimitive().isString()) {
+                    String key = indexValue.getAsString();
+                    if (!value.getAsJsonObject().has(key)) throw new IllegalArgumentException("字典字段不存在: " + key);
+                    value = value.getAsJsonObject().get(key);
+                } else {
+                    int index=integer(indexValue);
+                    if (!value.isJsonArray() || index<0 || index>=value.getAsJsonArray().size())
+                        throw new IllegalArgumentException("数组下标越界或目标不是数组");
+                    value=value.getAsJsonArray().get(index);
+                }
             } else return value;
         }
     }
@@ -308,7 +359,7 @@ public final class KurumiExpressions {
             }
             case "get_position", "get_player_status", "get_environment", "get_inventory",
                     "scan_nearby_entities", "scan_nearby_blocks", "scan_dropped_items",
-                    "inspect_container" -> {
+                    "inspect_container", "inspect_container_full" -> {
                 if (!args.isEmpty()) throw new IllegalArgumentException("工具不接受参数");
                 tool=name;
             }
@@ -317,6 +368,10 @@ public final class KurumiExpressions {
                 int slot=integer(args.get(0));
                 if (slot < 0 || slot > 255) throw new IllegalArgumentException("槽位编号必须在0到255之间");
                 tool="inspect_slot:"+slot;
+            }
+            case "find_container_items" -> {
+                if (args.size()!=1) throw new IllegalArgumentException("find_container_items 需要物品 ID");
+                tool="find_container_items:"+string(args.get(0));
             }
             case "get_distance" -> {
                 if (args.size()!=2) throw new IllegalArgumentException("距离工具参数数量错误");
