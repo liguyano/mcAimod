@@ -58,6 +58,10 @@ class KurumiDecisionParserTest {
         assertTrue(KurumiDecisionParser.parse(request("sleep(121)")).isEmpty());
     }
 
+    @Test void supportsModelSelectedEmotionInTalk() {
+        assertTrue(KurumiDecisionParser.parse(request("talk(\"ご主人様、助けて！\", \"fear\")")).isPresent());
+    }
+
     @Test void rejectsLegacyResponses() {
         assertTrue(KurumiDecisionParser.parse("{\"type\":\"chat\",\"reply\":\"你好\"}").isEmpty());
         assertTrue(KurumiDecisionParser.parse("{\"type\":\"tool\",\"tool\":\"get_environment\",\"reply\":\"查询\"}").isEmpty());
