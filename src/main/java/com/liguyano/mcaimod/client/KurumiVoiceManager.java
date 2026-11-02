@@ -20,7 +20,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.ArrayBlockingQueue;
 
-/** Connects to an independently running local AivisSpeech/VOICEVOX-compatible TTS server. */
+/** Connects to an independently running loopback Irodori-TTS or AivisSpeech server. */
 public final class KurumiVoiceManager {
     private static final ArrayBlockingQueue<String> QUEUE = new ArrayBlockingQueue<>(5);
     private static final HttpClient HTTP = HttpClient.newBuilder()
@@ -66,7 +66,7 @@ public final class KurumiVoiceManager {
     public static synchronized void install() {
         if (started) return;
         started = true;
-        Thread worker = new Thread(KurumiVoiceManager::work, "Kurumi-Local-Aivis-TTS");
+        Thread worker = new Thread(KurumiVoiceManager::work, "Kurumi-Local-TTS");
         worker.setDaemon(true);
         worker.start();
     }
@@ -83,6 +83,13 @@ public final class KurumiVoiceManager {
         speak("ご主人様、くるみの声が聞こえますか？ えへへっ♪");
     }
 
+    /** Queue a Web-panel test using exactly the same synthesis and playback path as Kurumi dialogue. */
+    public static void preview(String text) {
+        if (text == null || text.isBlank() || text.length() > 200)
+            throw new IllegalArgumentException("请输入 1 至 200 字符的试听文本");
+        speak(text);
+    }
+
     public static synchronized void stop() {
         epoch++;
         QUEUE.clear();
@@ -91,7 +98,9 @@ public final class KurumiVoiceManager {
     }
 
     private static URI endpoint(JsonObject config, String path, String params) {
-        String base = value(config, "server_url", "http://127.0.0.1:10101");
+        String provider = value(config, "provider", "irodori");
+        String base = value(config, "server_url", provider.equals("aivis")
+                ? "http://127.0.0.1:10101" : "http://127.0.0.1:8088");
         URI uri = URI.create(base);
         // Loopback only: never forward game speech to an arbitrary configured server.
         String host = uri.getHost();
@@ -101,7 +110,7 @@ public final class KurumiVoiceManager {
         return URI.create(base.replaceAll("/+$", "") + path + params);
     }
 
-    private static byte[] synthesize(String text, JsonObject config) throws Exception {
+    private static byte[] synthesizeAivis(String text, JsonObject config) throws Exception {
         String speaker = value(config, "speaker_id", "0");
         if (!speaker.matches("[0-9]{1,10}")) throw new IllegalArgumentException("speaker_id 必须是声线样式数字 ID");
         String params = "?speaker=" + speaker;
@@ -121,7 +130,33 @@ public final class KurumiVoiceManager {
                 .POST(HttpRequest.BodyPublishers.ofString(audioQuery.toString(), StandardCharsets.UTF_8)).build();
         HttpResponse<byte[]> response = HTTP.send(synthesis, HttpResponse.BodyHandlers.ofByteArray());
         if (response.statusCode() != 200) throw new IOException("语音合成 HTTP " + response.statusCode());
-        byte[] bytes = response.body();
+        return validateWav(response.body());
+    }
+
+    private static byte[] synthesizeIrodori(String text, JsonObject config) throws Exception {
+        float speed = Float.parseFloat(value(config, "speed", "1.0"));
+        JsonObject requestBody = IrodoriSpeechRequest.build(text,
+                value(config, "model", "irodori-tts"), value(config, "voice", "none"), speed,
+                value(config, "caption", "明るく可愛らしい日本のアニメ少女の声。親しみやすく自然な話し方。"));
+        HttpRequest request = HttpRequest.newBuilder(endpoint(config, "/v1/audio/speech", ""))
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(300))
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString(), StandardCharsets.UTF_8)).build();
+        HttpResponse<byte[]> response = HTTP.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        if (response.statusCode() != 200) throw new IOException("Irodori 合成 HTTP " + response.statusCode()
+                + "：" + new String(response.body(), 0, Math.min(240, response.body().length), StandardCharsets.UTF_8));
+        return validateWav(response.body());
+    }
+
+    private static byte[] synthesize(String text, JsonObject config) throws Exception {
+        return switch (value(config, "provider", "irodori")) {
+            case "irodori" -> synthesizeIrodori(text, config);
+            case "aivis" -> synthesizeAivis(text, config);
+            default -> throw new IllegalArgumentException("未知语音后端，支持 irodori 或 aivis");
+        };
+    }
+
+    private static byte[] validateWav(byte[] bytes) throws IOException {
         if (bytes.length < 44 || bytes.length > 8_000_000 || bytes[0] != 'R' || bytes[1] != 'I'
                 || bytes[2] != 'F' || bytes[3] != 'F') throw new IOException("语音合成响应不是有效 WAV 或超过8MB");
         return bytes;
@@ -160,7 +195,7 @@ public final class KurumiVoiceManager {
                 Thread.currentThread().interrupt();
                 return;
             } catch (Exception ex) {
-                KurumiWebMonitor.log("本地 AivisSpeech 语音失败：" + ex.getMessage());
+                KurumiWebMonitor.log("本地语音失败：" + ex.getMessage());
             }
         }
     }
