@@ -1,8 +1,7 @@
 {
   "enabled": true,
-  "voice_zh": "zh-CN-XiaoyiNeural",
-  "voice_ja": "ja-JP-NanamiNeural",
-  "rate": "+12%",
-  "pitch": "+35Hz",
-  "volume": "0.8"
+  "server_url": "http://127.0.0.1:10101",
+  "speaker_id": "0",
+  "speed": 1.0,
+  "local_playback": true
 }

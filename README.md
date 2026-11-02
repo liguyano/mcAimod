@@ -157,9 +157,7 @@ Java legacy interpreter only. `setup-agent.ps1` is **not required** for
 chat, planning or script execution. Previous Python sources and SQLite files
 are retained but not used by the default Java Agent.
 
-**Voice distinction:** network MP3 synthesis still uses Python `edge-tts`
-when speech is enabled. That is independent from the Java AI interpreter.
-For a fully Python-free deployment, disable the TTS feature separately; the
-browser remote MP3 output will then be unavailable until an alternative TTS
-backend is provided. This rollback does not yet migrate Python-agent memory
-or checkpoints into Java memory.
+**Voice:** Kurumi connects through Java HTTP to a separately running local
+AivisSpeech server (default `127.0.0.1:10101`). No Python, GraalPy, or TTS
+model files are bundled with the Mod. See [local voice setup](docs/kurumi-local-tts.md).
+The separate Python-agent memory and checkpoints are not migrated into Java.

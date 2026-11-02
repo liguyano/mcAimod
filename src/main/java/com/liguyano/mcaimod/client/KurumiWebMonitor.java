@@ -28,12 +28,14 @@ public final class KurumiWebMonitor {
     private static HttpServer server;
     private static long speechId;
     private static final Deque<String> SPEECH = new ArrayDeque<>();
-    private static final java.util.Map<Long, byte[]> AUDIO = new java.util.LinkedHashMap<>();
-    /** Called after successful Edge TTS synthesis; only Kurumi-authored speech enters here. */
-    public static synchronized void publishAudio(String spoken, byte[] mp3) {
-        if (spoken == null || spoken.isBlank() || mp3 == null || mp3.length == 0 || mp3.length > 2_000_000) return;
+    private record AudioData(byte[] bytes, String mimeType) {}
+    private static final java.util.Map<Long, AudioData> AUDIO = new java.util.LinkedHashMap<>();
+    /** Only Kurumi-authored speech enters the Web audio feed. */
+    public static synchronized void publishAudio(String spoken, byte[] audio, String mimeType) {
+        if (spoken == null || spoken.isBlank() || audio == null || audio.length == 0 || audio.length > 8_000_000
+                || !java.util.Set.of("audio/wav", "audio/mpeg").contains(mimeType)) return;
         long id = ++speechId;
-        AUDIO.put(id, mp3);
+        AUDIO.put(id, new AudioData(audio, mimeType));
         JsonObject event = new JsonObject();
         event.addProperty("id", id);
         event.addProperty("text", spoken.substring(0, Math.min(200, spoken.length())));
@@ -359,13 +361,13 @@ public final class KurumiWebMonitor {
                 long id;
                 try { id = Long.parseLong(idString); }
                 catch (NumberFormatException e) { exchange.sendResponseHeaders(404, -1); exchange.close(); return; }
-                byte[] mp3;
-                synchronized (KurumiWebMonitor.class) { mp3 = AUDIO.get(id); }
-                if (mp3 == null) { exchange.sendResponseHeaders(404, -1); exchange.close(); return; }
-                exchange.getResponseHeaders().set("Content-Type", "audio/mpeg");
+                AudioData audio;
+                synchronized (KurumiWebMonitor.class) { audio = AUDIO.get(id); }
+                if (audio == null) { exchange.sendResponseHeaders(404, -1); exchange.close(); return; }
+                exchange.getResponseHeaders().set("Content-Type", audio.mimeType());
                 exchange.getResponseHeaders().set("Cache-Control", "no-store");
-                exchange.sendResponseHeaders(200, mp3.length);
-                try (var out = exchange.getResponseBody()) { out.write(mp3); }
+                exchange.sendResponseHeaders(200, audio.bytes().length);
+                try (var out = exchange.getResponseBody()) { out.write(audio.bytes()); }
             });
             server.createContext("/api/speech", exchange -> {
                 if (!"GET".equals(exchange.getRequestMethod())) { exchange.sendResponseHeaders(405, -1); exchange.close(); return; }

@@ -2,22 +2,32 @@ package com.liguyano.mcaimod.client;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.neoforged.fml.loading.FMLPaths;
+
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.TimeUnit;
-import net.neoforged.fml.loading.FMLPaths;
 
-/** Local-only nonblocking Edge TTS. Python + edge-tts + pygame are user-installed. */
+/** Connects to an independently running local AivisSpeech/VOICEVOX-compatible TTS server. */
 public final class KurumiVoiceManager {
     private static final ArrayBlockingQueue<String> QUEUE = new ArrayBlockingQueue<>(5);
-    private static volatile Process playback;
+    private static final HttpClient HTTP = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(3)).build();
     private static volatile boolean started;
     private static volatile long epoch;
-    private static volatile Path pythonScript;
+    private static volatile Clip playback;
 
     private static JsonObject settings() {
         Path config = FMLPaths.CONFIGDIR.get().resolve("mcaimod-voice.json");
@@ -25,15 +35,14 @@ public final class KurumiVoiceManager {
             if (Files.isRegularFile(config))
                 return JsonParser.parseString(Files.readString(config, StandardCharsets.UTF_8)).getAsJsonObject();
         } catch (Exception ex) {
-            System.err.println("Kurumi voice config: " + ex.getMessage());
+            KurumiWebMonitor.log("语音配置读取失败：" + ex.getMessage());
         }
         return new JsonObject();
     }
 
     private static String value(JsonObject json, String key, String fallback) {
-        try {
-            if (json.has(key) && !json.get(key).isJsonNull()) return json.get(key).getAsString();
-        } catch (Exception ignored) { }
+        try { if (json.has(key) && !json.get(key).isJsonNull()) return json.get(key).getAsString(); }
+        catch (RuntimeException ignored) { }
         return fallback;
     }
 
@@ -49,16 +58,15 @@ public final class KurumiVoiceManager {
             config.addProperty("enabled", enabled);
             Files.createDirectories(file.getParent());
             Files.writeString(file, config.toString(), StandardCharsets.UTF_8);
-            // Disabling local speakers does not stop remote MP3 delivery.
         } catch (Exception ex) {
-            System.err.println("Kurumi voice save: " + ex.getMessage());
+            KurumiWebMonitor.log("语音设置保存失败：" + ex.getMessage());
         }
     }
 
     public static synchronized void install() {
         if (started) return;
         started = true;
-        Thread worker = new Thread(KurumiVoiceManager::work, "Kurumi-Local-TTS");
+        Thread worker = new Thread(KurumiVoiceManager::work, "Kurumi-Local-Aivis-TTS");
         worker.setDaemon(true);
         worker.start();
     }
@@ -66,86 +74,93 @@ public final class KurumiVoiceManager {
     public static void speak(String message) {
         if (message == null || message.isBlank() || message.startsWith("/")) return;
         install();
-        String trimmed = message.strip();
-        if (trimmed.length() > 200) trimmed = trimmed.substring(0, 200);
-        // Never block game execution; discard an older pending line if the queue is full.
-        if (!QUEUE.offer(trimmed)) {
-            QUEUE.poll();
-            QUEUE.offer(trimmed);
-        }
+        String text = message.strip();
+        if (text.length() > 200) text = text.substring(0, 200);
+        if (!QUEUE.offer(text)) { QUEUE.poll(); QUEUE.offer(text); }
     }
 
     public static void test() {
-        install();
-        if (!QUEUE.offer("ご主人さま〜！ くるみの声、聞こえますか？ えへへっ♪")) {
-            QUEUE.poll();
-            QUEUE.offer("ご主人さま〜！ くるみの声、聞こえますか？ えへへっ♪");
-        }
+        speak("ご主人様、くるみの声が聞こえますか？ えへへっ♪");
     }
 
     public static synchronized void stop() {
         epoch++;
         QUEUE.clear();
-        Process p = playback;
-        if (p != null && p.isAlive()) p.destroyForcibly();
+        Clip current = playback;
+        if (current != null) { current.stop(); current.close(); playback = null; }
     }
 
-    private static Path scriptPath() throws IOException {
-        if (pythonScript != null && Files.isRegularFile(pythonScript)) return pythonScript;
-        try (InputStream in = KurumiVoiceManager.class.getResourceAsStream("/kurumi_tts.py")) {
-            if (in == null) throw new IOException("Mod 缺少内置 kurumi_tts.py");
-            pythonScript = Files.createTempFile("kurumi-voice-", ".py");
-            Files.copy(in, pythonScript, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            pythonScript.toFile().deleteOnExit();
-            return pythonScript;
-        }
+    private static URI endpoint(JsonObject config, String path, String params) {
+        String base = value(config, "server_url", "http://127.0.0.1:10101");
+        URI uri = URI.create(base);
+        // Loopback only: never forward game speech to an arbitrary configured server.
+        String host = uri.getHost();
+        if (!"http".equals(uri.getScheme()) || !("127.0.0.1".equals(host) || "localhost".equals(host))
+                || uri.getUserInfo() != null || uri.getRawQuery() != null || uri.getRawFragment() != null)
+            throw new IllegalArgumentException("语音服务器必须是 http://127.0.0.1:端口");
+        return URI.create(base.replaceAll("/+$", "") + path + params);
+    }
+
+    private static byte[] synthesize(String text, JsonObject config) throws Exception {
+        String speaker = value(config, "speaker_id", "0");
+        if (!speaker.matches("[0-9]{1,10}")) throw new IllegalArgumentException("speaker_id 必须是声线样式数字 ID");
+        String params = "?speaker=" + speaker;
+        URI queryUri = endpoint(config, "/audio_query", params + "&text="
+                + URLEncoder.encode(text, StandardCharsets.UTF_8));
+        HttpRequest query = HttpRequest.newBuilder(queryUri).timeout(Duration.ofSeconds(15))
+                .POST(HttpRequest.BodyPublishers.noBody()).build();
+        HttpResponse<String> queryResult = HTTP.send(query, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        if (queryResult.statusCode() != 200) throw new IOException("语音查询 HTTP " + queryResult.statusCode());
+        JsonObject audioQuery = JsonParser.parseString(queryResult.body()).getAsJsonObject();
+        float speed = Float.parseFloat(value(config, "speed", "1.0"));
+        if (!Float.isFinite(speed) || speed < 0.5f || speed > 2.0f) throw new IllegalArgumentException("语速须在 0.5 至 2.0 之间");
+        audioQuery.addProperty("speedScale", speed);
+        HttpRequest synthesis = HttpRequest.newBuilder(endpoint(config, "/synthesis", params))
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(45))
+                .POST(HttpRequest.BodyPublishers.ofString(audioQuery.toString(), StandardCharsets.UTF_8)).build();
+        HttpResponse<byte[]> response = HTTP.send(synthesis, HttpResponse.BodyHandlers.ofByteArray());
+        if (response.statusCode() != 200) throw new IOException("语音合成 HTTP " + response.statusCode());
+        byte[] bytes = response.body();
+        if (bytes.length < 44 || bytes.length > 8_000_000 || bytes[0] != 'R' || bytes[1] != 'I'
+                || bytes[2] != 'F' || bytes[3] != 'F') throw new IOException("语音合成响应不是有效 WAV 或超过8MB");
+        return bytes;
+    }
+
+    private static void playWav(byte[] wav, long generation) {
+        try (AudioInputStream stream = AudioSystem.getAudioInputStream(new ByteArrayInputStream(wav))) {
+            Clip clip = AudioSystem.getClip();
+            try {
+                playback = clip;
+                clip.open(stream);
+                if (generation == epoch) {
+                    clip.start();
+                    while (clip.isRunning() && generation == epoch) Thread.sleep(40);
+                }
+            } finally {
+                clip.stop();
+                clip.close();
+            }
+        } catch (Exception ex) {
+            KurumiWebMonitor.log("本地播放不可用，仍可在 Web 面板播放：" + ex.getMessage());
+        } finally { playback = null; }
     }
 
     private static void work() {
         while (!Thread.currentThread().isInterrupted()) {
             try {
-                String message = QUEUE.take();
+                String text = QUEUE.take();
                 long generation = epoch;
                 JsonObject config = settings();
-                String voice = message.matches(".*[\\u3040-\\u30ff\\u31f0-\\u31ff].*")
-                        ? value(config, "voice_ja", "ja-JP-NanamiNeural")
-                        : value(config, "voice_zh", "zh-CN-XiaoyiNeural");
-                Path agentPython = FMLPaths.CONFIGDIR.get().resolve("mcaimod-agent")
-                        .resolve(".venv").resolve("Scripts").resolve("python.exe");
-                String defaultPython = Files.isRegularFile(agentPython)
-                        ? agentPython.toAbsolutePath().toString() : "py";
-                String python = value(config, "python_command", defaultPython);
-                Path audio = Files.createTempFile("kurumi-audio-", ".mp3");
-                ProcessBuilder builder = new ProcessBuilder(python, scriptPath().toString(), message,
-                        voice, value(config, "rate", "+12%"), value(config, "pitch", "+35Hz"),
-                        value(config, "volume", "0.8"), audio.toString(), (enabled() && Boolean.parseBoolean(value(config, "local_playback", "false"))) ? "1" : "0");
-                builder.redirectErrorStream(true);
-                Path output = Files.createTempFile("kurumi-tts-log-", ".txt");
-                builder.redirectOutput(output.toFile());
-                Process process;
-                try { process = builder.start(); }
-                catch (IOException error) { Files.deleteIfExists(audio); throw error; }
-                playback = process;
-                if (!process.waitFor(45, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                    System.err.println("Kurumi voice timeout");
-                } else if (process.exitValue() == 0 && generation == epoch) {
-                    try {
-                        if (Files.size(audio) <= 2_000_000)
-                            KurumiWebMonitor.publishAudio(message, Files.readAllBytes(audio));
-                    } catch (IOException e) { System.err.println("Kurumi MP3 publish failed: " + e.getMessage()); }
-                } else if (process.exitValue() != 0 && generation == epoch) {
-                    String log = Files.readString(output, StandardCharsets.UTF_8);
-                    System.err.println("Kurumi voice error: " + log.substring(0, Math.min(log.length(), 1000)));
-                }
-                if (playback == process) playback = null;
-                Files.deleteIfExists(output);
-                Files.deleteIfExists(audio);
+                byte[] wav = synthesize(text, config);
+                if (generation != epoch) continue;
+                KurumiWebMonitor.publishAudio(text, wav, "audio/wav");
+                if (enabled() && Boolean.parseBoolean(value(config, "local_playback", "true"))) playWav(wav, generation);
             } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
                 return;
             } catch (Exception ex) {
-                System.err.println("Kurumi voice unavailable: " + ex.getMessage());
+                KurumiWebMonitor.log("本地 AivisSpeech 语音失败：" + ex.getMessage());
             }
         }
     }
