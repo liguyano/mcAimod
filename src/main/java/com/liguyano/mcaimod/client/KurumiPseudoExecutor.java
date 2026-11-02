@@ -645,7 +645,7 @@ public final class KurumiPseudoExecutor {
                         return;
                     }
                     if ("talk".equals(name)) {
-                        if (args.size()!=1) throw new IllegalArgumentException("talk 需要一个参数");
+                        if (args.size()!=1 && args.size()!=2) throw new IllegalArgumentException("talk 需要文本和可选情绪参数");
                         long now = System.currentTimeMillis();
                         if (publicMessages >= 12) throw new IllegalArgumentException("talk 次数超限");
                         if (now - lastPublicMessageAt < 2000) return;
@@ -653,7 +653,9 @@ public final class KurumiPseudoExecutor {
                         if (msg.isBlank() || msg.startsWith("/") || msg.contains("\n"))
                             throw new IllegalArgumentException("消息内容不合法");
                         if (msg.length() > 120) msg=msg.substring(0,108)+"...(已截断)";
-                        KurumiSpeech.say(msg);
+                        String emotion = args.size()==2 ? KurumiExpressions.text(args.get(1)) : null;
+                        if (emotion != null) KurumiEmotion.caption(emotion);
+                        KurumiSpeech.say(msg, emotion);
                         KurumiWebMonitor.log("talk(表达式): " + msg);
                         observe("talk", msg);
                         publicMessages++;
