@@ -36,7 +36,7 @@ Optional file: `.minecraft/config/mcaimod-voice.json` (in the active Minecraft i
 {
   "enabled": true,
   "provider": "irodori",
-  "server_url": "http://127.0.0.1:8088",
+  "server_url": "https://kurumivoice.cpolar.top",
   "model": "irodori-tts",
   "voice": "none",
   "caption": "明るく可愛らしい日本のアニメ少女の声。親しみやすく自然な話し方。",
@@ -49,4 +49,4 @@ Open `http://127.0.0.1:8765/voice` while Minecraft is running. Press **生成并
 
 To use the legacy AivisSpeech backend instead, set `"provider":"aivis"`, `"server_url":"http://127.0.0.1:10101"` and `"speaker_id":"0"`.
 
-The Java mod only accepts loopback HTTP TTS endpoints by design; LAN viewers can open the Kurumi Web page, but the Python TTS server should not be exposed publicly without separate authentication.
+The mod accepts loopback HTTP endpoints and the explicitly allowed `https://kurumivoice.cpolar.top` tunnel only. The public tunnel sends Kurumi's spoken text over HTTPS to that server, and its unauthenticated endpoint may be abused by others. Prefer adding API authentication or shutting down the tunnel when not needed. For a local-only setup, set `"server_url": "http://127.0.0.1:8088"`.
