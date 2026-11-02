@@ -69,4 +69,16 @@ class KurumiDecisionParserTest {
         assertTrue(KurumiDecisionParser.parse(request("talk(get_distance(\"bad\",\"minecraft:stone\"))")).isEmpty());
         assertTrue(KurumiDecisionParser.parse("not json").isEmpty());
     }
+
+    @Test void pythonEngineFlagCannotBypassJavaScriptValidation() {
+        String previous = System.getProperty("mcaimod.scriptEngine");
+        try {
+            System.setProperty("mcaimod.scriptEngine", "python");
+            assertTrue(KurumiDecisionParser.parse(request("import helpers\nhelper = InventoryHelper()" )).isEmpty());
+            assertTrue(KurumiDecisionParser.parse(request("talk(\"Java 执行\")")).isPresent());
+        } finally {
+            if (previous == null) System.clearProperty("mcaimod.scriptEngine");
+            else System.setProperty("mcaimod.scriptEngine", previous);
+        }
+    }
 }

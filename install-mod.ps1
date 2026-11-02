@@ -1,8 +1,8 @@
-﻿# Kurumi Mod installer: build + verify GraalPy JarJar + install safely.
+﻿# Kurumi Mod installer: build and install the Java interpreter version safely.
 # Usage:
 #   .\install-mod.ps1                 # Build locally and install
-#   .\install-mod.ps1 -Pull           # Fast-forward GitHub main, then build/install
-#   .\install-mod.ps1 -SkipBuild      # Install only an existing, locally verified JAR
+#   .\install-mod.ps1 -Pull           # Fast-forward current branch, then build/install
+#   .\install-mod.ps1 -SkipBuild      # Install only an existing JAR
 param(
     [switch]$Pull,
     [switch]$SkipBuild
@@ -31,8 +31,12 @@ if ($Pull) {
     if ($changes.Count -gt 0) {
         throw "Local Git changes found. Commit or stash them before using -Pull. No files were modified."
     }
-    Write-Host "Updating repository from GitHub (fast-forward only)..."
-    & git pull --ff-only origin main
+    $branch = (& git branch --show-current).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($branch)) {
+        throw "Cannot detect the current Git branch."
+    }
+    Write-Host "Updating branch $branch from GitHub (fast-forward only)..."
+    & git pull --ff-only origin $branch
     if ($LASTEXITCODE -ne 0) { throw "Git pull failed; installation cancelled." }
 }
 
@@ -48,39 +52,18 @@ if (-not $SkipBuild) {
     if (-not (Test-Path -LiteralPath $gradle -PathType Leaf)) {
         throw "Gradle wrapper not found: $gradle"
     }
-    Write-Host "Building Mod and verifying embedded GraalPy dependencies..."
-    & $gradle build verifyGraalPyJarJar --no-configuration-cache --console=plain
+    Write-Host "Building Kurumi Java Mod..."
+    & $gradle build --no-configuration-cache --console=plain
     if ($LASTEXITCODE -ne 0) {
-        throw "Gradle build / GraalPy packaging verification failed. Existing Mod was not changed."
+        throw "Gradle build failed. Existing Mod was not changed."
     }
 } else {
-    Write-Warning "Skipping Gradle build: checking the existing JAR only."
+    Write-Warning "Skipping Gradle build: using an existing JAR."
 }
 
 if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
     throw "Build output not found: $source"
 }
-# Independent, lightweight check so -SkipBuild cannot accidentally install
-# the old JAR that compiled but lacked the GraalPy language libraries.
-Add-Type -AssemblyName System.IO.Compression
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-$zip = [System.IO.Compression.ZipFile]::OpenRead($source)
-try {
-    $entries = @($zip.Entries | ForEach-Object { $_.FullName })
-    if ($entries -notcontains 'META-INF/jarjar/metadata.json') {
-        throw "GraalPy JarJar metadata missing from $source"
-    }
-    foreach ($prefix in @('polyglot-', 'python-language-', 'python-resources-', 'truffle-api-')) {
-        if (-not @($entries | Where-Object {
-            $_.StartsWith('META-INF/jarjar/') -and $_.Contains($prefix) -and $_.EndsWith('.jar')
-        }).Count) {
-            throw "GraalPy dependency '$prefix' missing from $source"
-        }
-    }
-} finally {
-    $zip.Dispose()
-}
-
 $destination = Join-Path $modsFolder $jarName
 $existingMods = @(Get-ChildItem -LiteralPath $modsFolder -Filter 'mcaimod-*.jar' -File)
 $backupDir = Join-Path $modsFolder '.mcaimod-backup'
@@ -117,4 +100,4 @@ try {
 }
 Write-Host "Installed $jarName to $modsFolder" -ForegroundColor Green
 if ($backedUp.Count) { Write-Host "Previous JAR backup(s) in $backupDir" }
-Write-Host "Note: JarJar checks passed; launch Minecraft to verify GraalPy runtime loads."
+Write-Host "Launch Minecraft to verify the Java script interpreter works."

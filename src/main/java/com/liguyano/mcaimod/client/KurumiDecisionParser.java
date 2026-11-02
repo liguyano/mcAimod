@@ -83,23 +83,11 @@ public final class KurumiDecisionParser {
             if ("EXECUTE_SCRIPT".equals(name)) {
                 if (!object.has("script") || !object.get("script").isJsonPrimitive()) return Optional.empty();
                 String script = object.get("script").getAsString();
-                // Ordinary scripts must not initialize NeoForge config during standalone parser tests.
-                boolean localPythonImports = "python".equalsIgnoreCase(
-                        System.getProperty("mcaimod.scriptEngine", "python"))
-                        && KurumiPythonModulePolicy.isApprovedImportScript(script);
-                if (!localPythonImports && script.lines().map(String::stripLeading).anyMatch(line ->
+                if (script.lines().map(String::stripLeading).anyMatch(line ->
                         line.startsWith("from ") || line.startsWith("import ")
                                 || line.startsWith("run_skill(")))
                     script = KurumiSkillMemory.configured().expandCalls(script);
                 final String validatedScript = script;
-                // Local module imports use GraalPy, not the old pseudocode AST.
-                // Restrict this path to locally installed modules; actual game
-                // authorization is additionally checked in the controller.
-                if (localPythonImports) {
-                    return KurumiScriptParser.parse("observe(get_position())").map(program ->
-                            new Decision(reply, Optional.empty(), "", null, null, null, "",
-                                    Optional.empty(), Optional.of(program), validatedScript));
-                }
                 return KurumiScriptParser.parse(validatedScript).map(program ->
                         new Decision(reply, Optional.empty(), "", null, null, null, "", Optional.empty(), Optional.of(program), validatedScript));
             }

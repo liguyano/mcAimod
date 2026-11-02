@@ -272,20 +272,11 @@ public final class KurumiWebActions {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player == null || mc.level == null || mc.getConnection() == null)
                 error = "请先进入游戏";
-            else if (KurumiPseudoExecutor.busy() || KurumiPythonRuntime.busy()
+            else if (KurumiPseudoExecutor.busy()
                     || KurumiPlanExecutor.busy() || KurumiLongTaskBridge.busy()
                     || KurumiChestCraftTask.busy())
                 error = "已有任务在执行";
-            else if ("python".equals(engine)) {
-                if (!KurumiPythonRuntime.available()) error = "GraalPy 运行时不可用";
-                else if (!KurumiClientController.pythonAgentActionsAllowed())
-                    error = "请先开启 /kurumi auto on";
-                else {
-                    KurumiWebMonitor.requirement("Web GraalPy 脚本调试");
-                    var result = KurumiPythonRuntime.start(source);
-                    if (!result.success()) error = result.message();
-                }
-            } else if ("langgraph".equals(engine)) {
+            else if ("langgraph".equals(engine)) {
                 if (!KurumiAgentProcess.available()) error = "LangGraph Agent 未启动";
                 else if (!KurumiClientController.pythonAgentActionsAllowed())
                     error = "请先开启 /kurumi auto on";

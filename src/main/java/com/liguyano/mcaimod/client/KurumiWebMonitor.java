@@ -511,10 +511,10 @@ public final class KurumiWebMonitor {
             <h2>手动执行 · 引擎调试</h2>
             <p class="muted">当前使用 Java 手写解释器执行脚本，不需要安装 Python 或 LangGraph。</p>
             <label for="runEngine">执行引擎</label>
-            <select id="runEngine"><option value="legacy">旧 Java 伪代码（Legacy）</option></select>
+            <select id="runEngine"><option value="legacy">Java 内置脚本解释器</option></select>
             <textarea id="runScript" placeholder="talk(get_player_status())"></textarea>
             <div class="controls"><button id="runBtn">确认并执行</button><span id="runStatus" class="feedback">空闲</span></div>
-            <p class="muted" id="engineHelp">Legacy：旧脚本校验器；只支持受限伪 Python 语法。</p>
+            <p class="muted" id="engineHelp">Java 内置解释器：支持受限 Python 风格语法，无需额外运行时。</p>
           </section>
         </div>
         <h2>生成请求</h2><div id="pending" class="empty">暂无生成请求</div>
@@ -782,14 +782,8 @@ public final class KurumiWebMonitor {
         });
         document.getElementById('runEngine').addEventListener('change',function(){
           const engine=this.value;
-          document.getElementById('engineHelp').textContent=engine==='legacy'
-            ?'Legacy：旧脚本校验器；仅支持受限伪 Python 语法。'
-            :engine==='python'
-            ?'GraalPy：执行真实 Python 脚本；需要 GraalPy 运行时与 /kurumi auto on。'
-            :'LangGraph：输入自然语言任务，由 Agent 选择 Skills；需要 Agent 服务与 /kurumi auto on。';
-          document.getElementById('runScript').placeholder=engine==='langgraph'
-            ?'例如：查看背包里还有多少樱花原木'
-            :engine==='python'?'from helpers import KurumiHelper':'talk(get_player_status())';
+          document.getElementById('engineHelp').textContent='Java 内置解释器：仅支持受限 Python 风格语法，无需 GraalPy。';
+          document.getElementById('runScript').placeholder='talk(get_player_status())';
         });
         refresh();loadSkills();
         setInterval(refresh,1000);
