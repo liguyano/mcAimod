@@ -407,7 +407,8 @@ public final class KurumiWebMonitor {
                 }
                 try {
                     JsonObject payload = JsonParser.parseString(new String(input, StandardCharsets.UTF_8)).getAsJsonObject();
-                    KurumiVoiceManager.preview(payload.get("text").getAsString());
+                    KurumiVoiceManager.preview(payload.get("text").getAsString(),
+                            payload.has("emotion") ? payload.get("emotion").getAsString() : "normal");
                     JsonObject result = new JsonObject(); result.addProperty("accepted", true);
                     reply(exchange, 202, result);
                 } catch (RuntimeException ex) {
@@ -455,7 +456,7 @@ public final class KurumiWebMonitor {
         <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
         <title>Kurumi Voice</title><style>
         body{font:16px system-ui,sans-serif;background:#121624;color:#f0eaff;max-width:650px;margin:40px auto;padding:20px}
-        button,input,textarea{font:inherit;margin:7px;padding:9px;border-radius:8px}button{cursor:pointer}
+        button,input,textarea,select{font:inherit;margin:7px;padding:9px;border-radius:8px}button{cursor:pointer}
         section{padding:20px;background:#20263b;border-radius:18px}#last{white-space:pre-wrap;min-height:60px}
         textarea{display:block;width:95%;background:#121624;color:#fff;border:1px solid #64748b}
         </style></head><body><h1>くるみ ♡ Voice Player</h1><section>
@@ -464,6 +465,11 @@ public final class KurumiWebMonitor {
         <label>音量 <input id="volume" type="range" min="0" max="1" step="0.05" value="0.8"></label>
         <h3>语音试听</h3>
         <textarea id="previewText" maxlength="200" rows="3">こんにちは、ご主人様！私はくるみです。</textarea>
+        <label>情绪 <select id="emotion">
+          <option value="normal">普通</option><option value="happy">开心</option>
+          <option value="fear">害怕</option><option value="affection">撒娇</option>
+          <option value="shy">害羞</option><option value="sad">难过</option>
+        </select></label>
         <button id="preview">生成并试听</button><span id="previewStatus"></span>
         <p id="status">停止中</p><h3>最後のメッセージ</h3><div id="last">まだありません</div>
         </section><script>
@@ -490,7 +496,8 @@ public final class KurumiWebMonitor {
           active=true;document.getElementById('status').textContent='再生中';
           try{
             const res=await fetch('/api/voice/test',{method:'POST',headers:{'Content-Type':'application/json','X-Kurumi-Web':'1'},
-              body:JSON.stringify({text:document.getElementById('previewText').value})});
+              body:JSON.stringify({text:document.getElementById('previewText').value,
+                emotion:document.getElementById('emotion').value})});
             const body=await res.json();
             if(!res.ok)throw Error(body.error||res.status);
             status.textContent='已提交，等待合成…';
