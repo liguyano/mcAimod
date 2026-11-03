@@ -864,6 +864,14 @@ public final class KurumiClientController {
                 + "字典键使用字符串，允许嵌套但要保持结果简短。"
                 + "工具结果优先使用 result.success 一类字段访问，异步动作收到 success=true 仅代表已受理，仍需观察确认完成。"));
         conversation.add(new ChatMessage("system",
+                "开箱优先使用代码验证，避免无意义的 AI 观察轮次：opened = chest_open() 会在 Java 端等待"
+                + "客户端实际打开 ChestMenu 后才返回，成功时 opened.success 和 opened.completed 均为 true；"
+                + "失败或超时则为 false。只需用 if not opened.completed: 判断，不要为确认开箱而"
+                + "observe(inspect_container())。目标箱子不同且旧箱子已开时会自动关闭旧菜单并重新打开目标。"
+                + "存放物品时先记录 before = check_inventory_item(item_id)，执行 chest_put_item_all(item_id)，"
+                + "等待服务器同步后读取 after = check_inventory_item(item_id)；只有 after < before 才能确认确有存入，"
+                + "只有 after == 0 才能说全部存完。能够用这些本地判断完成的流程不要调用 observe() 或重新请求模型。"));
+        conversation.add(new ChatMessage("system",
                 "Kurumi 的情绪语音由你在每条实际发言中选择：普通聊天用 talk(\"消息\", \"normal\")，"
                 + "开心用 happy，害怕用 fear，撒娇用 affection，害羞用 shy，难过用 sad。"
                 + "根据当前对话语境选一个最自然的情绪，不要滥用极端语气；没有明显情绪就用 normal。"
