@@ -58,6 +58,7 @@ public final class KurumiChestCraftTask {
         if (mc.getConnection() != null) mc.getConnection().sendChat(text);
     }
     private static void tick(ClientTickEvent.Post event) {
+        if (KurumiSurvivalBridge.eating()) return;
         Job j = job;
         if (j == null || ++ticks % 10 != 0) return;
         Minecraft mc = Minecraft.getInstance();
