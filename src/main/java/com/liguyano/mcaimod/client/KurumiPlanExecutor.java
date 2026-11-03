@@ -143,6 +143,7 @@ public final class KurumiPlanExecutor {
         }
     }
     private static void tick(ClientTickEvent.Post event) {
+        if (KurumiSurvivalBridge.eating()) return;
         Run r = active;
         if (r == null || ++ticks % 10 != 0) return;
         Minecraft mc = Minecraft.getInstance();
