@@ -64,28 +64,6 @@ public final class KurumiClientController {
                 || KurumiFishingBridge.busy() || KurumiLongTaskBridge.busy();
     }
 
-    /** The model only decides whether to interrupt; it never controls the food-use implementation. */
-    static void requestHungerDecision(int foodLevel) {
-        ModelProfile profile;
-        try { profile = ModelProfiles.load(FMLPaths.CONFIGDIR.get()
-                .resolve("mcaimod-models.json")).first().orElse(null); }
-        catch (Exception e) { profile = null; }
-        if (profile == null) { KurumiSurvivalBridge.hungerDecision(false); return; }
-        long currentGeneration = generation;
-        Minecraft mc = Minecraft.getInstance();
-        KurumiWebMonitor.log("饥饿值 " + foodLevel + "，等待 AI 判断是否立即吃饭");
-        PROVIDER.chat(profile, List.of(
-                new ChatMessage("system", "你是 Minecraft AI 伙伴 Kurumi 的生存决策器。只允许返回一个单词 EAT 或 WAIT。"
-                        + "如果需要立即打断当前工作补充饥饿值，返回 EAT；否则返回 WAIT。"
-                        + "不生成脚本，不输出解释。"),
-                new ChatMessage("user", "当前饥饿值=" + foodLevel + "/20，当前有未完成任务。是否立即中断吃饭？")))
-                .whenComplete((reply, error) -> mc.execute(() -> {
-                    if (currentGeneration != generation) return;
-                    KurumiSurvivalBridge.hungerDecision(error == null && reply != null
-                            && "EAT".equalsIgnoreCase(reply.strip()));
-                }));
-    }
-
     /** Called synchronously by the local damage watcher; never waits for a model response. */
     static void onSurvivalAttack(double attackerX, double attackerZ) {
         long now = System.currentTimeMillis();
