@@ -6,6 +6,16 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class KurumiChestTargetScriptTest {
+    @Test void canCheckVerifiedChestOpenWithoutObservingWholeContainer() {
+        assertTrue(KurumiScriptParser.parse("""
+                chest_target(-21,64,-8)
+                opened = chest_open()
+                if not opened.completed:
+                    raise Exception("箱子没有打开")
+                chest_put_item_all("minecraft:cherry_log")
+                """).isPresent());
+    }
+
     @Test void correctsOneNearbyChestButRefusesAmbiguousTargets() {
         BlockPos chest = new BlockPos(-21, 64, -8);
         assertEquals(chest, KurumiChestBridge.uniqueCandidate(List.of(chest)));
