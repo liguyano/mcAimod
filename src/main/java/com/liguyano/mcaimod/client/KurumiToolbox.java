@@ -350,7 +350,7 @@ public final class KurumiToolbox {
         for (var entry : source.entrySet()) {
             JsonObject enchantment = new JsonObject();
             enchantment.addProperty("id", entry.getKey().unwrapKey()
-                    .map(key -> key.location().toString()).orElse("unknown"));
+                    .map(key -> key.identifier().toString()).orElse("unknown"));
             enchantment.addProperty("level", entry.getIntValue());
             target.add(enchantment);
         }
