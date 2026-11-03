@@ -12,12 +12,17 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Nearby vanilla chest interaction, followed by bounded item transfer after server opens the menu. */
 public final class KurumiChestBridge {
     private record Pending(String itemId, int quantity, long startedAt) {}
     private static Pending pending;
     private static BlockPos selectedChest;
+    private static BlockPos lastOpenedChest;
+    private static long lastOpenedAt;
+    private static int lastOpenedContainerId = -1;
     public static BlockPos selectedChest() { return selectedChest; }
     public static BaritoneBridge.Result clearTarget() {
         selectedChest = null;
@@ -44,6 +49,16 @@ public final class KurumiChestBridge {
     public static boolean busy() { return pending != null; }
 
     public static void cancel() { pending = null; }
+
+    /** Only a single nearby chest is safe to select automatically. */
+    static BlockPos uniqueCandidate(List<BlockPos> candidates) {
+        return candidates.size() == 1 ? candidates.get(0) : null;
+    }
+
+    private static boolean isLoadedChest(Minecraft mc, BlockPos pos) {
+        return mc.level.hasChunkAt(pos)
+                && mc.level.getBlockState(pos).getBlock() instanceof ChestBlock;
+    }
 
     public static BaritoneBridge.Result open() { return interact(null, 0); }
 
@@ -77,7 +92,8 @@ public final class KurumiChestBridge {
             return new BaritoneBridge.Result(false, "当前不在游戏世界");
         if (pending != null)
             return new BaritoneBridge.Result(false, "上一项箱子操作尚未完成");
-        if (selectedChest != null && mc.player.containerMenu instanceof ChestMenu)
+        if (selectedChest != null && mc.player.containerMenu instanceof ChestMenu menu
+                && (!selectedChest.equals(lastOpenedChest) || menu.containerId != lastOpenedContainerId))
             return new BaritoneBridge.Result(false, "已打开容器时不能确认是指定坐标的箱子，请先 close_container()");
         if (itemId != null && !ALL_ITEMS.equals(itemId) && !TAKE_ALL.equals(itemId) && !itemId.startsWith(TAKE_ITEM_PREFIX)) {
             String matchId = itemId.startsWith(ALL_OF_ITEM_PREFIX) ? itemId.substring(ALL_OF_ITEM_PREFIX.length()) : itemId;
@@ -112,9 +128,23 @@ public final class KurumiChestBridge {
         }
         if (selectedChest != null) {
             BlockPos pinned = selectedChest;
-            if (!mc.level.hasChunkAt(pinned)
-                    || !(mc.level.getBlockState(pinned).getBlock() instanceof ChestBlock))
-                return new BaritoneBridge.Result(false, "指定坐标不是已加载的普通箱子：" + pinned);
+            if (!isLoadedChest(mc, pinned)) {
+                List<BlockPos> candidates = new ArrayList<>();
+                for (BlockPos nearby : BlockPos.betweenClosed(pinned.offset(-2, -2, -2),
+                        pinned.offset(2, 2, 2))) {
+                    if (isLoadedChest(mc, nearby)) candidates.add(nearby.immutable());
+                }
+                BlockPos corrected = uniqueCandidate(candidates);
+                if (corrected == null) {
+                    if (candidates.isEmpty())
+                        return new BaritoneBridge.Result(false, "目标 " + pinned + " 周围2格没有找到已加载的普通箱子");
+                    return new BaritoneBridge.Result(false, "目标 " + pinned
+                            + " 周围2格找到多个箱子，无法安全自动选择，请指定准确坐标：" + candidates);
+                }
+                selectedChest = corrected;
+                pinned = corrected;
+                KurumiWebMonitor.log("箱子坐标容错：已将目标自动修正为 " + corrected);
+            }
             if (mc.player.getEyePosition().distanceToSqr(Vec3.atCenterOf(pinned)) >= 6.0 * 6.0)
                 return new BaritoneBridge.Result(false, "指定箱子超出交互距离，请先走近：" + pinned);
             nearest = pinned;
@@ -125,15 +155,29 @@ public final class KurumiChestBridge {
                 new BlockHitResult(Vec3.atCenterOf(nearest), Direction.UP, nearest, false));
         if (!result.consumesAction())
             return new BaritoneBridge.Result(false, "无法打开箱子，可能被阻挡或服务器拒绝");
+        lastOpenedChest = nearest;
+        lastOpenedAt = System.currentTimeMillis();
+        lastOpenedContainerId = -1;
         if (itemId != null)
             pending = new Pending(itemId, quantity, System.currentTimeMillis());
         return new BaritoneBridge.Result(true, itemId == null ? "已发送打开箱子的请求" : TAKE_ALL.equals(itemId) ? "正在打开箱子，等待服务器同步后取出物品" : "正在打开箱子，等待服务器同步后放入物品");
     }
 
     private static void onTick(ClientTickEvent.Post event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (lastOpenedChest != null) {
+            if (mc.player == null || (mc.player.containerMenu == mc.player.inventoryMenu
+                    && lastOpenedContainerId != -1)
+                    || System.currentTimeMillis() - lastOpenedAt > 10_000) {
+                lastOpenedChest = null;
+                lastOpenedContainerId = -1;
+            } else if (mc.player.containerMenu instanceof ChestMenu menu) {
+                if (lastOpenedContainerId == -1) lastOpenedContainerId = menu.containerId;
+                else if (lastOpenedContainerId != menu.containerId) lastOpenedChest = null;
+            }
+        }
         Pending task = pending;
         if (task == null) return;
-        Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.getConnection() == null) { pending = null; return; }
         if (mc.player.containerMenu instanceof ChestMenu) {
             pending = null;
