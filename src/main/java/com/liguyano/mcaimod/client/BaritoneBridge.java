@@ -8,6 +8,14 @@ import java.util.function.BooleanSupplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import java.util.function.Predicate;
 
 /**
@@ -31,6 +39,81 @@ public final class BaritoneBridge {
     private static BooleanSupplier waterGoalReached;
     private static long lastWaterProgress;
     private static double lastWaterX, lastWaterZ;
+    private static boolean doorAssistActive;
+    private static long lastDoorProgress;
+    private static double lastDoorX, lastDoorZ;
+    private static long lastDoorInteraction;
+
+    static boolean shouldAssistDoor(boolean active, long lastProgress, long now, long lastInteraction) {
+        return active && now - lastProgress >= 2_000L && now - lastInteraction >= 3_000L;
+    }
+
+    private static void trackDoorNavigation(boolean active) {
+        doorAssistActive = active;
+        lastDoorInteraction = 0;
+        lastDoorProgress = System.currentTimeMillis();
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player != null) {
+            lastDoorX = mc.player.getX();
+            lastDoorZ = mc.player.getZ();
+        }
+    }
+
+    /** Assist Baritone only when it has been unable to advance past a closed, clickable door. */
+    private static void tickDoorAssist() {
+        if (!doorAssistActive) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null || mc.gameMode == null) {
+            trackDoorNavigation(false);
+            return;
+        }
+        // A finished path must never trigger an unrelated door interaction.
+        try {
+            Object pathing = invoke(primaryBaritone(), "getPathingBehavior");
+            if (!Boolean.TRUE.equals(invoke(pathing, "isPathing"))) return;
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException ex) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        double dx = mc.player.getX() - lastDoorX;
+        double dz = mc.player.getZ() - lastDoorZ;
+        if (dx * dx + dz * dz >= 0.36) {
+            lastDoorX = mc.player.getX();
+            lastDoorZ = mc.player.getZ();
+            lastDoorProgress = now;
+            return;
+        }
+        if (!shouldAssistDoor(doorAssistActive, lastDoorProgress, now, lastDoorInteraction)) return;
+        Vec3 look = mc.player.getLookAngle();
+        double lookLength = Math.hypot(look.x, look.z);
+        if (lookLength < 0.01) return;
+        BlockPos feet = mc.player.blockPosition();
+        BlockPos best = null;
+        double bestDistance = 2.8 * 2.8;
+        for (BlockPos pos : BlockPos.betweenClosed(feet.offset(-2, -1, -2), feet.offset(2, 1, 2))) {
+            if (!mc.level.hasChunkAt(pos)) continue;
+            var state = mc.level.getBlockState(pos);
+            boolean interactive = (state.getBlock() instanceof DoorBlock && state.getBlock() != Blocks.IRON_DOOR)
+                    || state.getBlock() instanceof FenceGateBlock;
+            if (!interactive || !state.hasProperty(BlockStateProperties.OPEN)
+                    || state.getValue(BlockStateProperties.OPEN)) continue;
+            Vec3 center = Vec3.atCenterOf(pos);
+            double forwardX = center.x - mc.player.getX();
+            double forwardZ = center.z - mc.player.getZ();
+            double horizontal = Math.hypot(forwardX, forwardZ);
+            if (horizontal < 0.1 || (forwardX * look.x + forwardZ * look.z)
+                    / (horizontal * lookLength) < 0.65) continue;
+            double distance = mc.player.getEyePosition().distanceToSqr(center);
+            if (distance < bestDistance) { bestDistance = distance; best = pos.immutable(); }
+        }
+        if (best == null) return;
+        lastDoorInteraction = now;
+        var interaction = mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND,
+                new BlockHitResult(Vec3.atCenterOf(best), Direction.UP, best, false));
+        if (interaction.consumesAction()) {
+            KurumiWebMonitor.log("寻路停滞：尝试打开门 " + best.toShortString());
+        }
+    }
 
     /** Water is initially impassable to Baritone, then allowed if the land route stalls. */
     private static boolean setWaterAvoidance(boolean enabled) {
@@ -81,6 +164,7 @@ public final class BaritoneBridge {
 
     /** Called on client ticks even when the agent is waiting for a script result. */
     public static void tickWaterAvoidance() {
+        tickDoorAssist();
         Runnable fallback = waterFallback;
         if (fallback == null) return;
         Minecraft mc = Minecraft.getInstance();
@@ -136,6 +220,7 @@ public final class BaritoneBridge {
     }
 
     public static Result farm(int radius) {
+        trackDoorNavigation(false);
         if (radius < 4 || radius > 32) {
             return new Result(false, "农作半径必须在 4–32 格之间");
         }
@@ -154,13 +239,15 @@ public final class BaritoneBridge {
         if (!policy.success()) return policy;
         String command = "goto " + x + " " + y + " " + z;
         String message = "已向 Baritone 发送无破坏寻路到坐标 " + x + " " + y + " " + z;
-        return preferLand(() -> executeLocal(command, message), () -> executeLocal(command, message), () -> {
+        Result result = preferLand(() -> executeLocal(command, message), () -> executeLocal(command, message), () -> {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player == null) return false;
             double dx = mc.player.getX() - (x + 0.5);
             double dz = mc.player.getZ() - (z + 0.5);
             return dx * dx + dz * dz <= 2.25 && Math.abs(mc.player.getY() - y) <= 2;
         });
+        trackDoorNavigation(result.success());
+        return result;
     }
 
     /** Relative movement uses the player's actual yaw, not fixed world axes. */
@@ -220,7 +307,9 @@ public final class BaritoneBridge {
         String canonical = match.name();
         Result policy = setBreakPolicy(true);
         if (!policy.success()) return policy;
-        return preferLand(() -> startFollow(canonical), () -> startFollow(canonical), () -> false);
+        Result result = preferLand(() -> startFollow(canonical), () -> startFollow(canonical), () -> false);
+        trackDoorNavigation(result.success());
+        return result;
     }
 
     private static Result startFollow(String canonical) {
@@ -247,6 +336,7 @@ public final class BaritoneBridge {
 
     /** Bounded resource collection; only known block identifiers can be passed. */
     public static Result mineBlock(String blockId) {
+        trackDoorNavigation(false);
         waterFallback = null;
         waterGoalReached = null;
         setWaterAvoidance(false);
@@ -258,6 +348,7 @@ public final class BaritoneBridge {
     }
 
     public static Result stop() {
+        trackDoorNavigation(false);
         waterFallback = null;
         waterGoalReached = null;
         setWaterAvoidance(false);
