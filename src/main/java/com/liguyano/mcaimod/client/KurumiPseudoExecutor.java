@@ -87,6 +87,7 @@ public final class KurumiPseudoExecutor {
     private static boolean awaitingContainerTransfer;
     private static boolean awaitingExternal;
     private static boolean awaitingMenu;
+    private static boolean awaitingChestMenu;
     private static long menuStarted;
     private static long externalStarted;
     private static String comeTarget;
@@ -164,6 +165,7 @@ public final class KurumiPseudoExecutor {
         sleepUntil = 0;
         awaitingExternal = false;
         awaitingMenu = false;
+        awaitingChestMenu = false;
         frames.clear();
         functions.clear();
         KurumiBlockBreakingBridge.cancel();
@@ -222,6 +224,7 @@ public final class KurumiPseudoExecutor {
         awaitingContainerTransfer = false;
         awaitingExternal = false;
         awaitingMenu = false;
+        awaitingChestMenu = false;
         awaitingChestSearch = false;
         pendingCondition = null;
         pendingStatement = null;
@@ -360,12 +363,18 @@ public final class KurumiPseudoExecutor {
             return;
         }
         if (awaitingMenu) {
-            if (mc.player.containerMenu != mc.player.inventoryMenu) {
+            boolean menuReady = awaitingChestMenu
+                    ? mc.player.containerMenu instanceof net.minecraft.world.inventory.ChestMenu
+                    : mc.player.containerMenu != mc.player.inventoryMenu;
+            if (menuReady) {
                 awaitingMenu = false;
-                finishPendingAction(true, "已观察到容器界面打开");
-                KurumiWebMonitor.log("容器界面已打开，可以继续放入物品");
+                awaitingChestMenu = false;
+                lastResultSuccess = true;
+                finishPendingAction(true, "已由客户端确认容器菜单打开");
+                KurumiWebMonitor.log("容器菜单已打开并验证，不必发送完整槽位给 AI");
             } else if (System.currentTimeMillis() - menuStarted > 5000L) {
                 awaitingMenu = false;
+                awaitingChestMenu = false;
                 finishPendingAction(false, "等待容器界面超时");
                 KurumiWebMonitor.log("等待容器界面超时");
                 lastResultSuccess = false;
@@ -890,8 +899,9 @@ public final class KurumiPseudoExecutor {
                             default -> throw new IllegalArgumentException("动作不在白名单: " + name);
                         };
                         if (outcome.success()) {
-                            if ("craft_open".equals(name)) {
+                            if ("craft_open".equals(name) || "chest_open".equals(name)) {
                                 awaitingMenu = true;
+                                awaitingChestMenu = "chest_open".equals(name);
                                 menuStarted = System.currentTimeMillis();
                             }
                             if (KurumiLongTaskBridge.busy() || KurumiAutoCraftBridge.busy()
@@ -1057,8 +1067,10 @@ public final class KurumiPseudoExecutor {
                     frame.index++;
                     if (!result.success() && !assignedResult) { cancel(); return; }
                     if (result.success() && "SLEEP_IN_BED".equals(step.action())) awaitingBed = true;
-                    if (result.success() && "CRAFT_OPEN".equals(step.action())) {
+                    if (result.success() && ("CRAFT_OPEN".equals(step.action())
+                            || "CHEST_OPEN".equals(step.action()))) {
                         awaitingMenu = true;
+                        awaitingChestMenu = "CHEST_OPEN".equals(step.action());
                         menuStarted = System.currentTimeMillis();
                     }
                     if (result.success() && (KurumiLongTaskBridge.busy() || KurumiAutoCraftBridge.busy()
