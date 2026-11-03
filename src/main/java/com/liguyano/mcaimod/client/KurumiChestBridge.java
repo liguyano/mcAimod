@@ -93,8 +93,12 @@ public final class KurumiChestBridge {
         if (pending != null)
             return new BaritoneBridge.Result(false, "上一项箱子操作尚未完成");
         if (selectedChest != null && mc.player.containerMenu instanceof ChestMenu menu
-                && (!selectedChest.equals(lastOpenedChest) || menu.containerId != lastOpenedContainerId))
-            return new BaritoneBridge.Result(false, "已打开容器时不能确认是指定坐标的箱子，请先 close_container()");
+                && (!selectedChest.equals(lastOpenedChest) || menu.containerId != lastOpenedContainerId)) {
+            mc.player.closeContainer();
+            KurumiWebMonitor.log("当前打开的箱子与指定目标无法匹配，已自动关闭旧容器并准备重开目标箱子");
+            if (mc.player.containerMenu != mc.player.inventoryMenu)
+                return new BaritoneBridge.Result(false, "旧容器尚未关闭，稍后重试开箱");
+        }
         if (itemId != null && !ALL_ITEMS.equals(itemId) && !TAKE_ALL.equals(itemId) && !itemId.startsWith(TAKE_ITEM_PREFIX)) {
             String matchId = itemId.startsWith(ALL_OF_ITEM_PREFIX) ? itemId.substring(ALL_OF_ITEM_PREFIX.length()) : itemId;
             int count = 0;
