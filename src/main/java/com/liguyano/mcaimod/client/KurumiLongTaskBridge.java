@@ -79,6 +79,7 @@ public final class KurumiLongTaskBridge {
         }
     }
     private static void tick(ClientTickEvent.Post event) {
+        if (KurumiSurvivalBridge.eating()) return;
         Task t = active;
         if (t == null || ++ticks % 20 != 0) return;
         Minecraft mc = Minecraft.getInstance();
