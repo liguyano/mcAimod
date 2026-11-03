@@ -11,9 +11,7 @@ public final class KurumiSurvivalBridge {
     private static int tickCount, previousFood = 20, previousSlot, swappedSlot = -1;
     private static float previousHealth = -1;
     private static boolean eating, awaitingEquip, wasUsing;
-    private static boolean hungerDecisionPending, hungerApproved;
-    private static long nextHungerReview;
-    private static long hungerDecisionStarted;
+    private static final KurumiSurvivalPolicy.HungerNotice hungerNotice = new KurumiSurvivalPolicy.HungerNotice();
     private static int equipTicks;
     private static boolean warnedNoFood;
     private static String foodId;
@@ -21,22 +19,12 @@ public final class KurumiSurvivalBridge {
 
     private KurumiSurvivalBridge() {}
 
-    public static boolean eating() { return eating || hungerDecisionPending; }
-
-    static void hungerDecision(boolean eatNow) {
-        if (!hungerDecisionPending) return;
-        hungerDecisionPending = false;
-        hungerApproved = eatNow;
-        nextHungerReview = System.currentTimeMillis() + (eatNow ? 0 : 30_000);
-        if (!eatNow) talk("ご主人さま、おなかがすいちゃいました……もう少しだけがんばりますねっ♪");
-    }
+    public static boolean eating() { return eating; }
 
     public static void reset() {
+        BaritoneBridge.resumeAfterFood();
         eating = false;
-        hungerDecisionPending = false;
-        hungerApproved = false;
-        nextHungerReview = 0;
-        hungerDecisionStarted = 0;
+        hungerNotice.reset();
         awaitingEquip = false;
         foodId = null;
         warnedNoFood = false;
@@ -80,24 +68,12 @@ public final class KurumiSurvivalBridge {
         }
         previousHealth = health;
         if (eating) { tickEating(); return; }
-        if (hungerDecisionPending) {
-            if (System.currentTimeMillis() - hungerDecisionStarted > 15_000)
-                hungerDecision(false);
-            return;
-        }
         if (++tickCount % 10 != 0 || KurumiItemUseBridge.busy()
                 || mc.player.containerMenu != mc.player.inventoryMenu || mc.player.isUsingItem()) return;
         int level = mc.player.getFoodData().getFoodLevel();
         previousFood = level;
+        hungerNotice.updateFoodLevel(level);
         if (!KurumiSurvivalPolicy.needsFood(level, mc.player.getFoodData().needsFood(), false)) return;
-        if (!hungerApproved && System.currentTimeMillis() < nextHungerReview) return;
-        if (!hungerApproved && KurumiClientController.hasSurvivalTask()) {
-            hungerDecisionPending = true;
-            hungerDecisionStarted = System.currentTimeMillis();
-            KurumiClientController.requestHungerDecision(level);
-            return;
-        }
-        hungerApproved = false;
         int slot = -1;
         int bestNutrition = -1;
         for (int i = 0; i < 36; i++) {
@@ -117,6 +93,7 @@ public final class KurumiSurvivalBridge {
         }
         // Food is available again: allow one fresh warning if it later runs out.
         warnedNoFood = false;
+        BaritoneBridge.pauseForFood();
         foodId = BuiltInRegistries.ITEM.getKey(mc.player.getInventory().getItem(slot).getItem()).toString();
         previousSlot = mc.player.getInventory().getSelectedSlot();
         swappedSlot = slot >= 9 ? slot : -1;
@@ -129,7 +106,8 @@ public final class KurumiSurvivalBridge {
         equipTicks = 2;
         wasUsing = false;
         eatingStarted = System.currentTimeMillis();
-        talk("ご主人さま、ちょっとごはんを食べますねっ。すぐ戻ります♪");
+        if (hungerNotice.firstWarning())
+            talk("ご主人さま、ちょっとごはんを食べますねっ。すぐ戻ります♪");
     }
 
     private static void tickEating() {
@@ -164,6 +142,7 @@ public final class KurumiSurvivalBridge {
         swappedSlot = -1;
         foodId = null;
         tickCount = 0;
-        talk(success ? "もぐもぐ……ごちそうさまですっ！ お仕事に戻りますね♪" : "あれれ、ごはんを食べられませんでした……あとでもう一度試しますね。");
+        BaritoneBridge.resumeAfterFood();
+        KurumiWebMonitor.log(success ? "生存进食完成，继续先前任务" : "生存进食未成功，恢复先前任务");
     }
 }
