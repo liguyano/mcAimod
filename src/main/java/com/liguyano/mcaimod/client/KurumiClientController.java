@@ -628,7 +628,6 @@ public final class KurumiClientController {
             long agentGeneration = generation;
             String agentSender = senderNameForMemory.isBlank() ? event.getSender().toString() : senderNameForMemory;
             KurumiWebMonitor.requestReceived(message);
-            KurumiSpeech.say(isOwner ? "はいっ、ご主人さま！ ちゃんと聞こえましたよっ♪" : "はーいっ、くるみです♪");
             KurumiAgentProcess.chat(agentSender, message, !isOwner).whenComplete((answer, error) ->
                 minecraft.execute(() -> {
                     if (agentGeneration != generation || !requestInFlight) return;
@@ -683,7 +682,6 @@ public final class KurumiClientController {
             publicFailure("没有启用的模型配置，暂时无法响应。");
             return;
         }
-        KurumiSpeech.say("はいっ、ご主人さま！ ちゃんと聞こえましたよっ♪");
         List<ChatMessage> conversation = new ArrayList<>();
                 conversation.add(new ChatMessage("system",
                         "Kurumi 每次仅输出一个 JSON 对象：执行阶段用 {\"type\":\"action\",\"action\":\"EXECUTE_SCRIPT\",\"reply\":\"简短回复\",\"script\":\"脚本\"}；完成时用 {\"type\":\"finish\",\"reason\":\"理由\"}。"
