@@ -43,6 +43,30 @@ public final class BaritoneBridge {
     private static long lastDoorProgress;
     private static double lastDoorX, lastDoorZ;
     private static long lastDoorInteraction;
+    private static boolean pausedForFood;
+
+    /** Preserve the current Baritone goal while the local survival handler uses food. */
+    public static void pauseForFood() {
+        if (pausedForFood) return;
+        try {
+            Object behavior = invoke(primaryBaritone(), "getPathingBehavior");
+            if (!Boolean.TRUE.equals(invoke(behavior, "isPathing"))) return;
+            Result result = executeLocal("pause", "已暂停 Baritone 寻路以进食");
+            if (result.success()) {
+                pausedForFood = true;
+                KurumiWebMonitor.log("生存进食：暂时暂停 Baritone 寻路");
+            }
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException ex) {
+            KurumiWebMonitor.log("生存进食：未能检测 Baritone 状态，跳过寻路暂停");
+        }
+    }
+
+    public static void resumeAfterFood() {
+        if (!pausedForFood) return;
+        pausedForFood = false;
+        Result result = executeLocal("resume", "已恢复 Baritone 寻路");
+        KurumiWebMonitor.log("生存进食：" + result.message());
+    }
 
     static boolean shouldAssistDoor(boolean active, long lastProgress, long now, long lastInteraction) {
         return active && now - lastProgress >= 2_000L && now - lastInteraction >= 3_000L;
@@ -348,6 +372,7 @@ public final class BaritoneBridge {
     }
 
     public static Result stop() {
+        resumeAfterFood();
         trackDoorNavigation(false);
         waterFallback = null;
         waterGoalReached = null;
