@@ -5,6 +5,16 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class KurumiSurvivalPolicyTest {
+    @Test void hungerMessageOnlyOnceUntilFoodRecovers() {
+        var notice = new KurumiSurvivalPolicy.HungerNotice();
+        assertTrue(notice.firstWarning());
+        assertFalse(notice.firstWarning());
+        notice.updateFoodLevel(13);
+        assertFalse(notice.firstWarning());
+        notice.updateFoodLevel(16);
+        assertTrue(notice.firstWarning());
+    }
+
     @Test void startsEatingOnlyWhenHungryAndAble() {
         assertTrue(KurumiSurvivalPolicy.needsFood(14, true, false));
         assertFalse(KurumiSurvivalPolicy.needsFood(15, true, false));
