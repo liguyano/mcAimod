@@ -6,6 +6,20 @@ final class KurumiSurvivalPolicy {
     static final int FLEE_DISTANCE = 20;
     static final double MAX_ALLY_DISTANCE_SQUARED = 64 * 64;
 
+    /** One hunger notification per episode, rearmed only after food recovers. */
+    static final class HungerNotice {
+        private boolean warned;
+        boolean firstWarning() {
+            if (warned) return false;
+            warned = true;
+            return true;
+        }
+        void updateFoodLevel(int foodLevel) {
+            if (foodLevel > EAT_AT_FOOD_LEVEL) warned = false;
+        }
+        void reset() { warned = false; }
+    }
+
     record NearbyPlayer(String name, double x, double z, boolean attacker) {}
 
     static NearbyPlayer selectAlly(double x, double z, java.util.List<NearbyPlayer> players) {
