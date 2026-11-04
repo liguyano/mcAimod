@@ -336,7 +336,23 @@ public final class BaritoneBridge {
         return result;
     }
 
+    /** Follow a specific loaded player entity by UUID, not an ambiguous display name. */
+    public static Result followPlayerById(String canonical, java.util.UUID playerId) {
+        if (canonical == null || playerId == null)
+            return new Result(false, "跟随目标身份不完整");
+        Result policy = setBreakPolicy(true);
+        if (!policy.success()) return policy;
+        Result result = preferLand(() -> startFollow(canonical, playerId),
+                () -> startFollow(canonical, playerId), () -> false);
+        trackDoorNavigation(result.success());
+        return result;
+    }
+
     private static Result startFollow(String canonical) {
+        return startFollow(canonical, null);
+    }
+
+    private static Result startFollow(String canonical, java.util.UUID playerId) {
         try {
             Object baritone = primaryBaritone();
             if (baritone == null) return unavailable();
@@ -344,9 +360,13 @@ public final class BaritoneBridge {
             if (process == null) return unavailable();
             Predicate<Object> playerPredicate = entity -> {
                 try {
+                    if (playerId != null) {
+                        Object id = entity.getClass().getMethod("getUUID").invoke(entity);
+                        return playerId.equals(id);
+                    }
                     Object component = entity.getClass().getMethod("getName").invoke(entity);
                     Object text = component.getClass().getMethod("getString").invoke(component);
-                    return canonical.equals(String.valueOf(text));
+                    return canonical.equalsIgnoreCase(String.valueOf(text));
                 } catch (ReflectiveOperationException | RuntimeException ex) {
                     return false;
                 }
