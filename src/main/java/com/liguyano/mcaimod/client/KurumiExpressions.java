@@ -10,6 +10,7 @@ public final class KurumiExpressions {
         return java.util.Set.of("pos", "screenshot", "get_fishing_status", "get_agent_observation", "len",
                 "search_all_block", "check_inventory", "check_distance", "list_remembered_blocks",
                 "get_remembered_block_at", "get_remembered_block", "get_skill", "get_tool_help", "remember_block",
+                "forget_block", "delete_waypoint", "request_delete_death_waypoints",
                 "get_chest_search_result", "find_nearest_block", "check_inventory_item",
                 "check_inventory_count", "get_crafting_recipe", "check_nearby_chest",
                 "get_nearby_chest_result", "get_position", "get_player_status", "get_environment",
@@ -345,6 +346,18 @@ public final class KurumiExpressions {
             if(args.size()!=4) throw new IllegalArgumentException("remember_block 需要名称及三个坐标");
             return KurumiChestSearch.rememberAt(string(args.get(0)),integer(args.get(1)),
                     integer(args.get(2)),integer(args.get(3)));
+        }
+        if ("forget_block".equals(name)) {
+            if (args.size() != 1) throw new IllegalArgumentException("forget_block 需要记忆名称");
+            return KurumiChestSearch.forget(string(args.get(0)));
+        }
+        if ("delete_waypoint".equals(name)) {
+            if (args.size() != 1) throw new IllegalArgumentException("delete_waypoint 需要路径点名称");
+            return KurumiLocationMemory.deleteWaypointForAgent(string(args.get(0)));
+        }
+        if ("request_delete_death_waypoints".equals(name)) {
+            if (!args.isEmpty()) throw new IllegalArgumentException("request_delete_death_waypoints 不接受参数");
+            return KurumiLocationMemory.requestDeathDeletionForAgent();
         }
         if ("get_chest_search_result".equals(name)) {
             if(!args.isEmpty()) throw new IllegalArgumentException("get_chest_search_result 不接受参数");
