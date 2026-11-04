@@ -69,6 +69,25 @@ public final class KurumiJourneyMapPlugin implements IClientPlugin {
                 api.removeWaypoint(MOD_ID, found.get(0));
                 return true;
             }
+
+            @Override
+            public boolean deleteExact(KurumiJourneyMapBridge.Point point) {
+                requireWorld();
+                List<? extends Waypoint> found = api.getAllWaypoints().stream()
+                        .filter(w -> point.name().equals(w.getName())
+                                && point.dimension().equals(w.getPrimaryDimension())
+                                && point.x() == w.getX() && point.y() == w.getY()
+                                && point.z() == w.getZ()
+                                && (MOD_ID.equals(w.getModId()) == point.owned())).toList();
+                if (found.size() != 1) {
+                    if (found.size() > 1) throw new IllegalStateException("匹配到多个相同路径点，请在 JourneyMap 中手动删除");
+                    return false;
+                }
+                Waypoint target = found.get(0);
+                // JourneyMap may reject deleting markers owned by a different mod.
+                api.removeWaypoint(target.getModId(), target);
+                return true;
+            }
         });
     }
 
