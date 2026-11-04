@@ -90,6 +90,8 @@ public final class KurumiWebActions {
                 已检查的箱子记为 chest_1、chest_2 等，每次搜索会更新对应记忆。
                 通用方块记忆：saved = remember_block("矿场箱子",x,y,z)，
                 point = get_remembered_block("矿场箱子")，可用 point.x、point.y、point.z。
+                forget_block("矿场箱子") 删除一条方块坐标记忆。delete_waypoint("家") 删除一个同名唯一的 JourneyMap 路径点。
+                request_delete_death_waypoints() 只发起死亡点批量删除申请；必须由主人在聊天中亲自发送“确认删除所有死亡点”，模型没有确认工具，不可绕过。
                 skill = get_skill("loot_corpse")，按名称查询主人批准保存的技能源码，使用 observe(skill) 查看返回；不能直接通过该查询执行代码。
                 即时扫描：blocks = search_all_block("minecraft:chest") 返回坐标对象数组，
                 所有方块ID通用。仅搜索附近已加载区域（水平24格、上下8格），最多64项；
