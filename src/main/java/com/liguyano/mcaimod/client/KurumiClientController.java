@@ -965,7 +965,7 @@ public final class KurumiClientController {
             matched = true;
         }
         if (input.contains("记忆") || input.contains("地图") || input.contains("地点") || input.contains("路标") || input.contains("导航")) {
-            guide.append("\n").append("记忆：remember_block(\"名称\",x,y,z) 保存地点，get_remembered_block(\"名称\") 查看；list_remembered_blocks() 和 get_remembered_block_at(i) 枚举。search_chests(item_id) 搜索箱子，get_chest_search_result() 查看，take_from_memory(\"chest_1\",item_id,n) 回指定箱取物。");
+            guide.append("\n").append("记忆：remember_block(\"名称\",x,y,z) 保存方块坐标，get_remembered_block(\"名称\") 查看，forget_block(\"名称\") 删除方块记忆；list_remembered_blocks() 和 get_remembered_block_at(i) 枚举。delete_waypoint(\"名称\") 删除一个同名唯一的 JourneyMap 路径点。request_delete_death_waypoints() 只发起批量删除申请，主人须在30秒内亲自聊天发送“确认删除所有死亡点”；模型不能代替主人确认。search_chests(item_id) 搜索箱子，get_chest_search_result() 查看，take_from_memory(\"chest_1\",item_id,n) 回指定箱取物。");
             matched = true;
         }
         return matched ? guide.toString() : null;
