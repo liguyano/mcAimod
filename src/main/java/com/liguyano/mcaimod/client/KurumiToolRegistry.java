@@ -74,6 +74,9 @@ public final class KurumiToolRegistry {
         add("search_chests(item_id)", "container", "搜索附近箱子物品");
         add("get_chest_search_result()", "container", "箱子搜索报告");
         add("remember_block(name,x,y,z)", "memory", "保存地点");
+        add("forget_block(name)", "memory", "删除本服务器当前维度的一条方块坐标记忆");
+        add("delete_waypoint(name)", "memory", "按完整名称删除一个 JourneyMap 路径点；同名多个时拒绝");
+        add("request_delete_death_waypoints()", "memory", "申请批量删除 JourneyMap 死亡点；必须由主人在聊天中亲自确认，模型不可确认");
         add("get_remembered_block(name)", "memory", "读取地点");
         add("list_remembered_blocks()", "memory", "列出地点");
         add("get_remembered_block_at(index)", "memory", "指定记忆索引");
