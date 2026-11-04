@@ -266,6 +266,7 @@ public final class KurumiClientController {
     }
 
     private static void onAgentTick(net.neoforged.neoforge.client.event.ClientTickEvent.Post event) {
+        KurumiWaterSurvivalBridge.tick(enabled);
         KurumiSurvivalBridge.tick(enabled && autoFarmEnabled);
         if (fleeingUntil != 0) {
             if (System.currentTimeMillis() < fleeingUntil) return;
@@ -950,6 +951,15 @@ public final class KurumiClientController {
         }
         if (input.contains("走") || input.contains("来") || input.contains("跟") || input.contains("移动") || input.contains("寻路") || input.contains("回家") || input.contains("睡觉") || input.contains("床") || input.contains("视角") || input.contains("去")) {
             guide.append("\n").append("移动：goto(x,y,z) 坐标寻路；come(\"玩家名\") 到附近停止；follow(\"玩家名\") 持续跟随；move(\"forward\",n) 等相对移动1至16格；stop() 停止。look_at(x,y,z) 可选转头，interact(id) 默认不需看向目标但需在交互距离内。sleep(n) 只是等待，sleep_in_bed() 才是真睡觉。");
+            matched = true;
+        }
+        if (input.contains("潜水") || input.contains("下潜") || input.contains("上浮")
+                || input.contains("浮水") || input.contains("游泳") || input.contains("沉下")
+                || input.contains("swim") || input.contains("dive")) {
+            guide.append("\n水中安全：自动浮水默认开启；头部没入水中时持续尝试上浮。"
+                    + "如主人明确要下潜，可调用 auto_swim_off() 暂时关闭；"
+                    + "完成潜水后调用 auto_swim_on() 恢复。"
+                    + "auto_swim_status() 可以查询状态。关闭后需自行留意氧气，不能声称一直安全。");
             matched = true;
         }
         if (input.contains("睡") || input.contains("床")) {
