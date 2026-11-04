@@ -23,4 +23,11 @@ class KurumiWaypointDeletionTest {
         assertEquals(List.of(one, two), KurumiWaypointDeletion.exactName(List.of(one, two, nether), "家", WORLD));
         assertTrue(KurumiWaypointDeletion.exactName(List.of(nether), "家", WORLD).isEmpty());
     }
+
+    @Test void deletionToolsAreValidScriptFunctions() {
+        assertTrue(KurumiScriptParser.parse("forget_block(\"樱花木箱子\")").isPresent());
+        assertTrue(KurumiScriptParser.parse("delete_waypoint(\"家\")").isPresent());
+        assertTrue(KurumiScriptParser.parse("request_delete_death_waypoints()").isPresent());
+        assertFalse(KurumiExpressions.isExpressionFunction("confirm_delete_death_waypoints"));
+    }
 }
