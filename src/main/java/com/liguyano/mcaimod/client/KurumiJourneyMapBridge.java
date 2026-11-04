@@ -10,6 +10,7 @@ final class KurumiJourneyMapBridge {
         List<Point> list();
         void save(String name, String dimension, int x, int y, int z);
         boolean deleteOwned(String name, String dimension);
+        boolean deleteExact(Point point);
     }
 
     private static volatile Adapter adapter;
@@ -28,6 +29,10 @@ final class KurumiJourneyMapBridge {
 
     static boolean deleteOwned(String name, String dimension) {
         return require().deleteOwned(name, dimension);
+    }
+
+    static boolean deleteExact(Point point) {
+        return require().deleteExact(point);
     }
 
     private static Adapter require() {
