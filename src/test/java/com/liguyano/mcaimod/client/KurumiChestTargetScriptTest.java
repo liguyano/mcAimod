@@ -6,6 +6,14 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class KurumiChestTargetScriptTest {
+    @Test void chestMenuReceivedBeforeTickCanBeBoundToRequestedChest() {
+        BlockPos chest = new BlockPos(-21, 64, -8);
+        assertTrue(KurumiChestBridge.matchesOpenedChest(chest, chest, -1, 7, 1000, 1100));
+        assertTrue(KurumiChestBridge.matchesOpenedChest(chest, chest, 7, 7, 1000, 1100));
+        assertFalse(KurumiChestBridge.matchesOpenedChest(chest, chest, 6, 7, 1000, 1100));
+        assertFalse(KurumiChestBridge.matchesOpenedChest(chest, new BlockPos(-20, 64, -8), -1, 7, 1000, 1100));
+        assertFalse(KurumiChestBridge.matchesOpenedChest(chest, chest, -1, 7, 1000, 12000));
+    }
     @Test void canCheckVerifiedChestOpenWithoutObservingWholeContainer() {
         assertTrue(KurumiScriptParser.parse("""
                 chest_target(-21,64,-8)
