@@ -699,7 +699,13 @@ public final class KurumiPseudoExecutor {
                     }
                     if (++actions > MAX_ACTIONS) throw new IllegalArgumentException("动作次数达到上限");
                     BaritoneBridge.Result outcome;
-                    if ("chest_target".equals(name)) {
+                    if ("auto_swim_on".equals(name) || "auto_swim_off".equals(name)) {
+                        requireArgumentCount(name, args, 0);
+                        outcome = KurumiWaterSurvivalBridge.setEnabled("auto_swim_on".equals(name));
+                    } else if ("auto_swim_status".equals(name)) {
+                        requireArgumentCount(name, args, 0);
+                        outcome = KurumiWaterSurvivalBridge.status();
+                    } else if ("chest_target".equals(name)) {
                         if (args.isEmpty()) outcome = KurumiChestBridge.clearTarget();
                         else {
                         requireArgumentCount(name, args, 3);
