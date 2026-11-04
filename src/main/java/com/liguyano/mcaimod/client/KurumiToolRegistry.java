@@ -69,6 +69,9 @@ public final class KurumiToolRegistry {
         add("stop_fishing()", "fish", "停止钓鱼");
         add("sleep_in_bed()", "move", "与床交互睡觉");
         add("sleep(seconds)", "move", "等待一段时间");
+        add("auto_swim_on()", "move", "打开自动浮水（默认）；头部浸水时持续尝试上浮");
+        add("auto_swim_off()", "move", "关闭自动浮水，允许主动下潜；注意氧气");
+        add("auto_swim_status()", "move", "查看自动浮水开关状态");
         add("attack(target_id_or_player)", "combat", "攻击目标");
         add("tpa_request()", "move", "传送请求");
         add("search_chests(item_id)", "container", "搜索附近箱子物品");
@@ -110,6 +113,7 @@ public final class KurumiToolRegistry {
         if (containsAny(text, "打怪", "打架", "攻击", "怪物", "战斗", "逃跑", "救命"))
             categories.addAll(Set.of("combat", "move", "entity"));
         if (containsAny(text, "钓鱼", "鱼竿", "fish")) categories.addAll(Set.of("fish", "inventory", "move"));
+        if (containsAny(text, "潜水", "下潜", "上浮", "浮水", "游泳", "沉下", "swim", "dive")) categories.add("move");
         if (containsAny(text, "记忆", "地图", "地点", "路标", "导航")) categories.addAll(Set.of("memory", "move"));
         if (categories.isEmpty()) return catalog();
         categories.add("observe");
