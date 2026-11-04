@@ -55,6 +55,14 @@ public final class KurumiChestBridge {
         return candidates.size() == 1 ? candidates.get(0) : null;
     }
 
+    /** The first server ChestMenu may arrive before the client tick binds its container id. */
+    static boolean matchesOpenedChest(BlockPos selected, BlockPos opened, int boundMenuId,
+                                      int actualMenuId, long openedAt, long now) {
+        return selected != null && selected.equals(opened)
+                && (boundMenuId == actualMenuId
+                    || boundMenuId == -1 && now >= openedAt && now - openedAt <= 5000L);
+    }
+
     private static boolean isLoadedChest(Minecraft mc, BlockPos pos) {
         return mc.level.hasChunkAt(pos)
                 && mc.level.getBlockState(pos).getBlock() instanceof ChestBlock;
@@ -93,11 +101,15 @@ public final class KurumiChestBridge {
         if (pending != null)
             return new BaritoneBridge.Result(false, "上一项箱子操作尚未完成");
         if (selectedChest != null && mc.player.containerMenu instanceof ChestMenu menu
-                && (!selectedChest.equals(lastOpenedChest) || menu.containerId != lastOpenedContainerId)) {
+                && !matchesOpenedChest(selectedChest, lastOpenedChest, lastOpenedContainerId,
+                        menu.containerId, lastOpenedAt, System.currentTimeMillis())) {
             mc.player.closeContainer();
             KurumiWebMonitor.log("当前打开的箱子与指定目标无法匹配，已自动关闭旧容器并准备重开目标箱子");
             if (mc.player.containerMenu != mc.player.inventoryMenu)
                 return new BaritoneBridge.Result(false, "旧容器尚未关闭，稍后重试开箱");
+        } else if (mc.player.containerMenu instanceof ChestMenu menu
+                && lastOpenedContainerId == -1 && lastOpenedChest != null) {
+            lastOpenedContainerId = menu.containerId;
         }
         if (itemId != null && !ALL_ITEMS.equals(itemId) && !TAKE_ALL.equals(itemId) && !itemId.startsWith(TAKE_ITEM_PREFIX)) {
             String matchId = itemId.startsWith(ALL_OF_ITEM_PREFIX) ? itemId.substring(ALL_OF_ITEM_PREFIX.length()) : itemId;
@@ -113,7 +125,10 @@ public final class KurumiChestBridge {
         if (mc.player.containerMenu instanceof ChestMenu) {
             if (itemId == null) return new BaritoneBridge.Result(true, "箱子界面已打开");
             BaritoneBridge.Result outcome = transfer(itemId, quantity);
-            mc.player.closeContainer();
+            // Keep the menu open for all-item deposits so the caller can verify the
+            // server-updated inventory before closing it. An immediate close can race
+            // with shift-click acknowledgements and another chest_open() request.
+            if (!itemId.startsWith(ALL_OF_ITEM_PREFIX)) mc.player.closeContainer();
             return outcome;
         }
         if (mc.player.containerMenu != mc.player.inventoryMenu)
@@ -186,7 +201,7 @@ public final class KurumiChestBridge {
         if (mc.player.containerMenu instanceof ChestMenu) {
             pending = null;
             BaritoneBridge.Result result = transfer(task.itemId(), task.quantity());
-            mc.player.closeContainer();
+            if (!task.itemId().startsWith(ALL_OF_ITEM_PREFIX)) mc.player.closeContainer();
             mc.getConnection().sendChat("[Kurumi] " + (result.success() ? result.message() : "抱歉，操作失败：" + result.message()));
         } else if (System.currentTimeMillis() - task.startedAt() > 5000) {
             pending = null;
