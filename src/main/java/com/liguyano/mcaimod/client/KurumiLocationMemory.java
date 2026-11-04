@@ -1,5 +1,6 @@
 package com.liguyano.mcaimod.client;
 
+import com.google.gson.JsonObject;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
 
@@ -149,14 +150,39 @@ public final class KurumiLocationMemory {
 
     private static void requestDeathDeletion() {
         try {
-            pendingDeathDeletion = KurumiWaypointDeletion.deathPoints(KurumiJourneyMapBridge.list());
-            if (pendingDeathDeletion.isEmpty()) { reply("没有找到死亡路径点"); return; }
-            pendingDeathDeletionUntil = System.currentTimeMillis() + DELETE_CONFIRM_WINDOW_MS;
-            reply("找到 " + pendingDeathDeletion.size() + " 个死亡点。此操作不可撤销；30 秒内说“确认删除所有死亡点”才会执行，或说“取消删除死亡点”");
+            JsonObject result = requestDeathDeletionForAgent();
+            if (result.get("count").getAsInt() == 0) reply("没有找到死亡路径点");
+            else reply("找到 " + result.get("count").getAsInt() + " 个死亡点。此操作不可撤销；30 秒内说“确认删除所有死亡点”才会执行，或说“取消删除死亡点”");
         } catch (RuntimeException | LinkageError ex) {
             pendingDeathDeletion = List.of();
             reply("读取死亡点失败：" + ex.getMessage());
         }
+    }
+
+    /** Tool access: the model may request but never confirm a destructive batch deletion. */
+    public static JsonObject requestDeathDeletionForAgent() {
+        pendingDeathDeletion = KurumiWaypointDeletion.deathPoints(KurumiJourneyMapBridge.list());
+        pendingDeathDeletionUntil = pendingDeathDeletion.isEmpty() ? 0
+                : System.currentTimeMillis() + DELETE_CONFIRM_WINDOW_MS;
+        JsonObject result = new JsonObject();
+        result.addProperty("count", pendingDeathDeletion.size());
+        result.addProperty("requires_confirmation", !pendingDeathDeletion.isEmpty());
+        result.addProperty("confirmation_phrase", "确认删除所有死亡点");
+        return result;
+    }
+
+    /** Single marker deletion is precise: ambiguous names never select an arbitrary waypoint. */
+    public static JsonObject deleteWaypointForAgent(String name) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) throw new IllegalArgumentException("未进入世界");
+        if (!validName(name)) throw new IllegalArgumentException("路径点名称无效");
+        var matches = KurumiWaypointDeletion.exactName(KurumiJourneyMapBridge.list(), name,
+                mc.level.dimension().identifier().toString());
+        if (matches.size() > 1) throw new IllegalArgumentException("有多个同名路径点，请先重命名以区分");
+        JsonObject result = new JsonObject();
+        result.addProperty("name", name);
+        result.addProperty("deleted", matches.size() == 1 && KurumiJourneyMapBridge.deleteExact(matches.get(0)));
+        return result;
     }
 
     private static void confirmDeathDeletion() {
