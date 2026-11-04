@@ -102,6 +102,18 @@ public final class KurumiChestSearch {
         for (String field : new String[]{"x","y","z","block_id"}) result.add(field,e.get(field).deepCopy());
         return result;
     }
+    /** Delete one named block memory in the current server and dimension. */
+    public static JsonObject forget(String name) {
+        if (mc().level == null) throw new IllegalArgumentException("未进入世界");
+        JsonObject root = load();
+        JsonObject names = entries(root);
+        boolean found = names.remove(key(name)) != null;
+        if (found) save(root);
+        JsonObject result = new JsonObject();
+        result.addProperty("deleted", found);
+        result.addProperty("name", name);
+        return result;
+    }
     /** Compact, grounded memory context for AI prompts; full entries remain queryable at runtime. */
     public static String contextForModel() {
         Minecraft mc=mc();
