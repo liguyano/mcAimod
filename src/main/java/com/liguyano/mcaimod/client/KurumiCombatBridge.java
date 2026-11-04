@@ -19,6 +19,8 @@ import java.util.Map;
 /** Short-range, bounded combat against an explicitly selected player or mob. */
 public final class KurumiCombatBridge {
     private static UUID targetId;
+    private static UUID approachTargetId;
+    private static long approachStarted;
     private static long started;
     private static long lastHit;
     private static int previousSlot = -1;
@@ -26,10 +28,13 @@ public final class KurumiCombatBridge {
     private static int swappedHotbarSlot = -1;
     private static final double RANGE_SQUARED = 3.0 * 3.0;
 
-    public static boolean busy() { return targetId != null; }
+    public static boolean busy() { return targetId != null || approachTargetId != null; }
     public static void install() { NeoForge.EVENT_BUS.addListener(KurumiCombatBridge::tick); }
     public static void cancel() {
+        boolean wasApproaching = approachTargetId != null;
+        approachTargetId = null;
         targetId = null;
+        if (wasApproaching) BaritoneBridge.stop();
         Minecraft mc = Minecraft.getInstance();
         if (previousSlot >= 0 && mc.player != null)
             mc.player.getInventory().setSelectedSlot(previousSlot);
@@ -116,6 +121,8 @@ public final class KurumiCombatBridge {
                     || "SekaiSaionji".equalsIgnoreCase(selected.displayedName())
                     || (ownerUuid != null && ownerUuid.equals(selected.uuid())))
                 return new BaritoneBridge.Result(false, "不能攻击主人");
+            if (!KurumiCombatApproachPolicy.inAttackRange(mc.player.distanceToSqr(player)))
+                return beginApproach(player, canonical);
             return begin(player);
         }
         KurumiWebMonitor.log("玩家攻击目标识别失败：请求=" + name + "；解析=" + canonical
@@ -156,7 +163,45 @@ public final class KurumiCombatBridge {
         return new BaritoneBridge.Result(true, "已锁定目标，已尝试切换快捷栏武器，最多攻击 10 秒");
     }
 
+    /** Explicit orders may approach a loaded player; reactive defense never calls this. */
+    private static BaritoneBridge.Result beginApproach(Player player, String canonical) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.gameMode == null || !player.isAlive())
+            return new BaritoneBridge.Result(false, "目标不可攻击");
+        if ("SekaiSaionji".equalsIgnoreCase(player.getGameProfile().name()))
+            return new BaritoneBridge.Result(false, "不能攻击主人");
+        if (!KurumiCombatApproachPolicy.canContinue(0, 0,
+                mc.player.getHealth(), mc.player.getMaxHealth()))
+            return new BaritoneBridge.Result(false, "生命值低于 30%，取消追击");
+        cancel();
+        BaritoneBridge.Result following = BaritoneBridge.followPlayerById(canonical, player.getUUID());
+        if (!following.success()) return following;
+        approachTargetId = player.getUUID();
+        approachStarted = System.currentTimeMillis();
+        return new BaritoneBridge.Result(true, "正在跟随 " + canonical + "，靠近 3 格后攻击；最多追击 30 秒");
+    }
+
     private static void tick(ClientTickEvent.Post event) {
+        if (approachTargetId != null) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player == null || mc.level == null || mc.gameMode == null) { cancel(); return; }
+            long now = System.currentTimeMillis();
+            if (!KurumiCombatApproachPolicy.canContinue(approachStarted, now,
+                    mc.player.getHealth(), mc.player.getMaxHealth())) { cancel(); return; }
+            Player player = null;
+            for (Player candidate : mc.level.players()) {
+                if (candidate.getUUID().equals(approachTargetId)) { player = candidate; break; }
+            }
+            if (player == null || !player.isAlive()
+                    || "SekaiSaionji".equalsIgnoreCase(player.getGameProfile().name())) {
+                cancel();
+                return;
+            }
+            if (KurumiCombatApproachPolicy.inAttackRange(mc.player.distanceToSqr(player))) {
+                begin(player);
+            }
+            return;
+        }
         if (targetId == null) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null || mc.gameMode == null ||
