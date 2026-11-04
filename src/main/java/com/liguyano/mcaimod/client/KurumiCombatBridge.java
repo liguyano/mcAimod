@@ -11,6 +11,10 @@ import net.minecraft.world.inventory.ContainerInput;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /** Short-range, bounded combat against an explicitly selected player or mob. */
 public final class KurumiCombatBridge {
@@ -81,14 +85,44 @@ public final class KurumiCombatBridge {
         var match = KurumiPlayerResolver.resolve(name, KurumiPlayerDirectory.onlineNames());
         if (!match.found()) return new BaritoneBridge.Result(false, match.failure(name));
         String canonical = match.name();
-        if ("SekaiSaionji".equals(canonical))
+        if ("SekaiSaionji".equalsIgnoreCase(canonical))
             return new BaritoneBridge.Result(false, "不能攻击主人");
-        for (Player player : mc.level.players()) {
-            if (canonical.equals(player.getName().getString()) && player != mc.player)
-                return begin(player);
+        UUID targetUuid = null;
+        UUID ownerUuid = null;
+        if (mc.getConnection() != null) {
+            for (var info : mc.getConnection().getOnlinePlayers()) {
+                String listedName = info.getProfile().name();
+                if (listedName.equalsIgnoreCase(canonical)) targetUuid = info.getProfile().id();
+                if (listedName.equalsIgnoreCase("SekaiSaionji")) ownerUuid = info.getProfile().id();
+            }
         }
+        // The roster lists online players, but only spawned/synced entities can be attacked.
+        Map<UUID, Player> loaded = new LinkedHashMap<>();
+        for (Player player : mc.level.players())
+            if (player != mc.player && player.isAlive()) loaded.put(player.getUUID(), player);
+        for (var entity : mc.level.getEntities(mc.player, mc.player.getBoundingBox().inflate(32),
+                entity -> entity instanceof Player)) {
+            if (entity instanceof Player player && player != mc.player && player.isAlive())
+                loaded.putIfAbsent(player.getUUID(), player);
+        }
+        List<KurumiPlayerEntityMatcher.Candidate> candidates = new ArrayList<>();
+        for (Player player : loaded.values()) candidates.add(new KurumiPlayerEntityMatcher.Candidate(
+                player.getUUID(), player.getGameProfile().name(), player.getName().getString()));
+        var selected = KurumiPlayerEntityMatcher.select(canonical, targetUuid, candidates);
+        if (selected != null) {
+            Player player = loaded.get(selected.uuid());
+            // Never attack the owner even when a nickname or mismatched roster is supplied.
+            if ("SekaiSaionji".equalsIgnoreCase(selected.profileName())
+                    || "SekaiSaionji".equalsIgnoreCase(selected.displayedName())
+                    || (ownerUuid != null && ownerUuid.equals(selected.uuid())))
+                return new BaritoneBridge.Result(false, "不能攻击主人");
+            return begin(player);
+        }
+        KurumiWebMonitor.log("玩家攻击目标识别失败：请求=" + name + "；解析=" + canonical
+                + "；在线UUID=" + targetUuid + "；已加载玩家=" + candidates);
         return new BaritoneBridge.Result(false, "玩家 " + canonical
-                + " 在线，但实体不在客户端已加载范围内；需要先靠近");
+                + " 在线，但未唯一匹配到客户端玩家实体（已加载 " + candidates.size()
+                + " 名玩家，详情见 Kurumi 日志）");
     }
 
     public static BaritoneBridge.Result attackMob(String id) {
