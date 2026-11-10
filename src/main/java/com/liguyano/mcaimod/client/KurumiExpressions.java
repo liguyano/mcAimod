@@ -110,7 +110,8 @@ public final class KurumiExpressions {
         while (at < input.length() && (Character.isLetterOrDigit(input.charAt(at))
                 || input.charAt(at) == '_')) at++;
         String name = input.substring(start,at);
-        if (name.length() > 24) throw new IllegalArgumentException("标识符过长");
+        // Long built-in tool names are valid; assignment targets are separately restricted.
+        if (name.length() > 64) throw new IllegalArgumentException("标识符过长");
         return name;
     }
     private JsonElement or() {

@@ -244,7 +244,7 @@ public final class BaritoneBridge {
     }
 
     static boolean shouldFallbackToWater(long lastProgress, long now) {
-        return now - lastProgress >= 8_000L;
+        return KurumiWaterAvoidancePolicy.shouldFallback(lastProgress, now);
     }
 
     /** Scope no-breaking navigation until another explicit action or stop. */
