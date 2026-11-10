@@ -8,7 +8,7 @@ final class KurumiDoorAssistPolicy {
                              long now, long lastInteraction, double distanceSquared) {
         return enabled && navigating
                 && now - lastProgress >= 1_000L
-                && now - lastInteraction >= 3_000L
+                && (lastInteraction == 0L || now - lastInteraction >= 3_000L)
                 && distanceSquared <= 1.65 * 1.65;
     }
 }

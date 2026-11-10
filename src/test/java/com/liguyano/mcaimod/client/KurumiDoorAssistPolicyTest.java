@@ -4,6 +4,11 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class KurumiDoorAssistPolicyTest {
+    @Test void firstClickDoesNotWaitForRetryCooldown() {
+        assertTrue(KurumiDoorAssistPolicy.shouldTry(true, true, 1_000, 2_100, 0, 0));
+        assertFalse(KurumiDoorAssistPolicy.shouldTry(true, true, 1_000, 1_900, 0, 0));
+    }
+
     @Test void opensCloseDoorAfterStallWithoutDependingOnLookDirection() {
         assertTrue(KurumiDoorAssistPolicy.shouldTry(true, true, 1_000, 2_050, -10_000, 1.4));
     }
