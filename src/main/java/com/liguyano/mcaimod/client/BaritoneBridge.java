@@ -11,6 +11,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
@@ -43,6 +44,7 @@ public final class BaritoneBridge {
     private static long lastDoorProgress;
     private static double lastDoorX, lastDoorZ;
     private static long lastDoorInteraction;
+    private static BlockPos pendingDoorCheck;
     private static boolean pausedForFood;
 
     /** Preserve the current Baritone goal while the local survival handler uses food. */
@@ -69,12 +71,13 @@ public final class BaritoneBridge {
     }
 
     static boolean shouldAssistDoor(boolean active, long lastProgress, long now, long lastInteraction) {
-        return active && now - lastProgress >= 2_000L && now - lastInteraction >= 3_000L;
+        return KurumiDoorAssistPolicy.shouldTry(active, true, lastProgress, now, lastInteraction, 0);
     }
 
     private static void trackDoorNavigation(boolean active) {
         doorAssistActive = active;
         lastDoorInteraction = 0;
+        pendingDoorCheck = null;
         lastDoorProgress = System.currentTimeMillis();
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null) {
@@ -92,13 +95,25 @@ public final class BaritoneBridge {
             return;
         }
         // A finished path must never trigger an unrelated door interaction.
+        boolean navigating;
         try {
             Object pathing = invoke(primaryBaritone(), "getPathingBehavior");
-            if (!Boolean.TRUE.equals(invoke(pathing, "isPathing"))) return;
+            navigating = Boolean.TRUE.equals(invoke(pathing, "isPathing"));
         } catch (ReflectiveOperationException | LinkageError | RuntimeException ex) {
             return;
         }
+        if (!navigating) return;
         long now = System.currentTimeMillis();
+        if (pendingDoorCheck != null) {
+            if (mc.level.hasChunkAt(pendingDoorCheck)) {
+                var current = mc.level.getBlockState(pendingDoorCheck);
+                KurumiWebMonitor.log(current.hasProperty(BlockStateProperties.OPEN)
+                        && current.getValue(BlockStateProperties.OPEN)
+                        ? "开门辅助：已确认木门打开 " + pendingDoorCheck.toShortString()
+                        : "开门辅助：门尚未打开，等待冷却后重试 " + pendingDoorCheck.toShortString());
+            }
+            pendingDoorCheck = null;
+        }
         double dx = mc.player.getX() - lastDoorX;
         double dz = mc.player.getZ() - lastDoorZ;
         if (dx * dx + dz * dz >= 0.36) {
@@ -108,12 +123,9 @@ public final class BaritoneBridge {
             return;
         }
         if (!shouldAssistDoor(doorAssistActive, lastDoorProgress, now, lastDoorInteraction)) return;
-        Vec3 look = mc.player.getLookAngle();
-        double lookLength = Math.hypot(look.x, look.z);
-        if (lookLength < 0.01) return;
         BlockPos feet = mc.player.blockPosition();
         BlockPos best = null;
-        double bestDistance = 2.8 * 2.8;
+        double bestDistance = 1.65 * 1.65;
         for (BlockPos pos : BlockPos.betweenClosed(feet.offset(-2, -1, -2), feet.offset(2, 1, 2))) {
             if (!mc.level.hasChunkAt(pos)) continue;
             var state = mc.level.getBlockState(pos);
@@ -121,21 +133,33 @@ public final class BaritoneBridge {
                     || state.getBlock() instanceof FenceGateBlock;
             if (!interactive || !state.hasProperty(BlockStateProperties.OPEN)
                     || state.getValue(BlockStateProperties.OPEN)) continue;
+            if (state.getBlock() instanceof DoorBlock
+                    && state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)
+                    && state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) != DoubleBlockHalf.LOWER) continue;
             Vec3 center = Vec3.atCenterOf(pos);
             double forwardX = center.x - mc.player.getX();
             double forwardZ = center.z - mc.player.getZ();
-            double horizontal = Math.hypot(forwardX, forwardZ);
-            if (horizontal < 0.1 || (forwardX * look.x + forwardZ * look.z)
-                    / (horizontal * lookLength) < 0.65) continue;
-            double distance = mc.player.getEyePosition().distanceToSqr(center);
+            double distance = forwardX * forwardX + forwardZ * forwardZ;
+            if (Math.abs(center.y - mc.player.getY()) > 1.5) continue;
             if (distance < bestDistance) { bestDistance = distance; best = pos.immutable(); }
         }
-        if (best == null) return;
+        if (best == null || !KurumiDoorAssistPolicy.shouldTry(doorAssistActive, navigating,
+                lastDoorProgress, now, lastDoorInteraction, bestDistance)) return;
         lastDoorInteraction = now;
+        Vec3 center = Vec3.atCenterOf(best);
+        double xDelta = mc.player.getX() - center.x;
+        double zDelta = mc.player.getZ() - center.z;
+        Direction face = Math.abs(xDelta) >= Math.abs(zDelta)
+                ? (xDelta < 0 ? Direction.WEST : Direction.EAST)
+                : (zDelta < 0 ? Direction.NORTH : Direction.SOUTH);
+        Vec3 hit = center.add(face.getStepX() * 0.48, 0, face.getStepZ() * 0.48);
         var interaction = mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND,
-                new BlockHitResult(Vec3.atCenterOf(best), Direction.UP, best, false));
+                new BlockHitResult(hit, face, best, false));
         if (interaction.consumesAction()) {
+            pendingDoorCheck = best;
             KurumiWebMonitor.log("寻路停滞：尝试打开门 " + best.toShortString());
+        } else {
+            KurumiWebMonitor.log("开门辅助：交互未生效 " + best.toShortString());
         }
     }
 

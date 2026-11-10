@@ -6,8 +6,8 @@ import static org.junit.jupiter.api.Assertions.*;
 class BaritoneBridgeDoorAssistTest {
     @Test void onlyAssistAfterNavigationHasStalled() {
         assertFalse(BaritoneBridge.shouldAssistDoor(false, 1_000, 4_000, 0));
-        assertFalse(BaritoneBridge.shouldAssistDoor(true, 1_000, 2_900, 0));
-        assertTrue(BaritoneBridge.shouldAssistDoor(true, 1_000, 3_100, 0));
+        assertFalse(BaritoneBridge.shouldAssistDoor(true, 1_000, 1_900, 0));
+        assertTrue(BaritoneBridge.shouldAssistDoor(true, 1_000, 2_100, 0));
     }
 
     @Test void avoidRepeatedClicksWhileWaitingForDoorSync() {
