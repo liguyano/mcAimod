@@ -367,7 +367,8 @@ public final class KurumiClientController {
                 ? KurumiScreenshotBridge.consume(KurumiPseudoExecutor.finishedRunVisionId()) : null;
         next.add(new ChatMessage("user", "脚本发生异常或主动 observe() 请求进一步决策，以下是客户端实际反馈，"
                 + "不是推测：\n" + report
-                + "\n根据异常原因恢复尚未完成的任务，或根据 observe() 结果决定必要的后续行动。请优先生成可连续运行的完整剩余脚本。"
+                + "\n根据异常原因恢复尚未完成的任务，或根据 observe() 结果决定必要的后续行动。"
+                + "如果刚观察到箱子内容，请选择实际存在的合适物品，生成短的取物和验证脚本，不要再枚举全部食物。"
                 + "不要重复已证实成功的步骤。"
                 + (screenshotData == null ? "" : "\n本消息附有当前游戏真实截图，请基于画面回答，不确定时明确说明。"),
                 screenshotData));
@@ -840,20 +841,22 @@ public final class KurumiClientController {
                         + "检查箱子返回 pending 时须等待并查询结果；失败、未找到、未确认都应如实说明。"));
         }
         conversation.add(new ChatMessage("system",
-                "完整规划优先规则：收到明确任务时尽量一次生成覆盖全部目标的可执行脚本，"
+                "分阶段规划规则：信息充分时一次生成可完成目标的短脚本；"
+                + "物品种类、容器内容未知且需要根据观察决定下一步时，先 observe() 反馈实际结果，"
+                + "再由下一阶段生成后续动作，不要预先枚举全部候选物品。"
                 + "用变量、条件判断、循环、结果检查和 raise Exception(原因) 在本地处理执行过程，"
-                + "不要为了每个普通动作或每个正常阶段重新调用大模型。"
+                + "不要为了每个普通动作重新调用大模型；必要的观察决策阶段需要交回模型。"
                 + "每次返回 {\"type\":\"action\",\"action\":\"EXECUTE_SCRIPT\","
                 + "\"reply\":\"简短说明\",\"script\":\"完整可执行脚本\"}。"
                 + "脚本正常结束后客户端直接结束此次请求，不再自动调用模型；"
                 + "因此请在脚本里完成必要的验证和 talk() 汇报，不要依赖结束后另一轮模型检查。"
                 + "只有脚本失败、抛出无法本地解决的异常，或明确 observe(value) 主动交出决策权时，"
                 + "才会发送观察与错误报告给你并要求修订未完成部分。"
-                + "不要为已能自行检查的正常状态调用 observe；未知且无法在本地决策的信息才 observe。"
+                + "不要为已能自行检查的状态调用 observe；需要根据未知物品内容做选择时必须 observe。"
                 + "observe(value) 将结束当前脚本，丢弃之后的语句；本地能够使用查询值时直接赋值判断。"
                 + "需要真正观察屏幕时使用 image = screenshot()，随后 observe(image)，"
                 + "这会把客户端当前画面以图片形式交给支持视觉的模型；截图仅按需生成，不要频繁调用。"
-                + "脚本阶段恢复后仍优先输出一份可运行至任务完成的剩余脚本，"
+                + "脚本阶段恢复后根据实际观察输出简短、可验证的下一段脚本，"
                 + "确实无需动作时才返回 {\"type\":\"finish\",\"reason\":\"完成理由\"}。"
                 + "连续执行仍受动作数、运行时间及调用预算保护。"));
         conversation.add(new ChatMessage("system",
@@ -864,11 +867,13 @@ public final class KurumiClientController {
                 + "observe({\"rods_in_inventory\": rod_count, \"container\": info}) 和 [1, 2, 3]；"
                 + "字典键使用字符串，允许嵌套但要保持结果简短。"
                 + "工具结果优先使用 result.success 一类字段访问，异步动作收到 success=true 仅代表已受理，仍需观察确认完成。"));
+        conversation.add(new ChatMessage("system", KurumiObservationGuidance.text()));
         conversation.add(new ChatMessage("system",
-                "开箱优先使用代码验证，避免无意义的 AI 观察轮次：opened = chest_open() 会在 Java 端等待"
+                "开箱校验规则：opened = chest_open() 会在 Java 端等待"
                 + "客户端实际打开 ChestMenu 后才返回，成功时 opened.success 和 opened.completed 均为 true；"
-                + "失败或超时则为 false。只需用 if not opened.completed: 判断，不要为确认开箱而"
-                + "observe(inspect_container())。目标箱子不同且旧箱子已开时会自动关闭旧菜单并重新打开目标。"
+                + "失败或超时则为 false。用 if not opened.completed: 判断是否开箱成功；"
+                + "但需要观察内容后选择物品时必须 observe(inspect_container())。"
+                + "目标箱子不同且旧箱子已开时会自动关闭旧菜单并重新打开目标。"
                 + "存放物品时先记录 before = check_inventory_item(item_id)，执行 chest_put_item_all(item_id)，"
                 + "等待服务器同步后读取 after = check_inventory_item(item_id)；只有 after < before 才能确认确有存入，"
                 + "只有 after == 0 才能说全部存完。能够用这些本地判断完成的流程不要调用 observe() 或重新请求模型。"));
