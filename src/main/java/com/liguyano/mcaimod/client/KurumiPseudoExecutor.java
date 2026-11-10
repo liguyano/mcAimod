@@ -16,6 +16,7 @@ public final class KurumiPseudoExecutor {
         final List<KurumiTaskPlanner.Statement> statements;
         final KurumiTaskPlanner.Statement loop;
         final String forVariable;
+        final com.google.gson.JsonArray forItems;
         final int forEnd, forStep;
         int forValue;
         int index;
@@ -27,6 +28,7 @@ public final class KurumiPseudoExecutor {
             this.statements = statements;
             this.loop = loop;
             this.forVariable = null;
+            this.forItems = null;
             this.forEnd = 0;
             this.forStep = 0;
         }
@@ -34,9 +36,20 @@ public final class KurumiPseudoExecutor {
             this.statements = loop.body();
             this.loop = loop;
             this.forVariable = loop.step().target();
+            this.forItems = null;
             this.forValue = start;
             this.forEnd = end;
             this.forStep = step;
+            this.iterations = 1;
+        }
+        Frame(KurumiTaskPlanner.Statement loop, com.google.gson.JsonArray items) {
+            this.statements = loop.body();
+            this.loop = loop;
+            this.forVariable = loop.step().target();
+            this.forItems = items.deepCopy();
+            this.forEnd = items.size();
+            this.forStep = 1;
+            this.forValue = 0;
             this.iterations = 1;
         }
     }
@@ -507,6 +520,23 @@ public final class KurumiPseudoExecutor {
                 return;
             }
             if (frame.forVariable != null) {
+                if (frame.forItems != null) {
+                    int next = frame.forValue + 1;
+                    if (next < frame.forEnd) {
+                        if (++frame.iterations > 100) {
+                            KurumiWebMonitor.log("for 遍历超过100次，脚本已停止");
+                            cancel();
+                            return;
+                        }
+                        frame.forValue = next;
+                        variables.put(frame.forVariable, frame.forItems.get(next).deepCopy());
+                        frame.index = 0;
+                        return;
+                    }
+                    frames.pop();
+                    if (!frames.isEmpty()) frames.peek().index++;
+                    return;
+                }
                 long next = (long) frame.forValue + frame.forStep;
                 if ((frame.forStep > 0 && next < frame.forEnd)
                         || (frame.forStep < 0 && next > frame.forEnd)) {
@@ -544,6 +574,22 @@ public final class KurumiPseudoExecutor {
         KurumiWebMonitor.step(stmt, actions, frame.iterations, lastResultSuccess);
         switch (stmt.op()) {
             case "DEF" -> frame.index++;
+            case "FOR_EACH" -> {
+                try {
+                    var value = KurumiExpressions.evaluate(stmt.step().itemId(), variables);
+                    if (!value.isJsonArray()) throw new IllegalArgumentException("遍历目标必须是列表");
+                    var items = value.getAsJsonArray();
+                    if (items.size() > 100) throw new IllegalArgumentException("列表最多遍历100项");
+                    if (items.size() == 0) frame.index++;
+                    else {
+                        variables.put(stmt.step().target(), items.get(0).deepCopy());
+                        frames.push(new Frame(stmt, items));
+                    }
+                } catch (RuntimeException ex) {
+                    KurumiWebMonitor.log("for 列表遍历失败：" + ex.getMessage());
+                    cancel();
+                }
+            }
             case "CALL_FUNCTION" -> {
                 try {
                     callFunction(stmt, frame);

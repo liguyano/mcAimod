@@ -155,6 +155,16 @@ public final class KurumiTaskPlanner {
                 statements.add(new Statement(op, new Step(op, "FOR_EXPR".equals(op)
                         ? node.get("expression").getAsString() : start + "," + end + "," + step,
                         1, null, null, null, name), null, body, List.of()));
+            } else if ("FOR_EACH".equals(op)) {
+                String name = node.get("name").getAsString();
+                String expression = node.get("expression").getAsString();
+                if (!name.matches("[a-z][a-z0-9_]{0,23}")
+                        || !expression.matches("[a-z][a-z0-9_]{0,23}(?:\\.[a-z][a-z0-9_]{0,23})*")
+                        || expression.length() > 500)
+                    throw new IllegalArgumentException("invalid iterable");
+                List<Statement> body = parseStatements(node.getAsJsonArray("body"), depth + 1, budget);
+                statements.add(new Statement(op, new Step(op, expression, 1,
+                        null, null, null, name), null, body, List.of()));
             } else if ("IF".equals(op) || "WHILE".equals(op)) {
                 Condition condition = parseCondition(node.getAsJsonObject("condition"));
                 List<Statement> body = parseStatements(node.getAsJsonArray("body"), depth + 1, budget);

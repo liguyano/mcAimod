@@ -40,6 +40,7 @@ public final class KurumiScriptParser {
     private static final Pattern GOTO = Pattern.compile("goto\\((-?\\d{1,8}),\\s*(-?\\d{1,4}),\\s*(-?\\d{1,8})\\)");
     private static final Pattern RETURN = Pattern.compile("return\\s+\"[^\"\\r\\n]{0,100}\"");
     private static final Pattern FOR_RANGE = Pattern.compile("for ([a-z][a-z0-9_]{0,23}) in range\\(([^()]*)\\):");
+    private static final Pattern FOR_EACH = Pattern.compile("for ([a-z][a-z0-9_]{0,23}) in ([a-z][a-z0-9_]{0,23}(?:\\.[a-z][a-z0-9_]{0,23})*):");
     private static final Pattern DEFINITION = Pattern.compile("def ([a-z][a-z0-9_]{0,23})\\(([^()]*)\\):");
     private static final Pattern SIMPLE_CALL = Pattern.compile("([a-z][a-z0-9_]{0,23})\\((.*)\\)");
     private static final String RAISE_PART = "(?:\"[^\"\\r\\n]{1,190}\"|'[^'\\r\\n]{1,190}'|[a-z][a-z0-9_]{0,23}(?:\\.[a-z][a-z0-9_]{0,23})*)";
@@ -152,6 +153,7 @@ public final class KurumiScriptParser {
             node.addProperty("line", lines.get(cursor.at - 1).number());
             Matcher definition = DEFINITION.matcher(code);
             Matcher forRange = FOR_RANGE.matcher(code);
+            Matcher forEach = FOR_EACH.matcher(code);
             if (definition.matches()) {
                 if (indent != 0) throw new IllegalArgumentException("函数只能定义在顶层");
                 String[] params = definition.group(2).isBlank() ? new String[0] : definition.group(2).split(",", -1);
@@ -203,6 +205,13 @@ public final class KurumiScriptParser {
                 node.addProperty("start", start);
                 node.addProperty("end", end);
                 node.addProperty("step", step);
+                node.add("body", block(lines, cursor, indent + 1, depth + 1, loopDepth + 1));
+            } else if (forEach.matches()) {
+                if (cursor.at >= lines.size() || lines.get(cursor.at).indent() != indent + 1)
+                    throw new IllegalArgumentException("empty for body");
+                node.addProperty("op", "FOR_EACH");
+                node.addProperty("name", forEach.group(1));
+                node.addProperty("expression", forEach.group(2));
                 node.add("body", block(lines, cursor, indent + 1, depth + 1, loopDepth + 1));
             } else if (code.startsWith("while ") && code.endsWith(":")
                     || code.startsWith("if ") && code.endsWith(":")) {
