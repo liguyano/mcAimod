@@ -3,6 +3,7 @@ package com.liguyano.mcaimod.client;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.projectile.FishingHook;
@@ -161,13 +162,17 @@ public final class KurumiFishingBridge {
         long elapsed=System.currentTimeMillis()-phaseAt;
         if (phase == Phase.EQUIP) {
             if (!rodInHand(mc) && phaseTicks == 1) {
+                KurumiWebMonitor.log("自动钓鱼：主手没有鱼竿，开始装备；当前主手="
+                        + BuiltInRegistries.ITEM.getKey(mc.player.getMainHandItem().getItem()));
                 var equip=KurumiEquipBridge.mainHand("minecraft:fishing_rod");
+                KurumiWebMonitor.log("自动钓鱼：装备请求结果=" + equip.success() + "；" + equip.message());
                 if (!equip.success()) { fail(equip.message()); return; }
             }
             if (!rodInHand(mc)) {
                 if (elapsed>4000) fail("装备鱼竿后服务器未同步到主手");
                 return;
             }
+            KurumiWebMonitor.log("自动钓鱼：已确认主手为鱼竿，耗时 " + elapsed + "ms");
             if (rodUnsafe(mc)) { fail("鱼竿耐久即将耗尽"); return; }
             if (!nearStand(mc)) {
                 var stand=task.spot().stand();

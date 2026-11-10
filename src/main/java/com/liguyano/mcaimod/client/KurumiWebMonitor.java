@@ -20,6 +20,7 @@ public final class KurumiWebMonitor {
     private static final Map<KurumiTaskPlanner.Statement, Integer> LINES = new IdentityHashMap<>();
     private static final Map<KurumiTaskPlanner.Program, String> SOURCES = new IdentityHashMap<>();
     private static final Deque<Task> HISTORY = new ArrayDeque<>();
+    private static final KurumiRecentLog RECENT_LOG = new KurumiRecentLog(200);
     private static final int HISTORY_LIMIT = 30;
     private static Task current;
     private static Task pending;
@@ -299,6 +300,7 @@ public final class KurumiWebMonitor {
         while (task.events.size() > 100) task.events.removeFirst();
     }
     public static synchronized void log(String value) {
+        RECENT_LOG.add(value);
         addEvent(pending != null ? pending : current, value);
     }
     private static synchronized String snapshot() {
@@ -308,6 +310,9 @@ public final class KurumiWebMonitor {
         JsonArray history = new JsonArray();
         for (Task task : HISTORY) history.add(task.json());
         o.add("history", history);
+        JsonArray recentLog = new JsonArray();
+        for (String line : RECENT_LOG.entries()) recentLog.add(line);
+        o.add("recentLog", recentLog);
         o.add("controls", KurumiWebActions.status());
         return o.toString();
     }
@@ -582,6 +587,8 @@ public final class KurumiWebMonitor {
         <h2>当前任务</h2><div id="current" class="empty">等待新任务…</div>
         <h2>历史任务 <span class="muted">最近30条 · 新结束的排在最上方</span></h2>
         <div id="history" class="empty">暂无已结束任务</div>
+        <h2>实时诊断日志 <span class="muted">最近200条 · 不依赖任务状态</span></h2>
+        <section class="card"><pre id="recentLog" class="logs" style="max-height:320px;overflow:auto;white-space:pre-wrap">等待日志…</pre></section>
         <h2>技能库与快捷指令</h2>
         <div class="cols">
           <section class="card">
@@ -799,6 +806,10 @@ public final class KurumiWebMonitor {
             for(const task of data.history||[])history.append(createTask(task,false));
             history.className=history.children.length?'':'empty';
             if(!history.children.length)history.textContent='暂无已结束任务';
+            const recent=document.getElementById('recentLog');
+            const nearBottom=recent.scrollTop+recent.clientHeight>=recent.scrollHeight-24;
+            recent.textContent=(data.recentLog||[]).join('\\n')||'暂无诊断日志';
+            if(nearBottom)recent.scrollTop=recent.scrollHeight;
             document.getElementById('connection').textContent='已连接 · 每秒刷新';
           }catch(e){
             document.getElementById('connection').textContent='监测刷新失败：'+String(e.message||e);

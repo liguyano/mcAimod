@@ -9,6 +9,7 @@ import net.minecraft.world.entity.EquipmentSlot;
 /** Equip any explicitly requested inventory item in the main hand via a vanilla inventory swap. */
 public final class KurumiEquipBridge {
     public static BaritoneBridge.Result mainHand(String itemId) {
+        KurumiWebMonitor.log("主手装备请求：" + itemId);
         if (itemId == null || !itemId.matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,128}"))
             return new BaritoneBridge.Result(false, "物品 ID 不合法");
         Minecraft mc = Minecraft.getInstance();
@@ -18,6 +19,8 @@ public final class KurumiEquipBridge {
             return new BaritoneBridge.Result(false, "请先关闭其他容器界面");
         var inv = mc.player.getInventory();
         int selected = inv.getSelectedSlot();
+        KurumiWebMonitor.log("主手装备检查：快捷栏=" + selected + "，原主手="
+                + BuiltInRegistries.ITEM.getKey(mc.player.getMainHandItem().getItem()));
         int found = -1;
         for (int slot = 0; slot < 36; slot++) {
             var stack = inv.getItem(slot);
@@ -26,12 +29,18 @@ public final class KurumiEquipBridge {
                 if (slot == selected) break;
             }
         }
-        if (found < 0) return new BaritoneBridge.Result(false, "背包中没有 " + itemId);
+        if (found < 0) {
+            KurumiWebMonitor.log("主手装备失败：背包中没有 " + itemId);
+            return new BaritoneBridge.Result(false, "背包中没有 " + itemId);
+        }
         if (found < 9) {
+            KurumiWebMonitor.log("主手装备：鱼竿/物品位于快捷栏槽位 " + found + "，请求切换");
             inv.setSelectedSlot(found);
             return new BaritoneBridge.Result(true, "已将 " + itemId + " 切换到主手");
         }
         // Vanilla SWAP moves inventory menu slot 9..35 into the selected hotbar slot.
+        KurumiWebMonitor.log("主手装备：物品位于主背包槽位 " + found
+                + "，请求与快捷栏槽位 " + selected + " 交换；等待服务器确认");
         mc.gameMode.handleContainerInput(mc.player.inventoryMenu.containerId,
                 found, selected, ContainerInput.SWAP, mc.player);
         return new BaritoneBridge.Result(true, "已请求将 " + itemId + " 从背包交换到主手，等待服务器同步");
