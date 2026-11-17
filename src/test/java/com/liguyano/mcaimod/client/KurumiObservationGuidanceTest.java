@@ -7,8 +7,13 @@ class KurumiObservationGuidanceTest {
     @Test void unknownChestContentsRequireObservationBeforeSelectingAnItem() {
         String guide = KurumiObservationGuidance.text();
         assertTrue(guide.contains("observe(inspect_container())"));
+        assertTrue(guide.contains("observe(a, b, c)"));
+        assertTrue(guide.contains("最多1张截图"));
         assertTrue(guide.contains("不要预先枚举"));
         assertTrue(guide.contains("take_item"));
         assertTrue(guide.contains("重新观察"));
+        assertTrue(guide.contains("统一提供 success 字段"));
+        assertTrue(guide.contains("for e in scan.entities"));
+        assertTrue(guide.contains("interact(\"corpse:corpse\",uuid)"));
     }
 }

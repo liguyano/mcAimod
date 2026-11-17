@@ -64,11 +64,13 @@ public final class KurumiExpressions {
         return values;
     }
     public static String text(JsonElement element) {
+        element = KurumiToolResults.scalar(element);
         if (element == null || element.isJsonNull()) return "null";
         if (element.isJsonPrimitive()) return element.getAsString();
         return element.toString();
     }
     public static boolean truth(JsonElement element) {
+        element = KurumiToolResults.scalar(element);
         if (element == null || element.isJsonNull()) return false;
         if (!element.isJsonPrimitive()) return true;
         JsonPrimitive p = element.getAsJsonPrimitive();
@@ -77,6 +79,7 @@ public final class KurumiExpressions {
         return !p.getAsString().isEmpty();
     }
     public static int integer(JsonElement element) {
+        element = KurumiToolResults.scalar(element);
         if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber())
             throw new IllegalArgumentException("参数必须为整数");
         double d = element.getAsDouble();
@@ -133,8 +136,11 @@ public final class KurumiExpressions {
         }
         if (op == null) return a;
         JsonElement b = add();
-        if ("==".equals(op)) return new JsonPrimitive(a.equals(b));
-        if ("!=".equals(op)) return new JsonPrimitive(!a.equals(b));
+        if ("==".equals(op) || "!=".equals(op)) {
+            JsonElement left = KurumiToolResults.scalar(a), right = KurumiToolResults.scalar(b);
+            boolean equal = left.equals(right);
+            return new JsonPrimitive("==".equals(op) ? equal : !equal);
+        }
         double left = number(a), right = number(b);
         return new JsonPrimitive(switch(op) {
             case ">" -> left > right; case "<" -> left < right;
@@ -146,9 +152,10 @@ public final class KurumiExpressions {
         while (true) {
             if (take("+")) {
                 JsonElement b = multiply();
-                if (a.isJsonPrimitive() && b.isJsonPrimitive()
-                        && a.getAsJsonPrimitive().isString() && b.getAsJsonPrimitive().isString())
-                    a = new JsonPrimitive(a.getAsString() + b.getAsString());
+                JsonElement left = KurumiToolResults.scalar(a), right = KurumiToolResults.scalar(b);
+                if (left.isJsonPrimitive() && right.isJsonPrimitive()
+                        && left.getAsJsonPrimitive().isString() && right.getAsJsonPrimitive().isString())
+                    a = new JsonPrimitive(left.getAsString() + right.getAsString());
                 else a = numeric(number(a)+number(b));
             } else if (take("-")) a = numeric(number(a)-number(multiply()));
             else return a;
@@ -269,6 +276,12 @@ public final class KurumiExpressions {
         }
     }
     private JsonElement call(String name,java.util.List<JsonElement> args) {
+        JsonElement raw = callRaw(name, args);
+        // len() is a language expression, not an observation tool.
+        return "len".equals(name) ? raw : KurumiToolResults.normalize(raw);
+    }
+
+    private JsonElement callRaw(String name,java.util.List<JsonElement> args) {
         if ("screenshot".equals(name)) {
             if (!args.isEmpty()) throw new IllegalArgumentException("screenshot 不接受参数");
             return KurumiScreenshotBridge.capture();
@@ -293,9 +306,9 @@ public final class KurumiExpressions {
             return new JsonPrimitive(KurumiClientController.agentObservation(integer(args.get(0))));
         }
         if ("len".equals(name)) {
-            if (args.size()!=1 || !args.get(0).isJsonArray())
+            if (args.size()!=1 || KurumiToolResults.array(args.get(0)) == null)
                 throw new IllegalArgumentException("len 需要一个数组变量");
-            return new JsonPrimitive(args.get(0).getAsJsonArray().size());
+            return new JsonPrimitive(KurumiToolResults.array(args.get(0)).size());
         }
         if ("search_all_block".equals(name)) {
             if (args.size()!=1) throw new IllegalArgumentException("search_all_block 需要一个方块ID");
@@ -399,11 +412,13 @@ public final class KurumiExpressions {
         catch (RuntimeException ex) { throw new IllegalArgumentException("工具返回无效: "+name); }
     }
     private static String string(JsonElement e) {
+        e = KurumiToolResults.scalar(e);
         if (!e.isJsonPrimitive() || !e.getAsJsonPrimitive().isString())
             throw new IllegalArgumentException("需要字符串参数");
         return e.getAsString();
     }
     private static double number(JsonElement e) {
+        e = KurumiToolResults.scalar(e);
         // Observation helpers such as check_inventory_count return {"item_id": ..., "count": N}.
         // Retain the object for .count access, but permit its numeric count in expressions.
         if (e != null && e.isJsonObject()) {

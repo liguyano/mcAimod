@@ -161,7 +161,9 @@ public final class KurumiPseudoExecutor {
         comeFollowing = false;
         comeTarget = null;
         if (running) {
-            finishRun(false, "任务取消或执行失败");
+            // Keep a specific interpreter error when cancel() performs cleanup.
+            if (finishedRunId != activeRunId)
+                finishRun(false, "任务取消或执行失败");
             KurumiWebMonitor.state("已取消");
         }
         running = false;
@@ -190,6 +192,11 @@ public final class KurumiPseudoExecutor {
         pendingActionVariable = null;
         KurumiChestInspector.cancel();
         KurumiPlanExecutor.cancel();
+    }
+    private static void failAndCancel(String reason) {
+        KurumiWebMonitor.log(reason);
+        finishRun(false, reason);
+        cancel();
     }
     private static void say(String msg) {
         var mc = Minecraft.getInstance();
@@ -577,8 +584,8 @@ public final class KurumiPseudoExecutor {
             case "FOR_EACH" -> {
                 try {
                     var value = KurumiExpressions.evaluate(stmt.step().itemId(), variables);
-                    if (!value.isJsonArray()) throw new IllegalArgumentException("遍历目标必须是列表");
-                    var items = value.getAsJsonArray();
+                    var items = KurumiToolResults.array(value);
+                    if (items == null) throw new IllegalArgumentException("遍历目标必须是列表");
                     if (items.size() > 100) throw new IllegalArgumentException("列表最多遍历100项");
                     if (items.size() == 0) frame.index++;
                     else {
@@ -658,9 +665,7 @@ public final class KurumiPseudoExecutor {
                             : "已保存结构化数据（" + summary.length() + "字符），使用 observe(" + name + ") 发送完整结果");
                     frame.index++;
                 } catch (RuntimeException ex) {
-                    KurumiWebMonitor.log("变量赋值失败：" + ex.getMessage());
-                    say("脚本变量错误，任务停止");
-                    cancel();
+                    failAndCancel("变量赋值失败：" + ex.getMessage());
                 }
             }
             case "EXPR_IF", "EXPR_WHILE" -> {
@@ -670,8 +675,7 @@ public final class KurumiPseudoExecutor {
                     pendingStatement = stmt;
                     completeCondition(yes);
                 } catch (RuntimeException ex) {
-                    KurumiWebMonitor.log("条件表达式失败：" + ex.getMessage());
-                    cancel();
+                    failAndCancel("条件表达式失败：" + ex.getMessage());
                 }
             }
             case "EXPR_CALL", "EXPR_ACTION_ASSIGN" -> {
@@ -679,26 +683,33 @@ public final class KurumiPseudoExecutor {
                 String resultVariable = assign ? stmt.step().target() : null;
                 try {
                     String name = stmt.step().action();
-                    var args = KurumiExpressions.arguments(stmt.step().itemId(), variables);
                     if ("observe".equals(name)) {
-                        if (args.size() != 1) throw new IllegalArgumentException("observe 需要一个参数");
-                        if (args.get(0).isJsonObject() && args.get(0).getAsJsonObject().has("kind")
-                                && "screenshot".equals(args.get(0).getAsJsonObject().get("kind").getAsString())) {
-                            awaitingVisionId = args.get(0).getAsJsonObject().get("id").getAsLong();
-                            if (KurumiScreenshotBridge.status(awaitingVisionId) < 0)
+                        var batch = KurumiObserveBatch.prepare(stmt.step().itemId(), variables);
+                        if (batch.screenshotId() != 0
+                                && KurumiScreenshotBridge.status(batch.screenshotId()) < 0)
                                 throw new IllegalArgumentException("截图已过期或不可用，请重新截图");
+                        int required = 0;
+                        for (var entry : batch.values())
+                            required += entry.value().length() + entry.label().length() + 10;
+                        if (observationCount + batch.values().size() + (batch.screenshotId() != 0 ? 1 : 0) > 18
+                                || observations.length() + required + 160 > 32000)
+                            throw new IllegalArgumentException("批量观察结果超出容量，请减少参数或缩小查询范围");
+                        for (var entry : batch.values()) {
+                            observe("AI观察 " + entry.label(), entry.value());
+                        }
+                        if (batch.screenshotId() != 0) {
+                            awaitingVisionId = batch.screenshotId();
                             return;
                         }
-                        String value = KurumiExpressions.text(args.get(0));
-                        observe("AI观察", value);
                         restoreFunctionScopesOnPause();
                         finishedRunObserved = true;
-                        finishRun(true, "observe() 主动交还控制权给 AI");
+                        finishRun(true, "observe() 已批量交还 " + batch.values().size() + " 项观察给 AI");
                         running = false;
                         frames.clear();
                         KurumiWebMonitor.state("等待 AI 分析观察结果");
                         return;
                     }
+                    var args = KurumiExpressions.arguments(stmt.step().itemId(), variables);
                     if ("talk".equals(name)) {
                         if (args.size()!=1 && args.size()!=2) throw new IllegalArgumentException("talk 需要文本和可选情绪参数");
                         long now = System.currentTimeMillis();
@@ -1015,9 +1026,7 @@ public final class KurumiPseudoExecutor {
                     } else if (!outcome.success()) { cancel(); return; }
                     frame.index++;
                 } catch (RuntimeException ex) {
-                    KurumiWebMonitor.log("变量参数执行失败：" + ex.getMessage());
-                    say("变量或动作参数错误，任务已停止");
-                    cancel();
+                    failAndCancel("变量参数执行失败：" + ex.getMessage());
                 }
             }
             case "SLEEP" -> {

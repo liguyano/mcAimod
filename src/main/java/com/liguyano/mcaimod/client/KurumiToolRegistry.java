@@ -84,7 +84,7 @@ public final class KurumiToolRegistry {
         add("list_remembered_blocks()", "memory", "列出地点");
         add("get_remembered_block_at(index)", "memory", "指定记忆索引");
         add("take_from_memory(name,item_id,count)", "container", "从记忆箱子取物");
-        add("observe(value)", "observe", "结束本段脚本交回模型");
+        add("observe(value1,value2,...)", "observe", "一次交还最多7项观察结果给模型；可混合至多一张 screenshot() 截图；单参数兼容旧用法");
         add("talk(message)", "observe", "向公屏发言");
     }
 

@@ -347,9 +347,10 @@ public final class KurumiClientController {
             return;
         }
         String report = KurumiPseudoExecutor.finishedRunReport();
-        // Full-plan mode: a normally completed script is terminal. Only explicit
-        // observe() handoffs and failures re-enter the LLM for another plan.
-        if (KurumiPseudoExecutor.finishedRunSucceeded() && !KurumiPseudoExecutor.finishedRunObserved()) {
+        // Stepwise mode also returns successful stage results to the planner;
+        // only an explicit model finish decision ends the overall task.
+        if (!KurumiStepwisePolicy.shouldReplan(KurumiPseudoExecutor.finishedRunSucceeded(),
+                KurumiPseudoExecutor.finishedRunObserved())) {
             boolean verified = KurumiSkillResultVerifier.hasVerifiedCompletion(report);
             KurumiWebMonitor.log("完整脚本已结束，不再为正常阶段结束调用大模型：" + report);
             KurumiWebMonitor.state(verified ? "完整脚本执行完毕（有验证结果）"
@@ -365,9 +366,10 @@ public final class KurumiClientController {
         List<ChatMessage> next = new ArrayList<>(stage.conversation());
         String screenshotData = stage.generation() == generation
                 ? KurumiScreenshotBridge.consume(KurumiPseudoExecutor.finishedRunVisionId()) : null;
-        next.add(new ChatMessage("user", "脚本发生异常或主动 observe() 请求进一步决策，以下是客户端实际反馈，"
+        next.add(new ChatMessage("user", "上一小步已执行或通过 observe() 交还控制权，以下是客户端实际反馈，"
                 + "不是推测：\n" + report
                 + "\n根据异常原因恢复尚未完成的任务，或根据 observe() 结果决定必要的后续行动。"
+                + "如整体目标已验证完成，请立即返回 type=finish；否则仅规划下一小步，不要重复成功动作。"
                 + "如果刚观察到箱子内容，请选择实际存在的合适物品，生成短的取物和验证脚本，不要再枚举全部食物。"
                 + "不要重复已证实成功的步骤。"
                 + (screenshotData == null ? "" : "\n本消息附有当前游戏真实截图，请基于画面回答，不确定时明确说明。"),
@@ -841,17 +843,16 @@ public final class KurumiClientController {
                         + "检查箱子返回 pending 时须等待并查询结果；失败、未找到、未确认都应如实说明。"));
         }
         conversation.add(new ChatMessage("system",
-                "分阶段规划规则：信息充分时一次生成可完成目标的短脚本；"
+                KurumiStepwisePolicy.guidance()
+                + "分阶段规划规则：信息充分时生成当前短脚本；"
                 + "物品种类、容器内容未知且需要根据观察决定下一步时，先 observe() 反馈实际结果，"
                 + "再由下一阶段生成后续动作，不要预先枚举全部候选物品。"
                 + "用变量、条件判断、循环、结果检查和 raise Exception(原因) 在本地处理执行过程，"
-                + "不要为了每个普通动作重新调用大模型；必要的观察决策阶段需要交回模型。"
+                + "执行器会在每阶段完成后回传结果；只有需要环境判断时才主动 observe()。"
                 + "每次返回 {\"type\":\"action\",\"action\":\"EXECUTE_SCRIPT\","
-                + "\"reply\":\"简短说明\",\"script\":\"完整可执行脚本\"}。"
-                + "脚本正常结束后客户端直接结束此次请求，不再自动调用模型；"
-                + "因此请在脚本里完成必要的验证和 talk() 汇报，不要依赖结束后另一轮模型检查。"
-                + "只有脚本失败、抛出无法本地解决的异常，或明确 observe(value) 主动交出决策权时，"
-                + "才会发送观察与错误报告给你并要求修订未完成部分。"
+                + "\"reply\":\"简短说明\",\"script\":\"当前小步可执行脚本\"}。"
+                + "脚本正常结束后也会进入下一阶段；完成总体目标须明确返回 type=finish。"
+                + "脚本失败、异常或 observe(value) 也会提供反馈供你修订未完成部分。"
                 + "不要为已能自行检查的状态调用 observe；需要根据未知物品内容做选择时必须 observe。"
                 + "observe(value) 将结束当前脚本，丢弃之后的语句；本地能够使用查询值时直接赋值判断。"
                 + "需要真正观察屏幕时使用 image = screenshot()，随后 observe(image)，"
@@ -866,7 +867,9 @@ public final class KurumiClientController {
                 + "表达式支持由变量和基本值组成的字典与列表字面量，例如"
                 + "observe({\"rods_in_inventory\": rod_count, \"container\": info}) 和 [1, 2, 3]；"
                 + "字典键使用字符串，允许嵌套但要保持结果简短。"
-                + "工具结果优先使用 result.success 一类字段访问，异步动作收到 success=true 仅代表已受理，仍需观察确认完成。"));
+                + "所有工具结果统一包含 success；success=true 仅代表调用受理或查询成功，异步动作仍需观察确认完成。"
+                + "查询结果保留原本的业务字段，例如 scan_nearby_entities() 的 entities 和 find_nearest_block() 的 found。"
+                + "success 与 found 意义不同：success 判断查询调用本身，found 判断目标是否找到。"));
         conversation.add(new ChatMessage("system", KurumiObservationGuidance.text()));
         conversation.add(new ChatMessage("system",
                 "开箱校验规则：opened = chest_open() 会在 Java 端等待"
@@ -914,7 +917,8 @@ public final class KurumiClientController {
                 + "observe(get_nearby_chest_result(\"minecraft:diamond\"))，"
                 + "箱子打开后使用 observe(find_container_items(\"minecraft:diamond_sword\")) 获取指定物品的全部槽位、总数量及附魔耐久。"
                 + "需要内部观察时优先使用 value = get_inventory()、observe(value)，不要将原始 JSON 用 talk 发到公屏。"
-                + "当前 observe(value) 仍会结束本段脚本并交还控制权；正常重复操作优先在 for/while 内使用结果字段和局部检查，"
+                + "可以使用 observe(scan, inventory, env) 一次回传多个观察结果，最多7项，最多含1张 screenshot() 截图；"
+                + "单参数 observe(value) 保持兼容，都会结束本段脚本并交还控制权；正常重复操作优先在 for/while 内使用结果字段和局部检查，"
                 + "脚本能够自行处理的失败不要频繁 observe()；无法处理时用 raise Exception(原因) 主动交给 AI。"
                 + "talk 仅用来向玩家自然语言发言，物品太多可分多条，每条不超过120字符；不得自行编造。"
                 + "每条脚本最多12条 talk，发送间隔至少2秒，长结果可能截断。"
@@ -939,7 +943,7 @@ public final class KurumiClientController {
         StringBuilder guide = new StringBuilder(KurumiToolRegistry.catalogForRequest(request));
         boolean matched = false;
         if (input.contains("尸体") || input.contains("遗体") || input.contains("corpse") || input.contains("实体") || input.contains("上船") || input.contains("村民")) {
-            guide.append("\n").append("实体与尸体：scan_nearby_entities() 返回 entities 数组（按距离排序），每项有 type/uuid/x/y/z。找最近的 corpse:corpse，记录 UUID；goto 到附近后重新扫描确认 UUID，interact(\"corpse:corpse\",uuid) 精确交互；inspect_container() 检查界面，再 take_all_items()，观察剩余物品。交互默认不自动转头。");
+            guide.append("\n").append("实体与尸体：scan_nearby_entities() 返回 {success,tool,entities}；success 表示扫描调用成功，entities 为按距离排序的列表，每项有 type/uuid/x/y/z。直接 for e in scan.entities 遍历。找最近的 corpse:corpse，记录 UUID；goto 到附近后重新扫描确认 UUID，interact(\"corpse:corpse\",uuid) 精确交互；inspect_container() 检查界面，再 take_all_items()，观察剩余物品。交互默认不自动转头。");
             matched = true;
         }
         if (input.contains("箱") || input.contains("仓库") || input.contains("容器") || input.contains("背包") || input.contains("拿取") || input.contains("取出") || input.contains("放入") || input.contains("物品") || input.contains("存放")) {
